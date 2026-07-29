@@ -89,6 +89,7 @@ html,body{
   display:flex;align-items:center;justify-content:center;
   width:54px;height:54px;margin:0 auto 18px;
   border-radius:var(--r-md);background:var(--grad-b);color:var(--white);
+  font-size:17px;font-weight:800;letter-spacing:.6px;
 }
 .login-card h1{font-size:22px;font-weight:800;margin-bottom:6px;}
 .login-card p{font-size:14px;color:var(--text-muted);margin-bottom:26px;line-height:1.5;}
@@ -116,6 +117,7 @@ html,body{
   width:34px;height:34px;flex-shrink:0;border-radius:var(--r-sm);
   background:var(--grad-b);color:var(--white);
   display:flex;align-items:center;justify-content:center;
+  font-size:11.5px;font-weight:800;letter-spacing:.4px;
 }
 .topbar-titles{min-width:0;}
 .topbar-titles h1{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -175,8 +177,8 @@ html,body{
   backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
   border-top:1px solid var(--border);
   padding-bottom:var(--safe-bottom);
-  display:flex;
 }
+.nav-inner{display:flex;max-width:640px;margin:0 auto;}
 .nav-btn{
   flex:1;border:none;background:none;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
@@ -585,3 +587,159 @@ a:focus-visible,
   .topbar,.bottom-nav,.fab,#toast,.modal-overlay{display:none!important;}
   body{background:var(--white);}
 }
+
+/* ==========================================================================
+   CURRÍCULUM — RESUMEN Y ASISTENTE POR PASOS
+   ========================================================================== */
+.cv-resumen{
+  background:var(--white);border:1.5px solid var(--border);border-radius:var(--r-lg);
+  padding:18px;box-shadow:var(--shadow-sm);
+}
+.cv-res-top{display:flex;align-items:center;gap:14px;margin-bottom:16px;}
+.cv-res-foto{
+  width:58px;height:58px;border-radius:50%;flex-shrink:0;
+  background:var(--grad-c);color:var(--white);
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;font-weight:800;overflow:hidden;
+}
+.cv-res-foto img{width:100%;height:100%;object-fit:cover;}
+.cv-res-info{flex:1;min-width:0;}
+.cv-res-info strong{display:block;font-size:16px;font-weight:700;}
+.cv-res-info small{display:block;font-size:12.5px;color:var(--text-muted);margin-top:1px;}
+.cv-barra{height:7px;border-radius:20px;background:var(--border);overflow:hidden;margin-bottom:7px;}
+.cv-barra span{display:block;height:100%;border-radius:20px;background:var(--grad-c);transition:width .4s;}
+.cv-barra-txt{font-size:12px;color:var(--text-muted);margin-bottom:16px;}
+.cv-res-btns{display:flex;gap:8px;}
+.cv-res-btns .btn{padding:11px 8px;font-size:13px;}
+
+.cv-steps{display:flex;gap:5px;margin-bottom:18px;}
+.cv-step{
+  flex:1;height:5px;border-radius:20px;background:var(--border);
+  border:none;padding:0;cursor:pointer;transition:background .2s;
+  -webkit-tap-highlight-color:transparent;
+}
+.cv-step.done{background:var(--teal);}
+.cv-step.now{background:var(--blue2);}
+.cv-paso-tit{font-size:15px;font-weight:700;margin-bottom:3px;}
+.cv-paso-sub{font-size:12.5px;color:var(--text-muted);margin-bottom:18px;line-height:1.45;}
+.cv-comp-grupo{margin-bottom:16px;}
+.cv-comp-grupo > .form-lbl{margin-bottom:7px;}
+.cv-foto-fila{display:flex;align-items:center;gap:14px;}
+
+/* ==========================================================================
+   CURRÍCULUM — PLANTILLA DEL DOCUMENTO (se usa para vista previa y PDF)
+   Medidas fijas en px: el PDF se genera capturando este bloque.
+   ========================================================================== */
+.cvdoc{
+  width:794px;min-height:1123px;               /* A4 a 96 dpi */
+  background:#ffffff;color:#1b1b1b;
+  font-family:'Outfit',sans-serif;display:flex;align-items:stretch;
+}
+.cvdoc *{box-sizing:border-box;}
+.cvdoc-izq{width:270px;flex-shrink:0;background:#f3f6f7;padding:26px 22px 34px;}
+.cvdoc-der{flex:1;min-width:0;padding:30px 28px 34px;}
+
+.cvdoc-foto{
+  width:132px;height:132px;border-radius:50%;margin:0 auto 24px;
+  background:#dfe8ea;border:3px solid #ffffff;box-shadow:0 0 0 2px #18AE97;
+  overflow:hidden;display:flex;align-items:center;justify-content:center;
+  font-size:34px;font-weight:800;color:#002343;
+}
+.cvdoc-foto img{width:100%;height:100%;object-fit:cover;display:block;}
+
+.cvdoc-nombre{
+  font-size:33px;font-weight:800;color:#002343;line-height:1.02;
+  text-transform:uppercase;letter-spacing:-.3px;margin-bottom:12px;
+}
+.cvdoc-contacto{
+  display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;
+  font-size:11px;color:#3d4a52;padding-bottom:14px;
+}
+.cvdoc-contacto i{display:inline-flex;align-items:center;gap:4px;font-style:normal;}
+.cvdoc-contacto svg{width:11px;height:11px;color:#18AE97;}
+.cvdoc-contacto b{color:#c9d4d8;font-weight:400;}
+
+.cvdoc-tit{display:flex;align-items:center;gap:9px;margin:0 0 12px;}
+.cvdoc-tit-ico{
+  width:25px;height:25px;border-radius:50%;flex-shrink:0;
+  background:#0f5c5a;color:#ffffff;
+  display:flex;align-items:center;justify-content:center;
+}
+.cvdoc-tit-ico svg{width:13px;height:13px;}
+.cvdoc-tit h3{
+  font-size:12.5px;font-weight:800;color:#002343;
+  text-transform:uppercase;letter-spacing:.7px;white-space:nowrap;
+}
+.cvdoc-der .cvdoc-tit::after{content:"";flex:1;height:1px;background:#c9d4d8;}
+.cvdoc-izq .cvdoc-tit{margin-top:0;}
+.cvdoc-sep{height:1px;background:#d5dfe2;margin:16px 0;}
+
+.cvdoc-p{font-size:11px;line-height:1.55;color:#2c383f;}
+.cvdoc-sub{
+  font-size:10.5px;font-weight:800;color:#18AE97;
+  text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;
+}
+.cvdoc-lista{list-style:none;}
+.cvdoc-lista li{
+  position:relative;padding-left:11px;font-size:11px;line-height:1.5;
+  color:#2c383f;margin-bottom:3px;
+}
+.cvdoc-lista li::before{
+  content:"";position:absolute;left:0;top:6.5px;
+  width:3.5px;height:3.5px;border-radius:50%;background:#0f5c5a;
+}
+.cvdoc-idioma{font-size:11px;line-height:1.6;color:#2c383f;}
+.cvdoc-idioma b{font-weight:700;color:#002343;}
+
+/* Línea de tiempo de experiencia y educación */
+.cvdoc-time{position:relative;padding-left:19px;}
+.cvdoc-time::before{
+  content:"";position:absolute;left:4.5px;top:5px;bottom:6px;
+  width:1.5px;background:#c3d4d6;
+}
+.cvdoc-item{position:relative;margin-bottom:13px;}
+.cvdoc-item:last-child{margin-bottom:0;}
+.cvdoc-item::before{
+  content:"";position:absolute;left:-19px;top:4px;
+  width:10px;height:10px;border-radius:50%;
+  background:#18AE97;border:2px solid #ffffff;
+}
+.cvdoc-org{font-size:12.5px;font-weight:800;color:#002343;line-height:1.3;}
+.cvdoc-cargo{font-size:11px;font-weight:700;color:#0f5c5a;margin-top:1px;}
+.cvdoc-cargo em{font-style:normal;color:#5c6b73;font-weight:500;}
+.cvdoc-item .cvdoc-lista{margin-top:5px;}
+.cvdoc-logro{
+  font-size:10.5px;line-height:1.5;color:#2c383f;margin-top:5px;
+  padding-left:8px;border-left:2px solid #b6dfd6;
+}
+
+/* Proyectos destacados */
+.cvdoc-proys{display:flex;gap:9px;flex-wrap:wrap;}
+.cvdoc-proy{
+  flex:1 1 0;min-width:150px;
+  background:#eef4f5;border-radius:9px;padding:13px 12px;
+}
+.cvdoc-proy-ico{
+  width:29px;height:29px;border-radius:50%;margin-bottom:8px;
+  background:#0f5c5a;color:#ffffff;
+  display:flex;align-items:center;justify-content:center;
+}
+.cvdoc-proy-ico svg{width:14px;height:14px;}
+.cvdoc-proy strong{display:block;font-size:11px;font-weight:800;color:#0f5c5a;line-height:1.3;margin-bottom:4px;}
+.cvdoc-proy p{font-size:10px;line-height:1.45;color:#2c383f;}
+.cvdoc-proy small{display:block;font-size:9.5px;line-height:1.4;color:#5c6b73;margin-top:4px;}
+
+/* Etiquetas de temas */
+.cvdoc-tags{display:flex;flex-wrap:wrap;gap:5px;}
+.cvdoc-tag{
+  font-size:9.5px;font-weight:600;color:#0f5c5a;
+  background:#e6f2f1;border:1px solid #c4e3de;
+  border-radius:20px;padding:3px 9px;
+}
+
+/* Vista previa a escala dentro del modal */
+.cv-prev-wrap{overflow:auto;-webkit-overflow-scrolling:touch;}
+.cv-prev-esc{transform-origin:top left;}
+
+/* Contenedor fuera de pantalla para generar el PDF */
+#cv-render{position:fixed;left:-10000px;top:0;z-index:-1;}
