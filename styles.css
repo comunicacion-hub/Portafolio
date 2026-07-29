@@ -743,3 +743,120 @@ a:focus-visible,
 
 /* Contenedor fuera de pantalla para generar el PDF */
 #cv-render{position:fixed;left:-10000px;top:0;z-index:-1;}
+
+/* ==========================================================================
+   INFORMES — TARJETAS Y FICHA
+   ========================================================================== */
+.inf-area-badge{
+  width:46px;height:46px;border-radius:var(--r-sm);flex-shrink:0;
+  color:var(--white);font-size:10px;font-weight:800;text-align:center;line-height:1.15;
+  display:flex;align-items:center;justify-content:center;padding:4px;
+}
+.inf-proc-tag{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:11.5px;font-weight:600;color:var(--text-muted);
+}
+.inf-proc-dot{width:9px;height:9px;border-radius:3px;flex-shrink:0;}
+.inf-fila{
+  border:1.5px solid var(--border);border-radius:var(--r-md);
+  padding:13px;margin-bottom:9px;background:var(--surface);
+}
+.inf-fila-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px;}
+.inf-cinta{
+  display:flex;align-items:center;gap:9px;
+  padding:9px 13px;border-radius:var(--r-md);margin-bottom:14px;
+  color:var(--white);font-size:13px;font-weight:700;
+}
+.inf-cinta small{
+  margin-left:auto;font-size:11px;font-weight:600;
+  background:rgba(255,255,255,.22);padding:2px 9px;border-radius:20px;
+}
+.inf-medio{display:flex;gap:8px;align-items:flex-start;margin-bottom:9px;}
+.inf-medio .form-inp{flex:1;}
+
+/* ==========================================================================
+   INFORMES — PLANTILLA DEL DOCUMENTO (vista previa y PDF)
+   Ancho de contenido 702px = A4 (794px) menos 46px de margen a cada lado.
+   Colores tomados de los modelos originales en PDF.
+   ========================================================================== */
+.infdoc{
+  width:702px;background:#ffffff;color:#1b1b1b;
+  font-family:'Outfit',sans-serif;
+}
+.infdoc *{box-sizing:border-box;}
+
+/* Encabezado */
+.infdoc-enc{display:flex;gap:20px;align-items:center;margin-bottom:22px;}
+.infdoc-enc-logo{width:172px;flex-shrink:0;display:flex;align-items:center;}
+.infdoc-enc-tabla{flex:1;border:1px solid #c9cdd1;}
+.infdoc-enc-tit{
+  text-align:center;font-weight:700;font-size:11.5px;color:#333;
+  padding:7px 8px;border-bottom:1px solid #c9cdd1;
+}
+.infdoc-enc-fila{display:flex;border-bottom:1px solid #c9cdd1;}
+.infdoc-enc-fila:last-child{border-bottom:none;}
+.infdoc-enc-c{flex:1;display:flex;min-width:0;border-right:1px solid #c9cdd1;}
+.infdoc-enc-c:last-child{border-right:none;}
+.infdoc-enc-l{
+  padding:8px 10px;font-weight:700;font-size:10.5px;color:#333;
+  white-space:nowrap;display:flex;align-items:center;
+}
+.infdoc-enc-v{
+  padding:8px 10px;font-size:10.5px;color:#333;flex:1;min-width:0;
+  display:flex;align-items:center;word-break:break-word;
+}
+
+.infdoc-subtit{
+  text-align:center;font-size:14px;color:#3d3d3d;margin:4px 0 22px;
+}
+.infdoc-subtit b{font-weight:700;color:#1b1b1b;}
+
+/* Bloque de proceso */
+.infdoc-proc{margin-bottom:18px;}
+.infdoc-proc-tit{
+  color:#ffffff;font-weight:700;font-size:12.5px;text-align:center;padding:9px 10px;
+}
+.infdoc-t{width:100%;border-collapse:collapse;table-layout:fixed;}
+.infdoc-t th{
+  background:#EBEBEB;font-size:10px;font-weight:700;color:#4a4a4a;
+  padding:7px 9px;text-align:center;border:1px solid #E0E0E0;
+}
+.infdoc-t td{
+  padding:8px 9px;font-size:10px;line-height:1.45;color:#2c2c2c;
+  border:1px solid #E6E6E6;vertical-align:top;word-break:break-word;
+}
+.infdoc-c1{width:82px;text-align:center;color:#555;}
+.infdoc-c3{width:88px;text-align:center;}
+.infdoc-c4{width:150px;color:#555;}
+.infdoc-pill{
+  display:inline-block;font-size:9px;font-weight:700;
+  padding:3px 8px;border-radius:20px;white-space:nowrap;
+}
+.infdoc-pill.ok{background:#E8F7EE;color:#1B7F45;}
+.infdoc-pill.pend{background:#FFF4E0;color:#A96A12;}
+.infdoc-vacio{
+  font-size:10px;color:#9a9a9a;font-style:italic;
+  padding:10px;text-align:center;border:1px solid #E6E6E6;border-top:none;
+}
+
+/* Cierre */
+.infdoc-cierre-tit{font-size:11.5px;font-weight:700;color:#4a4a4a;margin:22px 0 9px;}
+.infdoc-medios{font-size:10px;line-height:1.7;color:#1a56c4;word-break:break-all;}
+.infdoc-medios div{margin-bottom:2px;}
+
+.infdoc-val{width:100%;border-collapse:collapse;border:1px solid #c9cdd1;margin-top:22px;}
+.infdoc-val th{
+  font-size:10.5px;font-weight:700;text-align:center;color:#333;
+  padding:8px;border:1px solid #c9cdd1;
+}
+.infdoc-val td{
+  font-size:10.5px;text-align:center;color:#333;
+  padding:8px;border:1px solid #c9cdd1;
+}
+.infdoc-val td.l{font-weight:700;color:#4a4a4a;width:96px;}
+.infdoc-val .firma{height:66px;}
+
+.infdoc-aliados{
+  display:flex;align-items:center;gap:20px;flex-wrap:wrap;
+  margin-top:26px;padding-top:4px;
+}
