@@ -807,12 +807,12 @@ a:focus-visible,
 }
 
 .infdoc-subtit{
-  text-align:center;font-size:14px;color:#3d3d3d;margin:4px 0 22px;
+  text-align:center;font-size:14px;color:#3d3d3d;margin:8px 0 30px;
 }
 .infdoc-subtit b{font-weight:700;color:#1b1b1b;}
 
 /* Bloque de proceso */
-.infdoc-proc{margin-bottom:18px;}
+.infdoc-proc{margin-bottom:26px;}
 .infdoc-proc-tit{
   color:#ffffff;font-weight:700;font-size:12.5px;text-align:center;padding:9px 10px;
 }
@@ -840,11 +840,11 @@ a:focus-visible,
 }
 
 /* Cierre */
-.infdoc-cierre-tit{font-size:11.5px;font-weight:700;color:#4a4a4a;margin:22px 0 9px;}
+.infdoc-cierre-tit{font-size:11.5px;font-weight:700;color:#4a4a4a;margin:30px 0 9px;}
 .infdoc-medios{font-size:10px;line-height:1.7;color:#1a56c4;word-break:break-all;}
 .infdoc-medios div{margin-bottom:2px;}
 
-.infdoc-val{width:100%;border-collapse:collapse;border:1px solid #c9cdd1;margin-top:22px;}
+.infdoc-val{width:100%;border-collapse:collapse;border:1px solid #c9cdd1;margin-top:8px;}
 .infdoc-val th{
   font-size:10.5px;font-weight:700;text-align:center;color:#333;
   padding:8px;border:1px solid #c9cdd1;
@@ -856,7 +856,5 @@ a:focus-visible,
 .infdoc-val td.l{font-weight:700;color:#4a4a4a;width:96px;}
 .infdoc-val .firma{height:66px;}
 
-.infdoc-aliados{
-  display:flex;align-items:center;gap:20px;flex-wrap:wrap;
-  margin-top:26px;padding-top:4px;
-}
+.infdoc-pie{margin-top:24px;}
+.infdoc-pie img{width:100%;height:auto;display:block;}
