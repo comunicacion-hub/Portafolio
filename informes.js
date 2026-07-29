@@ -67,12 +67,26 @@ var INF_AREAS = {
   redes: {
     nombre: 'Redes Con Rostro',
     logo: 'rcr',
-    aliados: [],                       // el pie usa la franja PIES.redes (solo RCR)
+    aliados: [],
+    sinPie: true,                      // no lleva franja de logos al pie; el logo va solo en el encabezado
     validador: null,                   // no tiene validador: la firma es solo "Elaborado por"
     procesos: [
       { key: 'principales',     nombre: 'Acciones principales',       color: '#09AF96' },
       { key: 'acompanamiento',  nombre: 'Acciones de acompañamiento', color: '#4996D2' },
       { key: 'otras',           nombre: 'Otras actividades',          color: '#545454' }
+    ]
+  },
+
+  mediacion: {
+    nombre: 'Mediación comunitaria',
+    logo: 'rcr',                       // usa el logo de Redes Con Rostro
+    aliados: [],
+    sinPie: true,                      // sin franja de pie, igual que Redes
+    validador: null,                   // firma de una sola columna "Elaborado por"
+    tituloEncabezado: 'Mediación comunitaria',   // el recuadro superior dice esto, no el texto genérico
+    campoEmpresas: true,               // agrega la fila "Empresas/entidades" en el encabezado
+    procesos: [
+      { key: 'principales', nombre: 'Acciones principales', color: '#09AF96' }
     ]
   }
 };
@@ -140,6 +154,7 @@ var INF = {
       cargo:  ult ? (ult.cargo || '')  : '',
       cedula: ult ? (ult.cedula || '') : '',
       fecha_cierre: INF.hoyTexto(),
+      empresas: '',                    // solo lo usa Mediación comunitaria (campoEmpresas)
       procesos: {},
       medios: ['']
     };
@@ -162,6 +177,7 @@ var INF = {
     var o = Object.assign({}, d);
     o.medios = Array.isArray(o.medios) ? o.medios : [];
     if (!o.medios.length) o.medios = [''];
+    if (typeof o.empresas !== 'string') o.empresas = '';
     INF.sembrarProcesos(o);
     return o;
   },
@@ -424,6 +440,12 @@ var INF = {
         '<label class="form-lbl" for="inf-cierre">Fecha de cierre</label>' +
         '<input class="form-inp" id="inf-cierre" value="' + RCR.esc(f.fecha_cierre) + '" placeholder="31/07/2026">' +
       '</div>' +
+      ((a && a.campoEmpresas)
+        ? '<div class="form-grp">' +
+            '<label class="form-lbl" for="inf-empresas">Empresas / entidades</label>' +
+            '<input class="form-inp" id="inf-empresas" value="' + RCR.esc(f.empresas) + '" placeholder="Con quién se realizó la mediación">' +
+          '</div>'
+        : '') +
       '<div class="form-grp">' +
         '<label class="form-lbl">Elaborado por</label>' +
         '<div class="form-static">' + RCR.esc(f.nombre) + '</div>' +
@@ -455,6 +477,7 @@ var INF = {
     f.fecha_cierre = INF.val('inf-cierre');
     f.cargo        = INF.val('inf-cargo');
     f.cedula       = INF.val('inf-cedula');
+    if (document.getElementById('inf-empresas')) f.empresas = INF.val('inf-empresas');
   },
 
   cambiarArea: function (nueva) {
@@ -758,35 +781,48 @@ var INF = {
 
     /* ── Encabezado: logo + tabla de datos, en dos columnas ─────────────── */
     var logo = window.LOGOS[a.logo];
-    var altoLogo = 46;
+    /* Caja del logo del encabezado: los logos apaisados aprovechan el ancho;
+       los compactos (ar bajo, como RCR) necesitan más alto para no verse chicos. */
+    var cajaW = 150, cajaH = (logo.ar < 2.5) ? 74 : 52;
     content.push({
       columns: [
         {
-          width: 150,
-          margin: [0, 6, 0, 0],
+          width: cajaW + 6,
+          margin: [0, 4, 0, 0],
           image: logo.src,
-          fit: [140, altoLogo]
+          fit: [cajaW, cajaH]
         },
         {
           width: '*',
           table: {
             widths: ['auto', '*', 'auto', '*'],
-            body: [
-              [{ text: 'Informe de cumplimiento de actividades', colSpan: 4, alignment: 'center',
-                 bold: true, fontSize: 9.5, color: '#333', margin: [0, 3, 0, 3] }, {}, {}, {}],
-              [
-                { text: 'Colaborador(a):', bold: true, fontSize: 9, margin: [0, 2, 0, 2] },
-                { text: d.nombre, fontSize: 9, margin: [0, 2, 0, 2] },
-                { text: 'Mes y año:', bold: true, fontSize: 9, margin: [0, 2, 0, 2] },
-                { text: d.mes + ' ' + d.anio, fontSize: 9, margin: [0, 2, 0, 2] }
-              ],
-              [
-                { text: 'Cargo:', bold: true, fontSize: 9, margin: [0, 2, 0, 2] },
-                { text: d.cargo, fontSize: 9, margin: [0, 2, 0, 2] },
-                { text: 'Fecha de cierre:', bold: true, fontSize: 9, margin: [0, 2, 0, 2] },
-                { text: d.fecha_cierre, fontSize: 9, margin: [0, 2, 0, 2] }
-              ]
-            ]
+            body: (function () {
+              var filas = [
+                [{ text: a.tituloEncabezado || 'Informe de cumplimiento de actividades',
+                   colSpan: 4, alignment: 'center',
+                   bold: true, fontSize: 9.5, color: '#333', margin: [0, 3, 0, 3] }, {}, {}, {}],
+                [
+                  { text: 'Colaborador(a):', bold: true, fontSize: 9, margin: [0, 2, 0, 2] },
+                  { text: d.nombre, fontSize: 9, margin: [0, 2, 0, 2] },
+                  { text: 'Mes y año:', bold: true, fontSize: 9, margin: [0, 2, 0, 2] },
+                  { text: d.mes + ' ' + d.anio, fontSize: 9, margin: [0, 2, 0, 2] }
+                ],
+                [
+                  { text: 'Cargo:', bold: true, fontSize: 9, margin: [0, 2, 0, 2] },
+                  { text: d.cargo, fontSize: 9, margin: [0, 2, 0, 2] },
+                  { text: 'Fecha de cierre:', bold: true, fontSize: 9, margin: [0, 2, 0, 2] },
+                  { text: d.fecha_cierre, fontSize: 9, margin: [0, 2, 0, 2] }
+                ]
+              ];
+              /* Mediación comunitaria: fila extra con las empresas/entidades */
+              if (a.campoEmpresas) {
+                filas.push([
+                  { text: 'Empresas/entidades:', bold: true, fontSize: 9, margin: [0, 2, 0, 2] },
+                  { text: d.empresas || '', colSpan: 3, fontSize: 9, margin: [0, 2, 0, 2] }, {}, {}
+                ]);
+              }
+              return filas;
+            })()
           },
           layout: {
             hLineWidth: function () { return 0.7; },
@@ -920,8 +956,9 @@ var INF = {
          El logo del área va a la izquierda; a la derecha los aliados, sin
          El pie usa la franja PNG del área (window.PIES), que ya trae los logos
          con el tamaño y espaciado del diseño; se coloca a ancho útil y centrada,
-         respetando su proporción (sin estirar). ─────────────────────────────── */
-    var pie = window.PIES[d.area];
+         respetando su proporción (sin estirar). Las áreas marcadas con sinPie
+         (ej. Redes Con Rostro) no llevan franja: el logo va solo en el encabezado. */
+    var pie = a.sinPie ? null : window.PIES[d.area];
 
     return {
       pageSize: 'A4',
@@ -942,9 +979,9 @@ var INF = {
            que no salgan gigantes al llevarlas a ancho completo. */
         var ancho;
         if (pie.ar >= 8) {
-          ancho = P.anchoUtil - 30;                 // ancho, centrada
+          ancho = P.anchoUtil - 30;                 // franja ancha (varios logos): centrada
         } else {
-          var ALTO_MAX = 40;                        // franja compacta: limitar alto
+          var ALTO_MAX = 66;                        // franja compacta (un solo logo): más grande
           ancho = Math.min(P.anchoUtil - 30, ALTO_MAX * pie.ar);
         }
         return {
@@ -1016,7 +1053,7 @@ var INF = {
       '<div class="infdoc-enc" data-bloque="enc">' +
         '<div class="infdoc-enc-logo">' + logoImg(a.logo, 50) + '</div>' +
         '<div class="infdoc-enc-tabla">' +
-          '<div class="infdoc-enc-tit">Informe de cumplimiento de actividades</div>' +
+          '<div class="infdoc-enc-tit">' + RCR.esc(a.tituloEncabezado || 'Informe de cumplimiento de actividades') + '</div>' +
           '<div class="infdoc-enc-fila">' +
             '<div class="infdoc-enc-c"><span class="infdoc-enc-l">Colaborador(a):</span>' +
               '<span class="infdoc-enc-v">' + RCR.esc(d.nombre) + '</span></div>' +
@@ -1029,6 +1066,12 @@ var INF = {
             '<div class="infdoc-enc-c"><span class="infdoc-enc-l">Fecha de cierre:</span>' +
               '<span class="infdoc-enc-v">' + RCR.esc(d.fecha_cierre) + '</span></div>' +
           '</div>' +
+          (a.campoEmpresas
+            ? '<div class="infdoc-enc-fila">' +
+                '<div class="infdoc-enc-c" style="flex:1"><span class="infdoc-enc-l">Empresas/entidades:</span>' +
+                  '<span class="infdoc-enc-v">' + RCR.esc(d.empresas || '') + '</span></div>' +
+              '</div>'
+            : '') +
         '</div>' +
       '</div>' +
       '<div class="infdoc-subtit" data-bloque="subtit">Informe de <b>cumplimiento</b> de actividades – ' +
@@ -1088,9 +1131,10 @@ var INF = {
               '<tr><td>' + RCR.esc(d.cedula) + '</td></tr>' +
             '</table>') +
       '</div>' +
-      '<div data-bloque="aliados" data-atomico="1" data-borde="1">' +
-        '<div class="infdoc-pie">' + pieImg(d.area, 702) + '</div>' +
-      '</div>';
+      (a.sinPie ? '' :
+        '<div data-bloque="aliados" data-atomico="1" data-borde="1">' +
+          '<div class="infdoc-pie">' + pieImg(d.area, 702) + '</div>' +
+        '</div>');
 
     return '<div class="infdoc">' + enc + cuerpo + cierre + '</div>';
   }
