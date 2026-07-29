@@ -46,7 +46,7 @@
      ══════════════════════════════════════════════════════════════════════ -->
 <div id="login-screen" class="hidden">
   <div class="login-card">
-    <div class="login-mark" id="login-mark"></div>
+    <div class="login-mark" id="login-mark">RCR</div>
     <h1>Mi RCR</h1>
     <p>Las herramientas del equipo de Redes Con Rostro, en un solo lugar.</p>
     <div class="login-hint">Entra con tu cuenta institucional</div>
@@ -62,7 +62,7 @@
 
   <header class="topbar">
     <div class="topbar-left">
-      <div class="topbar-mark" id="topbar-mark"></div>
+      <div class="topbar-mark" id="topbar-mark">RCR</div>
       <div class="topbar-titles">
         <h1 id="topbar-titulo">Mi RCR</h1>
         <span id="topbar-user">—</span>
@@ -88,7 +88,7 @@
 
   <button class="fab hidden" id="fab" aria-label="Agregar"></button>
 
-  <nav class="bottom-nav" id="nav" aria-label="Secciones"></nav>
+  <nav class="bottom-nav" aria-label="Secciones"><div class="nav-inner" id="nav"></div></nav>
 </div>
 
 <!-- Contenedor de modales dinámicos -->
@@ -168,8 +168,13 @@ RCR.modal = function (o) {
 
   document.getElementById('modal-root').appendChild(wrap);
 
-  wrap.querySelector('.modal-close').onclick = function () { RCR.cerrarModal(o.id); };
-  wrap.addEventListener('click', function (e) { if (e.target === wrap) RCR.cerrarModal(o.id); });
+  var cerrar = o.onCerrar || function () { RCR.cerrarModal(o.id); };
+  wrap.querySelector('.modal-close').onclick = cerrar;
+
+  /* Los formularios largos no se cierran al tocar fuera */
+  if (!o.persistente) {
+    wrap.addEventListener('click', function (e) { if (e.target === wrap) cerrar(); });
+  }
 
   requestAnimationFrame(function () {
     wrap.classList.add('open');
@@ -307,7 +312,7 @@ RCR.entrar = function () {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.remove('hidden');
 
-  document.getElementById('topbar-mark').innerHTML = ico('accesos', 18);
+
   document.getElementById('user-avatar').textContent = RCR.user.iniciales;
   document.getElementById('topbar-user').textContent = RCR.user.nombre;
   document.getElementById('menu-nombre').textContent = RCR.user.nombre;
@@ -333,7 +338,7 @@ RCR.entrar = function () {
 RCR.mostrarLogin = function () {
   document.getElementById('boot-screen').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
-  document.getElementById('login-mark').innerHTML = ico('accesos', 26);
+
 
   /* GSI carga en async: se espera con reintentos cortos */
   var intentos = 0;
