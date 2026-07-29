@@ -45,6 +45,35 @@ var INF_AREAS = {
       { key: 'nutricion',      nombre: 'Plan de nutrición',      color: '#395E27' },
       { key: 'otras',          nombre: 'Otras actividades',      color: '#545454' }
     ]
+  },
+
+  vidrio: {
+    nombre: 'Vidrio Mejor Planeta',
+    logo: 'vidrio',
+    aliados: [],                       // el pie usa la franja PIES.vidrio
+    validador: {
+      nombre: 'Monserrate Gómez',
+      cargo:  'Coordinadora Nacional de Vidrio Mejor Planeta',
+      cedula: '0930953559'
+    },
+    procesos: [
+      { key: 'cadena_comercial', nombre: 'Cadena comercial',           color: '#5B3D1C' },
+      { key: 'fortalecimiento',  nombre: 'Fortalecimiento asociativo', color: '#76753E' },
+      { key: 'vinculacion',      nombre: 'Vinculación estratégica',    color: '#DA9632' },
+      { key: 'otras',            nombre: 'Otras actividades',          color: '#545454' }
+    ]
+  },
+
+  redes: {
+    nombre: 'Redes Con Rostro',
+    logo: 'rcr',
+    aliados: [],                       // el pie usa la franja PIES.redes (solo RCR)
+    validador: null,                   // no tiene validador: la firma es solo "Elaborado por"
+    procesos: [
+      { key: 'principales',     nombre: 'Acciones principales',       color: '#09AF96' },
+      { key: 'acompanamiento',  nombre: 'Acciones de acompañamiento', color: '#4996D2' },
+      { key: 'otras',           nombre: 'Otras actividades',          color: '#545454' }
+    ]
   }
 };
 
@@ -80,8 +109,6 @@ RCR.modulos.informes = {
 var INF = {
 
   COL: 'Informes',
-  LIB_CANVAS: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
-  LIB_PDF:    'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
 
   MESES: ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
           'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'],
@@ -411,7 +438,7 @@ var INF = {
           '<input class="form-inp" id="inf-cedula" inputmode="numeric" value="' + RCR.esc(f.cedula) + '" placeholder="0912345678">' +
         '</div>' +
       '</div>' +
-      (a ? '<div class="form-grp" style="margin-bottom:0">' +
+      ((a && a.validador) ? '<div class="form-grp" style="margin-bottom:0">' +
              '<label class="form-lbl">Validado por</label>' +
              '<div class="form-static" style="font-weight:500;font-size:13px;line-height:1.5">' +
                RCR.esc(a.validador.nombre) + '<br>' +
@@ -671,14 +698,19 @@ var INF = {
   },
 
   /* ==========================================================================
-     PDF
-     Se captura bloque por bloque y se acomodan en páginas: así el corte
-     nunca cae en mitad de una fila de la tabla.
+     PDF — texto real con pdfmake
+     Ventajas frente a la versión imagen: texto seleccionable y buscable,
+     nítido a cualquier zoom, archivo liviano. pdfmake maneja de fábrica los
+     saltos de página que no parten filas y repite el encabezado de la tabla.
      ========================================================================== */
+  LIB_PDFMAKE: 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js',
+
   descargar: async function (docId, btn) {
     if (INF.generando) return;
     var d = INF.datos.find(function (x) { return x._docId === docId; });
     if (!d) return;
+    var a = INF.area(d.area);
+    if (!a) { RCR.toast('Área no reconocida'); return; }
 
     INF.generando = true;
     var txt = btn ? btn.innerHTML : '';
@@ -686,87 +718,21 @@ var INF = {
     RCR.toast('Generando el PDF');
 
     try {
-      await RCR.cargarLib(INF.LIB_CANVAS);
-      await RCR.cargarLib(INF.LIB_PDF);
-
-      var box = document.getElementById('inf-render');
-      if (!box) {
-        box = document.createElement('div');
-        box.id = 'inf-render';
-        box.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;';
-        document.body.appendChild(box);
-      }
-      box.innerHTML = INF.plantillaHTML(d);
-
-      if (document.fonts && document.fonts.ready) await document.fonts.ready;
-      await new Promise(function (r) { setTimeout(r, 200); });
-
-      var ESCALA = 2;
-      var jsPDF = window.jspdf.jsPDF;
-      var pdf = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
-      var PW = pdf.internal.pageSize.getWidth();
-      var PH = pdf.internal.pageSize.getHeight();
-      var MX = (PW - 702 * 0.75) / 2;     // 702 px de contenido a 96 dpi
-      var MY = 40;
-      var UTIL = PH - MY * 2;
-      var ANCHO = 702 * 0.75;
-
-      var bloques = box.querySelectorAll('[data-bloque]');
-      var UTIL_CSS = UTIL / 0.75;                // alto útil de página en px CSS
-      var y = MY;
-
-      for (var b = 0; b < bloques.length; b++) {
-        var el = bloques[b];
-        var cortes = INF.cortesSeguros(el);      // px CSS, relativos al bloque
-        var canvas = await html2canvas(el, {
-          scale: ESCALA, backgroundColor: null, useCORS: true, logging: false
-        });
-        var altoCss = canvas.height / ESCALA;
-        var libre = (MY + UTIL - y) / 0.75;      // px CSS que quedan en la página
-
-        /* 1. Entra tal cual en lo que queda */
-        if (altoCss <= libre + 0.5) {
-          INF.pegar(pdf, canvas, ESCALA, 0, altoCss, MX, y, ANCHO);
-          y += altoCss * 0.75 + 6;
-          continue;
-        }
-
-        /* 2. No entra aquí pero sí en una página limpia: se pasa entero */
-        if (altoCss <= UTIL_CSS + 0.5) {
-          pdf.addPage(); y = MY;
-          INF.pegar(pdf, canvas, ESCALA, 0, altoCss, MX, y, ANCHO);
-          y += altoCss * 0.75 + 6;
-          continue;
-        }
-
-        /* 3. Más alto que una página: se parte, y si se puede, por borde de fila */
-        var arriba = 0;
-        while (arriba < altoCss - 0.5) {
-          libre = (MY + UTIL - y) / 0.75;
-          if (libre < 60) { pdf.addPage(); y = MY; libre = UTIL_CSS; }
-
-          var pendiente = altoCss - arriba;
-          if (pendiente <= libre + 0.5) {
-            INF.pegar(pdf, canvas, ESCALA, arriba, pendiente, MX, y, ANCHO);
-            y += pendiente * 0.75;
-            arriba = altoCss;
-            break;
-          }
-
-          var corte = INF.mejorCorte(cortes, arriba, libre, altoCss);
-          if (corte === null) corte = arriba + libre;
-          INF.pegar(pdf, canvas, ESCALA, arriba, corte - arriba, MX, y, ANCHO);
-          arriba = corte;
-          pdf.addPage(); y = MY;
-        }
-        y += 6;
+      await RCR.cargarLib(INF.LIB_PDFMAKE);
+      if (!window.registrarOutfit || !registrarOutfit()) {
+        console.warn('Outfit no disponible; se usa la fuente por defecto de pdfmake.');
       }
 
-      var a = INF.area(d.area);
-      pdf.save('Informe ' + (a ? a.nombre : d.area) + ' - ' + d.mes + ' ' + d.anio + '.pdf');
-      box.innerHTML = '';
+      var doc = INF.docDefinicion(d, a);
+      var nombre = 'Informe ' + a.nombre + ' - ' + d.mes + ' ' + d.anio + '.pdf';
+
+      await new Promise(function (resolve, reject) {
+        try {
+          pdfMake.createPdf(doc).download(nombre, function () { resolve(); });
+        } catch (e) { reject(e); }
+      });
+
       RCR.toast('PDF descargado');
-
     } catch (e) {
       console.error('INF.descargar:', e);
       RCR.toast('No se pudo generar el PDF');
@@ -776,41 +742,267 @@ var INF = {
     INF.generando = false;
   },
 
-  /* Coloca un recorte del canvas en el PDF */
-  pegar: function (pdf, canvas, escala, topCss, altoCss, x, y, ancho) {
-    var t = document.createElement('canvas');
-    t.width  = canvas.width;
-    t.height = Math.round(altoCss * escala);
-    var ctx = t.getContext('2d');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, t.width, t.height);
-    ctx.drawImage(canvas, 0, Math.round(topCss * escala), canvas.width, t.height,
-                  0, 0, canvas.width, t.height);
-    pdf.addImage(t.toDataURL('image/jpeg', 0.94), 'JPEG', x, y, ancho, altoCss * 0.75);
+  /* Medidas del documento (en puntos) */
+  PDF: {
+    margen: 40,
+    anchoUtil: 595.28 - 80,          // A4 menos márgenes
+    colFecha: 62, colEstado: 66, colObs: 108,
+    gris: '#EBEBEB', borde: '#D9DCDF', bordeSuave: '#E6E6E6',
+    textoTabla: '#2C2C2C', tit: '#1B1B1B'
   },
 
-  /* Bordes de fila donde se puede cortar sin partir una celda */
-  cortesSeguros: function (el) {
-    var base = el.getBoundingClientRect().top;
-    var puntos = [];
-    el.querySelectorAll('tr').forEach(function (tr) {
-      var r = tr.getBoundingClientRect();
-      puntos.push(r.top - base);
-      puntos.push(r.bottom - base);
+  /* Estructura del informe para pdfmake */
+  docDefinicion: function (d, a) {
+    var P = INF.PDF;
+    var content = [];
+
+    /* ── Encabezado: logo + tabla de datos, en dos columnas ─────────────── */
+    var logo = window.LOGOS[a.logo];
+    var altoLogo = 46;
+    content.push({
+      columns: [
+        {
+          width: 150,
+          margin: [0, 6, 0, 0],
+          image: logo.src,
+          fit: [140, altoLogo]
+        },
+        {
+          width: '*',
+          table: {
+            widths: ['auto', '*', 'auto', '*'],
+            body: [
+              [{ text: 'Informe de cumplimiento de actividades', colSpan: 4, alignment: 'center',
+                 bold: true, fontSize: 9.5, color: '#333', margin: [0, 3, 0, 3] }, {}, {}, {}],
+              [
+                { text: 'Colaborador(a):', bold: true, fontSize: 9, margin: [0, 2, 0, 2] },
+                { text: d.nombre, fontSize: 9, margin: [0, 2, 0, 2] },
+                { text: 'Mes y año:', bold: true, fontSize: 9, margin: [0, 2, 0, 2] },
+                { text: d.mes + ' ' + d.anio, fontSize: 9, margin: [0, 2, 0, 2] }
+              ],
+              [
+                { text: 'Cargo:', bold: true, fontSize: 9, margin: [0, 2, 0, 2] },
+                { text: d.cargo, fontSize: 9, margin: [0, 2, 0, 2] },
+                { text: 'Fecha de cierre:', bold: true, fontSize: 9, margin: [0, 2, 0, 2] },
+                { text: d.fecha_cierre, fontSize: 9, margin: [0, 2, 0, 2] }
+              ]
+            ]
+          },
+          layout: {
+            hLineWidth: function () { return 0.7; },
+            vLineWidth: function () { return 0.7; },
+            hLineColor: function () { return '#C9CDD1'; },
+            vLineColor: function () { return '#C9CDD1'; }
+          }
+        }
+      ],
+      columnGap: 18,
+      margin: [0, 0, 0, 20]
     });
-    return puntos.sort(function (a, b) { return a - b; });
+
+    /* ── Subtítulo ──────────────────────────────────────────────────────── */
+    content.push({
+      text: [
+        'Informe de ', { text: 'cumplimiento', bold: true }, ' de actividades – ',
+        { text: d.mes + ' ' + d.anio, bold: true }
+      ],
+      alignment: 'center', fontSize: 13, color: '#3d3d3d', margin: [0, 0, 0, 24]
+    });
+
+    /* ── Un bloque por proceso ──────────────────────────────────────────── */
+    a.procesos.forEach(function (p) {
+      var filas = d.procesos[p.key] || [];
+      if (!filas.length) return;
+
+      /* Cinta de título con el color del proceso */
+      content.push({
+        table: { widths: ['*'], body: [[
+          { text: p.nombre, alignment: 'center', bold: true, color: '#ffffff',
+            fontSize: 11.5, fillColor: p.color, margin: [0, 6, 0, 6] }
+        ]]},
+        layout: 'noBorders',
+        margin: [0, 0, 0, 0]
+      });
+
+      var body = [[
+        { text: 'Fecha', style: 'th' },
+        { text: 'Actividad', style: 'th' },
+        { text: 'Estado', style: 'th' },
+        { text: 'Observaciones', style: 'th' }
+      ]];
+
+      filas.forEach(function (f) {
+        var ok = f.estado !== 'Por ejecutar';
+        body.push([
+          { text: f.fecha || '', style: 'td', alignment: 'center', color: '#555' },
+          { text: f.actividad || '', style: 'td' },
+          { text: f.estado || 'Ejecutado', style: 'tdEstado',
+            color: ok ? '#1B7F45' : '#A96A12', fillColor: ok ? '#E8F7EE' : '#FFF4E0' },
+          { text: f.observaciones || '', style: 'td', color: '#555' }
+        ]);
+      });
+
+      content.push({
+        table: {
+          headerRows: 1,
+          widths: [P.colFecha, '*', P.colEstado, P.colObs],
+          body: body
+        },
+        layout: {
+          hLineWidth: function () { return 0.5; },
+          vLineWidth: function () { return 0.5; },
+          hLineColor: function () { return P.bordeSuave; },
+          vLineColor: function () { return P.bordeSuave; }
+        },
+        margin: [0, 0, 0, 22]
+      });
+    });
+
+    /* ── Medios de verificación ─────────────────────────────────────────── */
+    var medios = (d.medios || []).filter(Boolean);
+    if (medios.length) {
+      content.push({ text: 'Medios de verificación', bold: true, fontSize: 11, color: '#4a4a4a', margin: [0, 4, 0, 6] });
+      medios.forEach(function (m) {
+        content.push({ text: m, link: m, color: '#1a56c4', fontSize: 9.5, margin: [0, 0, 0, 2] });
+      });
+    }
+
+    /* ── Tabla de firmas, indivisible.
+         Con validador: dos columnas (Elaborado por / Validado por).
+         Sin validador (ej. Redes Con Rostro): una sola columna Elaborado por. ─ */
+    var firmas;
+    if (a.validador) {
+      firmas = {
+        unbreakable: true,
+        margin: [0, 22, 0, 0],
+        table: {
+          widths: ['*', '*'],
+          body: [
+            [ { text: 'Elaborado por', style: 'thFirma' }, { text: 'Validado por', style: 'thFirma' } ],
+            [ { text: ' ', margin: [0, 22, 0, 22] }, { text: ' ', margin: [0, 22, 0, 22] } ],
+            [ { text: d.nombre, style: 'tdFirma' }, { text: a.validador.nombre, style: 'tdFirma' } ],
+            [ { text: d.cargo, style: 'tdFirma' }, { text: a.validador.cargo, style: 'tdFirma' } ],
+            [ { text: d.cedula, style: 'tdFirma' }, { text: a.validador.cedula, style: 'tdFirma' } ]
+          ]
+        },
+        layout: {
+          hLineWidth: function () { return 0.7; },
+          vLineWidth: function () { return 0.7; },
+          hLineColor: function () { return '#C9CDD1'; },
+          vLineColor: function () { return '#C9CDD1'; }
+        }
+      };
+    } else {
+      firmas = {
+        unbreakable: true,
+        margin: [0, 22, 0, 0],
+        table: {
+          widths: ['*'],
+          body: [
+            [ { text: 'Elaborado por', style: 'thFirma' } ],
+            [ { text: ' ', margin: [0, 22, 0, 22] } ],
+            [ { text: d.nombre, style: 'tdFirma' } ],
+            [ { text: d.cargo, style: 'tdFirma' } ],
+            [ { text: d.cedula, style: 'tdFirma' } ]
+          ]
+        },
+        layout: {
+          hLineWidth: function () { return 0.7; },
+          vLineWidth: function () { return 0.7; },
+          hLineColor: function () { return '#C9CDD1'; },
+          vLineColor: function () { return '#C9CDD1'; }
+        }
+      };
+    }
+    content.push(firmas);
+
+    /* ── Pie de aliados: logos sueltos, uniformes y dentro del ancho A4.
+         El logo del área va a la izquierda; a la derecha los aliados, sin
+         El pie usa la franja PNG del área (window.PIES), que ya trae los logos
+         con el tamaño y espaciado del diseño; se coloca a ancho útil y centrada,
+         respetando su proporción (sin estirar). ─────────────────────────────── */
+    var pie = window.PIES[d.area];
+
+    return {
+      pageSize: 'A4',
+      pageMargins: [P.margen, P.margen + 14, P.margen, P.margen + 34],  // más aire arriba y abajo
+      defaultStyle: { font: window.__outfitListo ? 'Outfit' : undefined, fontSize: 10, color: P.textoTabla },
+      styles: {
+        th: { bold: true, fontSize: 10, color: '#4a4a4a', fillColor: P.gris, alignment: 'center', margin: [0, 5, 0, 5] },
+        td: { fontSize: 10, margin: [0, 4, 0, 4], lineHeight: 1.15 },
+        tdEstado: { bold: true, fontSize: 9, alignment: 'center', margin: [0, 5, 0, 5] },
+        thFirma: { bold: true, fontSize: 10.5, color: '#333', alignment: 'center', margin: [0, 6, 0, 6] },
+        tdFirma: { fontSize: 10.5, color: '#333', alignment: 'center', margin: [0, 6, 0, 6] }
+      },
+      content: content,
+      footer: pie ? function (paginaActual, totalPaginas) {
+        if (paginaActual !== totalPaginas) return null;
+        /* Franjas anchas (varios logos, ar alto) van a ancho útil centradas.
+           Franjas compactas (pocos logos, ar bajo) se acotan por altura para
+           que no salgan gigantes al llevarlas a ancho completo. */
+        var ancho;
+        if (pie.ar >= 8) {
+          ancho = P.anchoUtil - 30;                 // ancho, centrada
+        } else {
+          var ALTO_MAX = 40;                        // franja compacta: limitar alto
+          ancho = Math.min(P.anchoUtil - 30, ALTO_MAX * pie.ar);
+        }
+        return {
+          image: pie.src,
+          width: ancho,
+          alignment: 'center',
+          margin: [0, 8, 0, 16]
+        };
+      } : undefined
+    };
   },
 
-  /* Corte más bajo que quepa en el espacio disponible */
-  mejorCorte: function (cortes, desde, disponible, altoTotal) {
-    var limite = desde + disponible;
-    var mejor = null;
-    for (var i = 0; i < cortes.length; i++) {
-      var c = cortes[i];
-      if (c > desde + 24 && c <= limite && c < altoTotal - 1) mejor = c;
+  /* (En desuso) Fila de logos del pie con logos sueltos, en una sola fila de columnas:
+       [ logo del área ] [ espaciador flexible ] [ aliado ][gap][ aliado ]…
+     Todos a la MISMA ALTURA con su ancho natural (respetan su proporción).
+  /* Fila de logos del pie con logos sueltos, en una sola fila de columnas:
+       [ logo del área ] [ espaciador flexible ] [ aliado ][gap][ aliado ]…
+     Se dimensionan por ÁREA VISUAL: cada logo ocupa una superficie parecida
+     (ancho × alto ≈ constante), así los apaisados no se ven gigantes ni los
+     compactos diminutos. La altura se acota a un rango suave para que la fila
+     quede prolija. Todo dentro del ancho útil A4. */
+  footerLogos: function (logoArea, aliados) {
+    var P = INF.PDF;
+    var AREA = 1150;         // superficie objetivo por logo, en pt²
+    var H_MIN = 20, H_MAX = 34;
+
+    function celda(L) {
+      var alto = Math.sqrt(AREA / L.ar);          // alto = sqrt(area/ar)
+      alto = Math.max(H_MIN, Math.min(H_MAX, alto));
+      var ancho = Math.round(alto * L.ar);
+      return { width: ancho, image: L.src, fit: [ancho, Math.round(alto)] };
     }
-    return mejor;
+
+    var cols = [];
+
+    /* Logo del área, a la izquierda */
+    if (logoArea) cols.push(celda(logoArea));
+
+    /* Espaciador flexible: empuja los aliados hacia la derecha */
+    cols.push({ width: '*', text: '' });
+
+    /* Aliados, a la derecha, separados por un gap fijo uniforme */
+    var GAP = 16;
+    (aliados || []).forEach(function (L, i) {
+      if (i > 0) cols.push({ width: GAP, text: '' });
+      cols.push(celda(L));
+    });
+
+    return {
+      margin: [P.margen, 8, P.margen, 18],
+      columns: cols,
+      columnGap: 0,
+      alignment: 'center'
+    };
   },
+
+
+
 
   /* ==========================================================================
      PLANTILLA DEL DOCUMENTO
@@ -874,21 +1066,30 @@ var INF = {
             '</div>' +
           '</div>'
         : '') +
-      /* La tabla de validación y los logos nunca se parten */
+      /* La tabla de validación va en flujo (con su aire); solo el pie se ancla al borde.
+         Con validador: dos columnas. Sin validador: una sola (Elaborado por). */
       '<div data-bloque="validacion" data-atomico="1">' +
-        '<table class="infdoc-val">' +
-          '<tr><th></th><th>Elaborado por</th><th>Validado por</th></tr>' +
-          '<tr><td class="l"></td><td class="firma"></td><td class="firma"></td></tr>' +
-          '<tr><td class="l">Nombre</td><td>' + RCR.esc(d.nombre) + '</td>' +
-            '<td>' + RCR.esc(a.validador.nombre) + '</td></tr>' +
-          '<tr><td class="l">Cargo</td><td>' + RCR.esc(d.cargo) + '</td>' +
-            '<td>' + RCR.esc(a.validador.cargo) + '</td></tr>' +
-          '<tr><td class="l">C.I.</td><td>' + RCR.esc(d.cedula) + '</td>' +
-            '<td>' + RCR.esc(a.validador.cedula) + '</td></tr>' +
-        '</table>' +
-        '<div class="infdoc-aliados">' +
-          a.aliados.map(function (k) { return logoImg(k, 34); }).join('') +
-        '</div>' +
+        (a.validador
+          ? '<table class="infdoc-val">' +
+              '<tr><th>Elaborado por</th><th>Validado por</th></tr>' +
+              '<tr><td class="firma"></td><td class="firma"></td></tr>' +
+              '<tr><td>' + RCR.esc(d.nombre) + '</td>' +
+                '<td>' + RCR.esc(a.validador.nombre) + '</td></tr>' +
+              '<tr><td>' + RCR.esc(d.cargo) + '</td>' +
+                '<td>' + RCR.esc(a.validador.cargo) + '</td></tr>' +
+              '<tr><td>' + RCR.esc(d.cedula) + '</td>' +
+                '<td>' + RCR.esc(a.validador.cedula) + '</td></tr>' +
+            '</table>'
+          : '<table class="infdoc-val">' +
+              '<tr><th>Elaborado por</th></tr>' +
+              '<tr><td class="firma"></td></tr>' +
+              '<tr><td>' + RCR.esc(d.nombre) + '</td></tr>' +
+              '<tr><td>' + RCR.esc(d.cargo) + '</td></tr>' +
+              '<tr><td>' + RCR.esc(d.cedula) + '</td></tr>' +
+            '</table>') +
+      '</div>' +
+      '<div data-bloque="aliados" data-atomico="1" data-borde="1">' +
+        '<div class="infdoc-pie">' + pieImg(d.area, 702) + '</div>' +
       '</div>';
 
     return '<div class="infdoc">' + enc + cuerpo + cierre + '</div>';
