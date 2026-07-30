@@ -52,11 +52,6 @@ var FIR = {
   seq: 0,
   generando: false,
 
-  /* Iconos inline de la estampa (no dependen de icons.js) */
-  ICO_MOVER: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>',
-  ICO_BORRAR: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
-  ICO_RESIZE: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>',
-
   reset: function () {
     FIR.firmaDataUrl = null;
     FIR.pdfBytes = null;
@@ -288,12 +283,12 @@ var FIR = {
   abrirVisor: async function () {
     if (!FIR.firmaDataUrl || !FIR.pdfBytes) return;
 
-    /* Se abre a pantalla completa (nivel 2) para ver el documento entero */
     RCR.subvista({
-      titulo: 'Colocar la firma',
-      cuerpo: RCR.cargando('Abriendo el documento'),
+      titulo: 'Colocar firma',
+      cuerpo: '<div id="fir-visor-wrap">' + RCR.cargando('Abriendo el documento') + '</div>',
       onCerrar: function () { FIR.volverInicio(); }
     });
+    var root = document.getElementById('fir-visor-wrap');
 
     try {
       await RCR.cargarLib(FIR.LIB_PDFJS);
@@ -307,22 +302,14 @@ var FIR = {
       FIR.estampas = [];
       FIR.paginas = [];
 
-      /* Botones a la derecha de la franja blanca ("Colocar la firma") */
-      var prevAcc = document.getElementById('fir-bar-acciones');
-      if (prevAcc) prevAcc.remove();
-      var bar = document.querySelector('.subvista-bar');
-      if (bar) {
-        var acc = document.createElement('div');
-        acc.id = 'fir-bar-acciones';
-        acc.style.cssText = 'display:flex;gap:8px;margin-left:auto;';
-        acc.innerHTML =
-          '<button class="btn btn-glass" onclick="FIR.agregarEstampa()">' + ico('plus', 14) + 'Añadir firma</button>' +
-          '<button class="btn btn-primary" id="fir-btn-firmar" onclick="FIR.firmar()">' + ico('check', 14) + 'Firmar</button>';
-        bar.appendChild(acc);
-      }
-
-      var body = document.getElementById('subvista-body');
-      body.innerHTML = '<div class="fir-viewer" id="fir-viewer"></div>';
+      root.innerHTML =
+        '<div class="fir-toolbar">' +
+          '<span class="fir-hint">' + ico('info', 14) +
+            ' Arrastra la firma al lugar exacto. Puedes colocar varias.</span>' +
+          '<button class="btn btn-glass" onclick="FIR.agregarEstampa()">' + ico('plus', 15) + 'Añadir firma</button>' +
+          '<button class="btn btn-primary" id="fir-btn-firmar" onclick="FIR.firmar()">' + ico('check', 15) + 'Firmar</button>' +
+        '</div>' +
+        '<div class="fir-viewer" id="fir-viewer"></div>';
 
       var viewer = document.getElementById('fir-viewer');
       for (var n = 1; n <= FIR.pdfDoc.numPages; n++) {
@@ -353,15 +340,15 @@ var FIR = {
     } catch (e) {
       console.error('FIR.abrirVisor:', e);
       RCR.toast('No se pudo abrir el PDF');
-      FIR.volverInicio();
+      RCR.cerrarSubvista();
+      FIR.pintarInicio();
     }
   },
 
   volverInicio: function () {
-    var acc = document.getElementById('fir-bar-acciones');
-    if (acc) acc.remove();
-    RCR.cerrarSubvista();
-    FIR.reset();          // borra también la firma y el PDF cargados
+    FIR.pdfDoc = null;
+    FIR.paginas = [];
+    FIR.estampas = [];
     FIR.pintarInicio();
   },
 
@@ -391,9 +378,10 @@ var FIR = {
     el.style.top = (yRel * 100) + '%';
     el.innerHTML =
       '<img src="' + FIR.firmaDataUrl + '" alt="Firma">' +
-      '<div class="fir-stamp-move" title="Mover">' + FIR.ICO_MOVER + '</div>' +
-      '<div class="fir-stamp-del" title="Quitar" onclick="FIR.quitarEstampa(' + id + ')">' + FIR.ICO_BORRAR + '</div>' +
-      '<div class="fir-stamp-resize" title="Redimensionar">' + FIR.ICO_RESIZE + '</div>';
+      '<div class="fir-stamp-del" title="Quitar" onclick="FIR.quitarEstampa(' + id + ')">' + ico('x', 13) + '</div>' +
+      '<div class="fir-stamp-resize" title="Redimensionar">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 20 L20 4 M20 4 L13 4 M20 4 L20 11 M4 20 L4 13 M4 20 L11 20"/></svg>' +
+      '</div>';
     pag.wrap.appendChild(el);
 
     var st = { id: id, el: el, pagina: pag.num, xRel: xRel, yRel: yRel, wRel: wRel, hRel: hRel };
@@ -432,29 +420,9 @@ var FIR = {
       var offX = p.x - (rect.left + st.xRel * rect.width);
       var offY = p.y - (rect.top + st.yRel * rect.height);
 
-      /* Encuentra a qué página pertenece un punto de pantalla (para poder
-         soltar la firma en otra página distinta a la que empezó) */
-      function paginaEnPunto(x, y) {
-        for (var i = 0; i < FIR.paginas.length; i++) {
-          var pg = FIR.paginas[i];
-          var r = pg.wrap.getBoundingClientRect();
-          if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return pg;
-        }
-        return null;
-      }
-
       function mover(ev) {
         ev.preventDefault();
         var q = punto(ev);
-
-        var destino = paginaEnPunto(q.x, q.y);
-        if (destino && destino.num !== st.pagina) {
-          st.pagina = destino.num;
-          pag = destino;
-          rect = pag.wrap.getBoundingClientRect();
-          pag.wrap.appendChild(el);
-        }
-
         var nx = (q.x - offX - rect.left) / rect.width;
         var ny = (q.y - offY - rect.top) / rect.height;
         st.xRel = Math.max(0, Math.min(1 - st.wRel, nx));
@@ -549,8 +517,7 @@ var FIR = {
 
       var bytes = await pdfDoc.save();
       FIR.pdfFirmado = new Blob([bytes], { type: 'application/pdf' });
-      var acc = document.getElementById('fir-bar-acciones');
-      if (acc) acc.remove();
+      RCR.cerrarSubvista();
       FIR.pintarListo();
 
     } catch (e) {
@@ -573,7 +540,7 @@ var FIR = {
      ESTADO FINAL
      ========================================================================== */
   pintarListo: function () {
-    var root = document.getElementById('subvista-body') || document.getElementById('fir-root');
+    var root = document.getElementById('fir-root');
     root.innerHTML =
       '<div class="fir-done">' +
         '<div class="fir-done-ico">' + ico('check', 30) + '</div>' +
