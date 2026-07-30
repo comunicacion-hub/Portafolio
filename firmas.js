@@ -52,6 +52,11 @@ var FIR = {
   seq: 0,
   generando: false,
 
+  /* Iconos inline de la estampa (no dependen de icons.js) */
+  ICO_MOVER: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>',
+  ICO_BORRAR: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
+  ICO_RESIZE: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>',
+
   reset: function () {
     FIR.firmaDataUrl = null;
     FIR.pdfBytes = null;
@@ -282,8 +287,13 @@ var FIR = {
      ========================================================================== */
   abrirVisor: async function () {
     if (!FIR.firmaDataUrl || !FIR.pdfBytes) return;
-    var root = document.getElementById('fir-root');
-    root.innerHTML = RCR.cargando('Abriendo el documento');
+
+    /* Se abre a pantalla completa (nivel 2) para ver el documento entero */
+    RCR.subvista({
+      titulo: 'Colocar la firma',
+      cuerpo: RCR.cargando('Abriendo el documento'),
+      onCerrar: function () { FIR.volverInicio(); }
+    });
 
     try {
       await RCR.cargarLib(FIR.LIB_PDFJS);
@@ -297,7 +307,8 @@ var FIR = {
       FIR.estampas = [];
       FIR.paginas = [];
 
-      root.innerHTML =
+      var body = document.getElementById('subvista-body');
+      body.innerHTML =
         '<div class="fir-toolbar">' +
           '<span class="fir-hint">' + ico('info', 14) +
             ' Arrastra la firma al lugar exacto. Puedes colocar varias.</span>' +
@@ -336,7 +347,7 @@ var FIR = {
     } catch (e) {
       console.error('FIR.abrirVisor:', e);
       RCR.toast('No se pudo abrir el PDF');
-      FIR.pintarInicio();
+      FIR.volverInicio();
     }
   },
 
@@ -344,6 +355,7 @@ var FIR = {
     FIR.pdfDoc = null;
     FIR.paginas = [];
     FIR.estampas = [];
+    RCR.cerrarSubvista();
     FIR.pintarInicio();
   },
 
@@ -373,8 +385,9 @@ var FIR = {
     el.style.top = (yRel * 100) + '%';
     el.innerHTML =
       '<img src="' + FIR.firmaDataUrl + '" alt="Firma">' +
-      '<div class="fir-stamp-del" title="Quitar" onclick="FIR.quitarEstampa(' + id + ')">' + ico('x', 13) + '</div>' +
-      '<div class="fir-stamp-resize" title="Redimensionar"></div>';
+      '<div class="fir-stamp-move" title="Mover">' + FIR.ICO_MOVER + '</div>' +
+      '<div class="fir-stamp-del" title="Quitar" onclick="FIR.quitarEstampa(' + id + ')">' + FIR.ICO_BORRAR + '</div>' +
+      '<div class="fir-stamp-resize" title="Redimensionar">' + FIR.ICO_RESIZE + '</div>';
     pag.wrap.appendChild(el);
 
     var st = { id: id, el: el, pagina: pag.num, xRel: xRel, yRel: yRel, wRel: wRel, hRel: hRel };
@@ -532,7 +545,7 @@ var FIR = {
      ESTADO FINAL
      ========================================================================== */
   pintarListo: function () {
-    var root = document.getElementById('fir-root');
+    var root = document.getElementById('subvista-body') || document.getElementById('fir-root');
     root.innerHTML =
       '<div class="fir-done">' +
         '<div class="fir-done-ico">' + ico('check', 30) + '</div>' +
