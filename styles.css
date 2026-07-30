@@ -1011,3 +1011,4 @@ a:focus-visible,
 .inf-ver-obs{ font-size:12.5px; color:var(--text-muted,#667); margin-top:5px; }
 .inf-ver-link{ display:block; font-size:13px; color:var(--brand,#0778bf); word-break:break-all; margin-bottom:4px; text-decoration:none; }
 .inf-ver-link:hover{ text-decoration:underline; }
+.infdoc-val-solo{max-width:230px;margin-left:auto;margin-right:auto;}
