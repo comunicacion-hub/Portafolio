@@ -92,6 +92,17 @@
 
   <main class="main" id="view"></main>
 
+  <!-- Subvista nivel 2: pantalla completa para fichas (informe, CV) -->
+  <section class="subvista hidden" id="subvista" aria-hidden="true">
+    <header class="subvista-bar">
+      <button class="subvista-back" id="subvista-back" aria-label="Volver">
+        <span id="subvista-back-ico"></span>
+      </button>
+      <h2 id="subvista-titulo">—</h2>
+    </header>
+    <div class="subvista-body" id="subvista-body"></div>
+  </section>
+
   <button class="fab hidden" id="fab" aria-label="Agregar"></button>
 
   <nav class="bottom-nav" aria-label="Secciones"><div class="nav-inner" id="nav"></div></nav>
@@ -150,7 +161,38 @@ RCR.cargando = function (texto) {
          '</div>';
 };
 
-/* ── Modales dinámicos ──────────────────────────────────────────────────── */
+/* ── Subvista nivel 2: ficha a pantalla completa (informe, CV) ───────────── */
+RCR.subvista = function (o) {
+  /* o = { titulo, cuerpo, onCerrar } */
+  var sv   = document.getElementById('subvista');
+  var body = document.getElementById('subvista-body');
+  document.getElementById('subvista-titulo').textContent = o.titulo || '';
+  document.getElementById('subvista-back-ico').innerHTML = ico('chevronLeft', 20, 2.4);
+  body.innerHTML = o.cuerpo || '';
+
+  var back = document.getElementById('subvista-back');
+  RCR._subvistaCerrar = o.onCerrar || function () { RCR.cerrarSubvista(); };
+  back.onclick = function () { RCR._subvistaCerrar(); };
+
+  sv.classList.remove('hidden');
+  sv.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(function () { sv.classList.add('open'); });
+  body.scrollTop = 0;
+  document.body.style.overflow = 'hidden';
+};
+
+RCR.cerrarSubvista = function () {
+  var sv = document.getElementById('subvista');
+  sv.classList.remove('open');
+  sv.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+  setTimeout(function () {
+    sv.classList.add('hidden');
+    document.getElementById('subvista-body').innerHTML = '';
+  }, 200);
+};
+
+/* Modales dinámicos */
 RCR.modal = function (o) {
   var prev = document.getElementById(o.id);
   if (prev) prev.remove();
