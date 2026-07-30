@@ -379,10 +379,12 @@ var CV = {
           (img.width - lado) / 2, (img.height - lado) / 2, lado, lado,
           0, 0, LADO, LADO
         );
-        CV.form.foto_b64 = cnv.toDataURL('image/jpeg', 0.82);
+        var dataUrl = cnv.toDataURL('image/jpeg', 0.82);
+        CV.form._fotoPendiente = dataUrl;   // se sube a Storage al guardar
+        CV.form.foto_b64 = dataUrl;          // vista previa inmediata
         CV.tocado = true;
         var prev = document.getElementById('cv-foto-prev');
-        if (prev) prev.innerHTML = '<img src="' + CV.form.foto_b64 + '" alt="">';
+        if (prev) prev.innerHTML = '<img src="' + dataUrl + '" alt="">';
         RCR.toast('Foto lista');
       };
       img.onerror = function () { RCR.toast('No se pudo leer la imagen'); };
@@ -763,12 +765,28 @@ var CV = {
     var btn = document.getElementById('cv-save');
     if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
 
-    var data = Object.assign({}, f, {
-      id_colaborador: RCR.user.docId || '',
-      actualizado: firebase.firestore.FieldValue.serverTimestamp()
-    });
-
     try {
+      /* Si hay foto nueva, se sube a Firebase Storage y se guarda solo la URL. */
+      if (f._fotoPendiente && RCR.storage) {
+        try {
+          var ref = RCR.storage.ref('curriculums/' + RCR.user.correo + '/foto.jpg');
+          await ref.putString(f._fotoPendiente, 'data_url');
+          f.foto_b64 = await ref.getDownloadURL();
+        } catch (eF) {
+          console.error('CV foto Storage:', eF);
+          RCR.toast('No se pudo subir la foto; se guarda el resto.');
+          /* Si falla la subida, no se guarda un data_url gigante en Firestore */
+          if (/^data:/.test(f.foto_b64)) f.foto_b64 = CV.datos ? (CV.datos.foto_b64 || '') : '';
+        }
+      }
+      delete f._fotoPendiente;
+
+      var data = Object.assign({}, f, {
+        id_colaborador: RCR.user.docId || '',
+        actualizado: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      delete data._fotoPendiente;
+
       await RCR.db.collection(CV.COL).doc(RCR.user.correo).set(data, { merge: true });
       CV.datos  = CV.normalizar(f);
       CV.tocado = false;
