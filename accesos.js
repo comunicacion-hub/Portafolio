@@ -33,6 +33,7 @@ RCR.EXIGIR_REGISTRO = false;
 RCR.user = null;   // { correo, nombre, rol, area, iniciales }
 RCR.db   = null;
 RCR.auth = null;
+RCR.storage = null;
 
 /* ==========================================================================
    INICIALIZACIÓN
@@ -42,6 +43,7 @@ RCR.initFirebase = function () {
   firebase.initializeApp(RCR.firebaseConfig);
   RCR.db   = firebase.firestore();
   RCR.auth = firebase.auth();
+  RCR.storage = firebase.storage();
   RCR.auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(function () {});
 };
 
