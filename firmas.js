@@ -310,11 +310,8 @@ var FIR = {
       var body = document.getElementById('subvista-body');
       body.innerHTML =
         '<div class="fir-toolbar">' +
-          '<span class="fir-hint">' + ico('info', 14) +
-            ' Arrastra la firma al lugar exacto. Puedes colocar varias.</span>' +
-          '<button class="btn btn-glass" onclick="FIR.volverInicio()">' + ico('chevronLeft', 15) + 'Atrás</button>' +
-          '<button class="btn btn-glass" onclick="FIR.agregarEstampa()">' + ico('plus', 15) + 'Añadir firma</button>' +
-          '<button class="btn btn-primary" id="fir-btn-firmar" onclick="FIR.firmar()">' + ico('check', 15) + 'Firmar</button>' +
+          '<button class="btn btn-glass" onclick="FIR.agregarEstampa()">' + ico('plus', 14) + 'Añadir firma</button>' +
+          '<button class="btn btn-primary" id="fir-btn-firmar" onclick="FIR.firmar()">' + ico('check', 14) + 'Firmar</button>' +
         '</div>' +
         '<div class="fir-viewer" id="fir-viewer"></div>';
 
@@ -426,9 +423,29 @@ var FIR = {
       var offX = p.x - (rect.left + st.xRel * rect.width);
       var offY = p.y - (rect.top + st.yRel * rect.height);
 
+      /* Encuentra a qué página pertenece un punto de pantalla (para poder
+         soltar la firma en otra página distinta a la que empezó) */
+      function paginaEnPunto(x, y) {
+        for (var i = 0; i < FIR.paginas.length; i++) {
+          var pg = FIR.paginas[i];
+          var r = pg.wrap.getBoundingClientRect();
+          if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return pg;
+        }
+        return null;
+      }
+
       function mover(ev) {
         ev.preventDefault();
         var q = punto(ev);
+
+        var destino = paginaEnPunto(q.x, q.y);
+        if (destino && destino.num !== st.pagina) {
+          st.pagina = destino.num;
+          pag = destino;
+          rect = pag.wrap.getBoundingClientRect();
+          pag.wrap.appendChild(el);
+        }
+
         var nx = (q.x - offX - rect.left) / rect.width;
         var ny = (q.y - offY - rect.top) / rect.height;
         st.xRel = Math.max(0, Math.min(1 - st.wRel, nx));
