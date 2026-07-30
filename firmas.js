@@ -307,13 +307,22 @@ var FIR = {
       FIR.estampas = [];
       FIR.paginas = [];
 
-      var body = document.getElementById('subvista-body');
-      body.innerHTML =
-        '<div class="fir-toolbar">' +
+      /* Botones a la derecha de la franja blanca ("Colocar la firma") */
+      var prevAcc = document.getElementById('fir-bar-acciones');
+      if (prevAcc) prevAcc.remove();
+      var bar = document.querySelector('.subvista-bar');
+      if (bar) {
+        var acc = document.createElement('div');
+        acc.id = 'fir-bar-acciones';
+        acc.style.cssText = 'display:flex;gap:8px;margin-left:auto;';
+        acc.innerHTML =
           '<button class="btn btn-glass" onclick="FIR.agregarEstampa()">' + ico('plus', 14) + 'Añadir firma</button>' +
-          '<button class="btn btn-primary" id="fir-btn-firmar" onclick="FIR.firmar()">' + ico('check', 14) + 'Firmar</button>' +
-        '</div>' +
-        '<div class="fir-viewer" id="fir-viewer"></div>';
+          '<button class="btn btn-primary" id="fir-btn-firmar" onclick="FIR.firmar()">' + ico('check', 14) + 'Firmar</button>';
+        bar.appendChild(acc);
+      }
+
+      var body = document.getElementById('subvista-body');
+      body.innerHTML = '<div class="fir-viewer" id="fir-viewer"></div>';
 
       var viewer = document.getElementById('fir-viewer');
       for (var n = 1; n <= FIR.pdfDoc.numPages; n++) {
@@ -349,10 +358,10 @@ var FIR = {
   },
 
   volverInicio: function () {
-    FIR.pdfDoc = null;
-    FIR.paginas = [];
-    FIR.estampas = [];
+    var acc = document.getElementById('fir-bar-acciones');
+    if (acc) acc.remove();
     RCR.cerrarSubvista();
+    FIR.reset();          // borra también la firma y el PDF cargados
     FIR.pintarInicio();
   },
 
@@ -540,6 +549,8 @@ var FIR = {
 
       var bytes = await pdfDoc.save();
       FIR.pdfFirmado = new Blob([bytes], { type: 'application/pdf' });
+      var acc = document.getElementById('fir-bar-acciones');
+      if (acc) acc.remove();
       FIR.pintarListo();
 
     } catch (e) {
