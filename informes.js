@@ -310,13 +310,13 @@ var INF = {
     INF.paso = 0;
     INF.tocado = false;
 
-    RCR.modal({
-      id: 'm-inf',
+    RCR.subvista({
       titulo: docId ? 'Editar informe' : 'Nuevo informe',
-      sub: RCR.esc(RCR.user.nombre),
-      cuerpo: '<div id="inf-body"></div>',
-      acciones: '<div id="inf-foot" style="display:flex;gap:10px;flex:1;"></div>',
-      persistente: true,
+      cuerpo:
+        '<div class="form-wrap">' +
+          '<div id="inf-body"></div>' +
+          '<div class="subvista-actions" id="inf-foot"></div>' +
+        '</div>',
       onCerrar: function () { INF.intentarCerrar(); }
     });
     INF.pintar();
@@ -324,12 +324,12 @@ var INF = {
 
   intentarCerrar: function () {
     INF.leerPaso();
-    if (!INF.tocado) { RCR.cerrarModal('m-inf'); return; }
+    if (!INF.tocado) { RCR.cerrarSubvista(); return; }
     RCR.confirmar({
       titulo: '¿Salir sin guardar?',
       texto: 'Los cambios de esta sesión se pierden.',
       label: 'Salir',
-      onOk: "RCR.cerrarModal('m-confirm');RCR.cerrarModal('m-inf');"
+      onOk: "RCR.cerrarModal('m-confirm');RCR.cerrarSubvista();"
     });
   },
 
@@ -366,14 +366,17 @@ var INF = {
         : '<button class="btn btn-primary" onclick="INF.ir(' + (p + 1) + ')">Siguiente' +
             ico('chevronRight', 15) + '</button>');
 
-    var body = document.querySelector('#m-inf .modal-body');
-    if (body) body.scrollTop = 0;
+    /* Solo se sube el scroll al cambiar de paso (no al agregar/quitar filas). */
+    var body = document.getElementById('subvista-body');
+    if (body && !INF._mantenerScroll) body.scrollTop = 0;
+    INF._mantenerScroll = false;
   },
 
   ir: function (i) {
     INF.leerPaso();
     var n = INF.pasos().length;
     INF.paso = Math.max(0, Math.min(n - 1, i));
+    INF._mantenerScroll = false;      // cambio de paso: subir al inicio
     INF.pintar();
   },
 
@@ -564,12 +567,14 @@ var INF = {
   agregar: function (procKey) {
     INF.leerPaso();
     INF.form.procesos[procKey].push({ fecha: '', actividad: '', estado: 'Ejecutado', observaciones: '' });
+    INF._mantenerScroll = true;
     INF.pintar();
   },
 
   quitar: function (procKey, i) {
     INF.leerPaso();
     INF.form.procesos[procKey].splice(i, 1);
+    INF._mantenerScroll = true;
     INF.pintar();
   },
 
@@ -594,8 +599,8 @@ var INF = {
     INF.form.medios = INF.form.medios.map(function (_, i) { return INF.val('inf-medio-' + i); });
   },
 
-  agregarMedio: function () { INF.leerPaso(); INF.form.medios.push(''); INF.pintar(); },
-  quitarMedio: function (i) { INF.leerPaso(); INF.form.medios.splice(i, 1); INF.pintar(); },
+  agregarMedio: function () { INF.leerPaso(); INF.form.medios.push(''); INF._mantenerScroll = true; INF.pintar(); },
+  quitarMedio: function (i) { INF.leerPaso(); INF.form.medios.splice(i, 1); INF._mantenerScroll = true; INF.pintar(); },
 
   /* ==========================================================================
      GUARDAR
@@ -647,7 +652,7 @@ var INF = {
       INF.datos.sort(function (a, b) { return INF.orden(b) - INF.orden(a); });
       INF.tocado = false;
       INF.render();
-      RCR.cerrarModal('m-inf');
+      RCR.cerrarSubvista();
       RCR.toast(id ? 'Informe actualizado' : 'Informe guardado');
     } catch (e) {
       console.error('INF.guardar:', e);
@@ -692,32 +697,82 @@ var INF = {
   },
 
   /* ==========================================================================
-     VISTA PREVIA
+     VER — formulario de solo lectura (no el PDF), a pantalla completa
      ========================================================================== */
   ver: function (docId) {
     var d = INF.datos.find(function (x) { return x._docId === docId; });
     if (!d) return;
-    RCR.modal({
-      id: 'm-inf-ver',
-      titulo: 'Vista previa',
-      sub: RCR.esc(d.mes + ' ' + d.anio),
-      cuerpo: '<div class="cv-prev-wrap" id="inf-prev-wrap">' +
-                '<div class="cv-prev-esc" id="inf-prev-esc">' + INF.plantillaHTML(d) + '</div>' +
-              '</div>',
-      acciones:
-        '<button class="btn btn-glass" onclick="RCR.cerrarModal(\'m-inf-ver\')">Cerrar</button>' +
-        '<button class="btn btn-primary" onclick="INF.descargar(\'' + docId + '\',this)">' +
-          ico('download', 15) + 'Descargar PDF</button>'
+    d = INF.normalizar(d);
+    var a = INF.area(d.area);
+    if (!a) return;
+
+    function campo(lbl, val) {
+      return '<div class="form-grp">' +
+               '<label class="form-lbl">' + lbl + '</label>' +
+               '<div class="form-static">' + (val ? RCR.esc(val) : '—') + '</div>' +
+             '</div>';
+    }
+
+    var html = '<div class="form-wrap">';
+
+    /* Datos generales */
+    html += '<div class="inf-ver-sec"><h3 class="inf-ver-h">' + RCR.esc(a.nombre) + '</h3>';
+    html += '<div class="form-2col">' +
+              campo('Colaborador(a)', d.nombre) +
+              campo('Mes y año', d.mes + ' ' + d.anio) +
+              campo('Cargo', d.cargo) +
+              campo('Fecha de cierre', d.fecha_cierre) +
+            '</div>';
+    if (a.campoEmpresas) html += campo('Empresas / entidades', d.empresas);
+    html += '</div>';
+
+    /* Cada proceso con sus actividades */
+    a.procesos.forEach(function (p) {
+      var filas = (d.procesos[p.key] || []).filter(function (f) {
+        return f.fecha || f.actividad || f.observaciones;
+      });
+      if (!filas.length) return;
+      html += '<div class="inf-ver-sec">' +
+                '<div class="inf-ver-cinta" style="background:' + p.color + '">' + RCR.esc(p.nombre) + '</div>';
+      filas.forEach(function (f) {
+        html += '<div class="inf-ver-act">' +
+                  '<div class="inf-ver-act-top">' +
+                    '<span class="inf-ver-fecha">' + RCR.esc(f.fecha || '—') + '</span>' +
+                    '<span class="inf-ver-estado ' + (f.estado === 'Por ejecutar' ? 'pend' : 'ok') + '">' +
+                      RCR.esc(f.estado || 'Ejecutado') + '</span>' +
+                  '</div>' +
+                  '<div class="inf-ver-actividad">' + RCR.esc(f.actividad || '—') + '</div>' +
+                  (f.observaciones ? '<div class="inf-ver-obs">' + RCR.esc(f.observaciones) + '</div>' : '') +
+                '</div>';
+      });
+      html += '</div>';
     });
 
-    requestAnimationFrame(function () {
-      var wrap = document.getElementById('inf-prev-wrap');
-      var esc  = document.getElementById('inf-prev-esc');
-      if (!wrap || !esc || !esc.firstChild) return;
-      var k = Math.min(1, wrap.clientWidth / 702);
-      esc.style.transform = 'scale(' + k + ')';
-      esc.style.height = (esc.firstChild.offsetHeight * k) + 'px';
-    });
+    /* Medios de verificación */
+    var medios = (d.medios || []).filter(Boolean);
+    if (medios.length) {
+      html += '<div class="inf-ver-sec"><label class="form-lbl">Medios de verificación</label>';
+      medios.forEach(function (m) {
+        html += '<a class="inf-ver-link" href="' + RCR.esc(m) + '" target="_blank" rel="noopener">' + RCR.esc(m) + '</a>';
+      });
+      html += '</div>';
+    }
+
+    /* Firmas */
+    html += '<div class="inf-ver-sec"><div class="form-2col">';
+    html += campo('Elaborado por', d.nombre + ' · ' + d.cargo + ' · ' + d.cedula);
+    if (a.validador) html += campo('Validado por', a.validador.nombre + ' · ' + a.validador.cargo + ' · ' + a.validador.cedula);
+    html += '</div></div>';
+
+    /* Acciones */
+    html += '<div class="subvista-actions">' +
+              '<button class="btn btn-primary" onclick="INF.descargar(\'' + docId + '\',this)">' +
+                ico('download', 15) + 'Descargar PDF</button>' +
+            '</div>';
+
+    html += '</div>';
+
+    RCR.subvista({ titulo: 'Informe · ' + d.mes + ' ' + d.anio, cuerpo: html });
   },
 
   /* ==========================================================================
