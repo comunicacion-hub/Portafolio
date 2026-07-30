@@ -261,6 +261,7 @@ var INF = {
       return '' +
       '<div class="card">' +
         '<div class="card-top">' +
+          '<div class="card-badge-soft">' + ico('calendar', 22) + '</div>' +
           '<div class="card-info">' +
             '<strong>' + RCR.esc(d.mes + ' ' + d.anio) + '</strong>' +
             '<small>' + RCR.esc(nomArea) + ' · ' + filas + ' actividad' + (filas === 1 ? '' : 'es') + '</small>' +
@@ -273,7 +274,7 @@ var INF = {
         '<div class="cv-res-btns">' +
           '<button class="btn btn-glass" onclick="INF.ver(\'' + d._docId + '\')">' + ico('eye', 15) + 'Ver</button>' +
           '<button class="btn btn-glass" onclick="INF.abrirForm(\'' + d._docId + '\')">' + ico('edit', 15) + 'Editar</button>' +
-          '<button class="btn btn-primary" onclick="INF.descargar(\'' + d._docId + '\',this)">' + ico('download', 15) + 'PDF</button>' +
+          '<button class="btn btn-primary" onclick="INF.descargar(\'' + d._docId + '\',this)">' + ico('download', 15) + 'Descargar PDF</button>' +
           '<button class="btn-ico danger" style="height:auto" aria-label="Eliminar informe"' +
             ' onclick="INF.pedirBorrar(\'' + d._docId + '\')">' + ico('trash', 15) + '</button>' +
         '</div>' +
