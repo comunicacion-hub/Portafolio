@@ -233,13 +233,13 @@ var CV = {
     CV.paso = 0;
     CV.tocado = false;
 
-    RCR.modal({
-      id: 'm-cv',
+    RCR.subvista({
       titulo: CV.datos ? 'Editar mi ficha' : 'Mi ficha',
-      sub: RCR.esc(RCR.user.nombre),
-      cuerpo: '<div id="cv-body"></div>',
-      acciones: '<div id="cv-foot" style="display:flex;gap:10px;flex:1;"></div>',
-      persistente: true,
+      cuerpo:
+        '<div class="form-wrap">' +
+          '<div id="cv-body"></div>' +
+          '<div class="subvista-actions" id="cv-foot"></div>' +
+        '</div>',
       onCerrar: function () { CV.intentarCerrar(); }
     });
     CV.pintar();
@@ -247,12 +247,12 @@ var CV = {
 
   intentarCerrar: function () {
     CV.leerPaso();
-    if (!CV.tocado) { RCR.cerrarModal('m-cv'); return; }
+    if (!CV.tocado) { RCR.cerrarSubvista(); return; }
     RCR.confirmar({
       titulo: '¿Salir sin guardar?',
       texto: 'Los cambios de esta sesión se pierden. Tu ficha guardada no cambia.',
       label: 'Salir',
-      onOk: "RCR.cerrarModal('m-confirm');RCR.cerrarModal('m-cv');"
+      onOk: "RCR.cerrarModal('m-confirm');RCR.cerrarSubvista();"
     });
   },
 
@@ -280,13 +280,15 @@ var CV = {
         : '<button class="btn btn-primary" onclick="CV.ir(' + (p + 1) + ')">Siguiente' +
             ico('chevronRight', 15) + '</button>');
 
-    var body = document.querySelector('#m-cv .modal-body');
-    if (body) body.scrollTop = 0;
+    var body = document.getElementById('subvista-body');
+    if (body && !CV._mantenerScroll) body.scrollTop = 0;
+    CV._mantenerScroll = false;
   },
 
   ir: function (i) {
     CV.leerPaso();
     CV.paso = Math.max(0, Math.min(CV.PASOS.length - 1, i));
+    CV._mantenerScroll = false;
     CV.pintar();
   },
 
@@ -680,12 +682,14 @@ var CV = {
       idiomas:     { idioma: '', nivel: '' }
     };
     CV.form[lista].push(JSON.parse(JSON.stringify(vacios[lista])));
+    CV._mantenerScroll = true;
     CV.pintar();
   },
 
   quitar: function (lista, i) {
     CV.leerPaso();
     CV.form[lista].splice(i, 1);
+    CV._mantenerScroll = true;
     CV.pintar();
   },
 
@@ -769,7 +773,7 @@ var CV = {
       CV.datos  = CV.normalizar(f);
       CV.tocado = false;
       CV.render();
-      RCR.cerrarModal('m-cv');
+      RCR.cerrarSubvista();
       RCR.toast('Ficha guardada');
     } catch (e) {
       console.error('CV.guardar:', e);
@@ -781,31 +785,106 @@ var CV = {
   },
 
   /* ==========================================================================
-     VISTA PREVIA
+     VER — formulario de solo lectura (no el PDF), a pantalla completa
      ========================================================================== */
   ver: function () {
     if (!CV.datos) return;
-    RCR.modal({
-      id: 'm-cv-ver',
-      titulo: 'Vista previa',
-      sub: 'Así se ve tu CV al descargarlo',
-      cuerpo: '<div class="cv-prev-wrap" id="cv-prev-wrap">' +
-                '<div class="cv-prev-esc" id="cv-prev-esc">' + CV.plantillaHTML(CV.datos) + '</div>' +
-              '</div>',
-      acciones:
-        '<button class="btn btn-glass" onclick="RCR.cerrarModal(\'m-cv-ver\')">Cerrar</button>' +
-        '<button class="btn btn-primary" onclick="CV.descargar()">' + ico('download', 15) + 'Descargar PDF</button>'
-    });
+    var d = CV.normalizar(JSON.parse(JSON.stringify(CV.datos)));
 
-    /* La hoja mide 794px: se reduce al ancho disponible del modal */
-    requestAnimationFrame(function () {
-      var wrap = document.getElementById('cv-prev-wrap');
-      var esc  = document.getElementById('cv-prev-esc');
-      if (!wrap || !esc || !esc.firstChild) return;
-      var k = Math.min(1, wrap.clientWidth / 794);
-      esc.style.transform = 'scale(' + k + ')';
-      esc.style.height = (esc.firstChild.offsetHeight * k) + 'px';
+    function campo(lbl, val) {
+      return '<div class="form-grp"><label class="form-lbl">' + lbl + '</label>' +
+             '<div class="form-static">' + (val ? RCR.esc(val) : '—') + '</div></div>';
+    }
+    function sec(tit, inner) {
+      if (!inner) return '';
+      return '<div class="inf-ver-sec"><h3 class="inf-ver-h">' + RCR.esc(tit) + '</h3>' + inner + '</div>';
+    }
+    function tarjeta(inner) {
+      return '<div class="inf-ver-act">' + inner + '</div>';
+    }
+    function linea(txt) { return txt ? '<div class="inf-ver-actividad">' + RCR.esc(txt) + '</div>' : ''; }
+    function sub(txt)   { return txt ? '<div class="inf-ver-obs">' + RCR.esc(txt) + '</div>' : ''; }
+
+    var html = '<div class="form-wrap">';
+
+    /* Datos personales */
+    html += sec(d.nombre || 'Mi ficha',
+      '<div class="form-2col">' +
+        campo('Ciudad', d.ciudad) + campo('Provincia', d.provincia) +
+        campo('Teléfono', d.telefono) + campo('LinkedIn', d.linkedin) +
+      '</div>');
+
+    /* Perfil */
+    var p = d.perfil || {};
+    var perfil = '<div class="form-2col">' +
+        campo('Profesión', p.profesion) + campo('Años de experiencia', p.anios_experiencia) +
+      '</div>' +
+      (p.areas_experiencia && p.areas_experiencia.length ? campo('Áreas de experiencia', p.areas_experiencia.join(', ')) : '') +
+      (p.fortalezas ? campo('Fortalezas', p.fortalezas) : '');
+    html += sec('Perfil profesional', perfil);
+
+    /* Formación */
+    var form = (d.formacion || []).filter(function (f) { return f.titulo || f.institucion; })
+      .map(function (f) {
+        return tarjeta(
+          linea(f.titulo) +
+          sub([f.institucion, f.pais, f.anio].filter(Boolean).join(' · ')) +
+          (f.nivel ? sub('Nivel: ' + f.nivel) : '')
+        );
+      }).join('');
+    html += sec('Formación académica', form);
+
+    /* Experiencia */
+    var exp = (d.experiencia || []).filter(function (e) { return e.cargo || e.organizacion; })
+      .map(function (e) {
+        var periodo = [e.fecha_inicio, e.actualidad ? 'Actualidad' : e.fecha_fin].filter(Boolean).join(' – ');
+        var acts = (e.actividades || []).filter(Boolean).map(function (a) { return sub('• ' + a); }).join('');
+        return tarjeta(
+          linea(e.cargo) +
+          sub([e.organizacion, periodo].filter(Boolean).join(' · ')) +
+          acts +
+          (e.logro ? sub('Logro: ' + e.logro) : '')
+        );
+      }).join('');
+    html += sec('Experiencia laboral', exp);
+
+    /* Proyectos */
+    var proy = (d.proyectos || []).filter(function (x) { return x.nombre; })
+      .map(function (x) {
+        return tarjeta(
+          linea(x.nombre) +
+          sub([x.organizacion, x.rol].filter(Boolean).join(' · ')) +
+          sub(x.descripcion) +
+          (x.resultados ? sub('Resultados: ' + x.resultados) : '')
+        );
+      }).join('');
+    html += sec('Proyectos', proy);
+
+    /* Competencias */
+    var c = d.competencias || {};
+    var comp = '';
+    [['Desarrollo comunitario','desarrollo_comunitario'],['Formación y facilitación','formacion_facilitacion'],
+     ['Comunicación','comunicacion'],['Ofimática','ofimatica']].forEach(function (par) {
+      var arr = c[par[1]] || [];
+      if (arr.length) comp += campo(par[0], arr.join(', '));
     });
+    html += sec('Competencias', comp);
+
+    /* Experiencia social */
+    var soc = (d.experiencia_social || []).filter(Boolean).map(function (s) { return tarjeta(linea(s)); }).join('');
+    html += sec('Experiencia comunitaria / social', soc);
+
+    /* Idiomas */
+    var idi = (d.idiomas || []).filter(function (x) { return x.idioma; })
+      .map(function (x) { return tarjeta(linea(x.idioma) + sub(x.nivel)); }).join('');
+    html += sec('Idiomas', idi);
+
+    html += '<div class="subvista-actions">' +
+              '<button class="btn btn-primary" onclick="CV.descargar()">' + ico('download', 15) + 'Descargar PDF</button>' +
+            '</div>';
+    html += '</div>';
+
+    RCR.subvista({ titulo: 'Mi ficha', cuerpo: html });
   },
 
   /* ==========================================================================
