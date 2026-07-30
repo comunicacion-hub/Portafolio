@@ -137,7 +137,6 @@ var SEM = {
       return '' +
       '<div class="card">' +
         '<div class="card-top">' +
-          '<div class="card-badge"><span>' + RCR.esc(corto) + '</span><span>' + RCR.esc(anio) + '</span></div>' +
           '<div class="card-info">' +
             '<strong>' + RCR.esc(mes) + '</strong>' +
             '<small>' + RCR.esc(SEM.fechaLegible(r.Fecha)) + '</small>' +
