@@ -116,7 +116,8 @@ html,body{
    ========================================================================== */
 .topbar{
   position:fixed;top:16px;left:16px;right:16px;z-index:100;
-  background:var(--white);
+  background:rgba(255,255,255,.72);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
   border:1px solid var(--border);
   border-radius:24px;
   box-shadow:0 8px 28px rgba(20,30,60,.08);
@@ -180,7 +181,8 @@ html,body{
 .bottom-nav{
   position:fixed;z-index:90;
   top:50%;left:22px;transform:translateY(-50%);
-  background:var(--white);
+  background:rgba(255,255,255,.72);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
   border:1px solid var(--border);
   border-radius:28px;
   box-shadow:0 8px 28px rgba(20,30,60,.08);
@@ -215,15 +217,15 @@ html,body{
 
 @media (max-width:720px){
   .bottom-nav{
-    top:auto; left:50%; bottom:calc(16px + var(--safe-bottom));
-    transform:translateX(-50%);
-    border-radius:26px; padding:8px;
+    top:auto; left:16px; right:16px; bottom:calc(16px + var(--safe-bottom));
+    transform:none;
+    border-radius:24px; padding:8px 6px;
   }
-  .nav-inner{flex-direction:row;gap:2px;}
-  .nav-btn{min-width:0; padding:9px 12px; flex-direction:row; gap:6px;}
-  .nav-btn span{display:none;}
-  .nav-btn svg{width:22px;height:22px;}
-  .main{padding:calc(100px + var(--safe-top)) 16px calc(90px + var(--safe-bottom));}
+  .nav-inner{flex-direction:row;gap:2px;justify-content:space-between;}
+  .nav-btn{flex:1;min-width:0; padding:9px 4px; flex-direction:column; gap:4px;}
+  .nav-btn span{display:block;font-size:10.5px;}
+  .nav-btn svg{width:21px;height:21px;}
+  .main{padding:calc(100px + var(--safe-top)) 16px calc(96px + var(--safe-bottom));}
 }
 
 /* ==========================================================================
@@ -251,14 +253,11 @@ html,body{
    ========================================================================== */
 .section-header{
   display:flex;align-items:center;justify-content:space-between;
-  gap:10px;margin-bottom:20px;
-  background:var(--white);border:1px solid var(--border);
-  border-radius:var(--r-lg);box-shadow:var(--shadow-sm);
-  padding:18px 22px;
+  gap:10px;margin-bottom:18px;
 }
 .section-title{display:none;}
 .section-title{font-size:16px;font-weight:700;}
-.section-sub{font-size:14px;color:var(--text-muted);}
+.section-sub{font-size:14px;color:var(--text-muted);font-weight:500;}
 .count-badge{
   background:var(--grad-c);color:var(--white);
   font-size:11px;font-weight:700;border-radius:20px;padding:3px 10px;flex-shrink:0;
