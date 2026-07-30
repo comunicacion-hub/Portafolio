@@ -75,8 +75,7 @@
   <header class="topbar">
     <div class="topbar-left">
       <div class="topbar-titles">
-        <h1 id="topbar-titulo">Mi RCR</h1>
-        <span id="topbar-user">—</span>
+        <h1 id="topbar-titulo">mi redes con rostro</h1>
       </div>
     </div>
     <div style="position:relative;">
@@ -339,7 +338,7 @@ RCR.ir = function (id) {
   var btn = document.getElementById('nav-' + id);
   if (btn) btn.classList.add('active');
 
-  document.getElementById('topbar-titulo').textContent = mod.titulo;
+  /* El título de la topbar queda fijo ("mi redes con rostro"); ya no cambia por sección */
 
   /* FAB de la sección */
   var fab = document.getElementById('fab');
@@ -367,7 +366,6 @@ RCR.entrar = function () {
 
 
   document.getElementById('user-avatar').textContent = RCR.user.iniciales;
-  document.getElementById('topbar-user').textContent = RCR.user.nombre;
   document.getElementById('menu-nombre').textContent = RCR.user.nombre;
   document.getElementById('menu-correo').textContent = RCR.user.correo;
   document.getElementById('menu-rol').textContent = RCR.user.rol;
