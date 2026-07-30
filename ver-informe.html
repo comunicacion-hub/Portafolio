@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Informe — Redes Con Rostro</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* Página pública de solo visualización: no usa el shell de la app (sin
+     login, sin nav). Estilos propios y mínimos, apoyados en el mismo
+     sistema de diseño (fuente, colores) via styles.css. */
+  html,body{background:var(--bg);min-height:100vh;}
+  .ver-wrap{
+    max-width:900px;margin:0 auto;padding:24px 16px 48px;
+    display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;
+  }
+  .ver-topbar{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:rgba(255,255,255,.85);border:1px solid var(--border);
+    border-radius:20px;padding:14px 18px;margin-bottom:18px;
+    box-shadow:0 6px 22px rgba(20,30,60,.06);
+  }
+  .ver-topbar h1{font-size:15px;font-weight:600;color:var(--text);}
+  .ver-topbar .btn{flex:none;padding:10px 16px;font-size:13.5px;}
+  .ver-stage{
+    flex:1;background:var(--white);border:1px solid var(--border);
+    border-radius:var(--r-lg);box-shadow:var(--shadow-sm);
+    overflow:hidden;display:flex;align-items:stretch;justify-content:center;
+    min-height:70vh;
+  }
+  .ver-stage iframe{width:100%;height:100%;border:none;min-height:70vh;}
+  .ver-estado{
+    margin:auto;text-align:center;padding:40px 24px;color:var(--text-muted);
+  }
+  .ver-estado .spinner{margin:0 auto 14px;}
+  .ver-estado h2{font-size:16px;color:var(--text);margin-bottom:6px;}
+  .ver-foot{
+    text-align:center;font-size:12px;color:var(--text-muted);
+    margin-top:16px;
+  }
+</style>
+</head>
+<body>
+
+<div class="ver-wrap">
+  <div class="ver-topbar">
+    <h1 id="ver-titulo">Informe</h1>
+  </div>
+  <div class="ver-stage" id="ver-stage">
+    <div class="ver-estado" id="ver-estado">
+      <span class="spinner dark"></span>
+      <h2>Abriendo el informe…</h2>
+    </div>
+  </div>
+  <div class="ver-foot">Redes Con Rostro · vista solo de lectura</div>
+</div>
+
+<!-- Firebase (solo Firestore; no requiere iniciar sesión para leer un informe puntual) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<script>
+/* Stub mínimo de RCR: informes.js solo necesita esc() y cargarLib() de él
+   para poder construir el PDF (docDefinicion es una función pura). */
+window.RCR = { modulos: {}, _libs: {} };
+RCR.esc = function (v) {
+  var d = document.createElement('div');
+  d.textContent = (v == null) ? '' : String(v);
+  return d.innerHTML;
+};
+RCR.cargarLib = function (url) {
+  if (RCR._libs[url]) return RCR._libs[url];
+  RCR._libs[url] = new Promise(function (res, rej) {
+    var s = document.createElement('script');
+    s.src = url; s.onload = res;
+    s.onerror = function () { rej(new Error('No se pudo cargar ' + url)); };
+    document.head.appendChild(s);
+  });
+  return RCR._libs[url];
+};
+</script>
+<script src="fondos.js"></script>
+<script src="fuente.js"></script>
+<script src="informes.js"></script>
+
+<script>
+(async function () {
+  var params = new URLSearchParams(location.search);
+  var id = params.get('id');
+  var estado = document.getElementById('ver-estado');
+  var stage  = document.getElementById('ver-stage');
+
+  function mostrarError(msg) {
+    estado.innerHTML = '<h2>' + RCR.esc(msg) + '</h2>' +
+      '<p style="margin-top:6px;font-size:13px">Pedí que te reenvíen el enlace.</p>';
+  }
+
+  if (!id) { mostrarError('Enlace incompleto'); return; }
+
+  try {
+    firebase.initializeApp({
+      apiKey: "AIzaSyB4-Agk4jG2HFMnvLQyB1q4vapZQ01Bh4o",
+      authDomain: "redes-con-rostro.firebaseapp.com",
+      projectId: "redes-con-rostro",
+      storageBucket: "redes-con-rostro.firebasestorage.app",
+      messagingSenderId: "138746747295",
+      appId: "1:138746747295:web:1ceb9c60d4a4073e6885aa"
+    });
+    var db = firebase.firestore();
+
+    var snap = await db.collection('Informes').doc(id).get();
+    if (!snap.exists) { mostrarError('Este informe ya no está disponible'); return; }
+
+    var d = INF.normalizar(Object.assign({ _docId: id }, snap.data()));
+    var a = INF.area(d.area);
+    if (!a) { mostrarError('No se pudo leer el área del informe'); return; }
+
+    document.getElementById('ver-titulo').textContent =
+      a.nombre + ' · ' + d.mes + ' ' + d.anio;
+    document.title = a.nombre + ' · ' + d.mes + ' ' + d.anio;
+
+    await RCR.cargarLib(INF.LIB_PDFMAKE);
+    if (window.registrarOutfit) registrarOutfit();
+
+    var doc = INF.docDefinicion(d, a);
+
+    pdfMake.createPdf(doc).getBlob(function (blob) {
+      var url = URL.createObjectURL(blob);
+      /* #toolbar=0 oculta la barra del visor nativo (que trae su propio botón
+         de descarga/impresión) en los navegadores que la soportan (Chrome/Edge). */
+      stage.innerHTML = '<iframe src="' + url + '#toolbar=0" title="Informe en PDF"></iframe>';
+    });
+
+  } catch (e) {
+    console.error('ver-informe:', e);
+    mostrarError('No se pudo abrir el informe');
+  }
+})();
+</script>
+
+</body>
+</html>
