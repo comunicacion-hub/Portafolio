@@ -461,15 +461,7 @@ var INF = {
           '<label class="form-lbl" for="inf-cedula">Tu cédula</label>' +
           '<input class="form-inp" id="inf-cedula" inputmode="numeric" value="' + RCR.esc(f.cedula) + '" placeholder="0912345678">' +
         '</div>' +
-      '</div>' +
-      ((a && a.validador) ? '<div class="form-grp" style="margin-bottom:0">' +
-             '<label class="form-lbl">Validado por</label>' +
-             '<div class="form-static" style="font-weight:500;font-size:13px;line-height:1.5">' +
-               RCR.esc(a.validador.nombre) + '<br>' +
-               '<span style="color:var(--text-muted);font-size:12px">' + RCR.esc(a.validador.cargo) + '</span>' +
-             '</div>' +
-             '<div class="form-help">Se completa solo según el área.</div>' +
-           '</div>' : '');
+      '</div>';
   },
 
   leerDatos: function () {
@@ -760,7 +752,6 @@ var INF = {
     /* Firmas */
     html += '<div class="inf-ver-sec"><div class="form-2col">';
     html += campo('Elaborado por', d.nombre + ' · ' + d.cargo + ' · ' + d.cedula);
-    if (a.validador) html += campo('Validado por', a.validador.nombre + ' · ' + a.validador.cargo + ' · ' + a.validador.cedula);
     html += '</div></div>';
 
     /* Acciones */
@@ -964,53 +955,32 @@ var INF = {
       });
     }
 
-    /* ── Tabla de firmas, indivisible.
-         Con validador: dos columnas (Elaborado por / Validado por).
-         Sin validador (ej. Redes Con Rostro): una sola columna Elaborado por. ─ */
-    var firmas;
-    if (a.validador) {
-      firmas = {
-        unbreakable: true,
-        margin: [0, 22, 0, 0],
-        table: {
-          widths: ['*', '*'],
-          body: [
-            [ { text: 'Elaborado por', style: 'thFirma' }, { text: 'Validado por', style: 'thFirma' } ],
-            [ { text: ' ', margin: [0, 22, 0, 22] }, { text: ' ', margin: [0, 22, 0, 22] } ],
-            [ { text: d.nombre, style: 'tdFirma' }, { text: a.validador.nombre, style: 'tdFirma' } ],
-            [ { text: d.cargo, style: 'tdFirma' }, { text: a.validador.cargo, style: 'tdFirma' } ],
-            [ { text: d.cedula, style: 'tdFirma' }, { text: a.validador.cedula, style: 'tdFirma' } ]
-          ]
-        },
-        layout: {
-          hLineWidth: function () { return 0.7; },
-          vLineWidth: function () { return 0.7; },
-          hLineColor: function () { return '#C9CDD1'; },
-          vLineColor: function () { return '#C9CDD1'; }
-        }
-      };
-    } else {
-      firmas = {
-        unbreakable: true,
-        margin: [0, 22, 0, 0],
-        table: {
-          widths: ['*'],
-          body: [
-            [ { text: 'Elaborado por', style: 'thFirma' } ],
-            [ { text: ' ', margin: [0, 22, 0, 22] } ],
-            [ { text: d.nombre, style: 'tdFirma' } ],
-            [ { text: d.cargo, style: 'tdFirma' } ],
-            [ { text: d.cedula, style: 'tdFirma' } ]
-          ]
-        },
-        layout: {
-          hLineWidth: function () { return 0.7; },
-          vLineWidth: function () { return 0.7; },
-          hLineColor: function () { return '#C9CDD1'; },
-          vLineColor: function () { return '#C9CDD1'; }
-        }
-      };
-    }
+    /* ── Tabla de firmas: solo "Elaborado por", recuadro angosto y centrado.
+         Se centra con columnas espaciadoras a los lados (pdfmake no centra
+         tablas por sí solo). ─ */
+    var firmaTabla = {
+      table: {
+        widths: [200],
+        body: [
+          [ { text: 'Elaborado por', style: 'thFirma' } ],
+          [ { text: ' ', margin: [0, 22, 0, 22] } ],
+          [ { text: d.nombre, style: 'tdFirma' } ],
+          [ { text: d.cargo, style: 'tdFirma' } ],
+          [ { text: d.cedula, style: 'tdFirma' } ]
+        ]
+      },
+      layout: {
+        hLineWidth: function () { return 0.7; },
+        vLineWidth: function () { return 0.7; },
+        hLineColor: function () { return '#C9CDD1'; },
+        vLineColor: function () { return '#C9CDD1'; }
+      }
+    };
+    var firmas = {
+      unbreakable: true,
+      margin: [0, 22, 0, 0],
+      columns: [ { width: '*', text: '' }, { width: 200, stack: [firmaTabla] }, { width: '*', text: '' } ]
+    };
     content.push(firmas);
 
     /* Capas oficiales A4 (sin recortar ni escalar el diseño):
@@ -1165,27 +1135,15 @@ var INF = {
             '</div>' +
           '</div>'
         : '') +
-      /* La tabla de validación va en flujo (con su aire); solo el pie se ancla al borde.
-         Con validador: dos columnas. Sin validador: una sola (Elaborado por). */
+      /* Tabla de firma: solo "Elaborado por", recuadro angosto. */
       '<div data-bloque="validacion" data-atomico="1">' +
-        (a.validador
-          ? '<table class="infdoc-val">' +
-              '<tr><th>Elaborado por</th><th>Validado por</th></tr>' +
-              '<tr><td class="firma"></td><td class="firma"></td></tr>' +
-              '<tr><td>' + RCR.esc(d.nombre) + '</td>' +
-                '<td>' + RCR.esc(a.validador.nombre) + '</td></tr>' +
-              '<tr><td>' + RCR.esc(d.cargo) + '</td>' +
-                '<td>' + RCR.esc(a.validador.cargo) + '</td></tr>' +
-              '<tr><td>' + RCR.esc(d.cedula) + '</td>' +
-                '<td>' + RCR.esc(a.validador.cedula) + '</td></tr>' +
-            '</table>'
-          : '<table class="infdoc-val">' +
-              '<tr><th>Elaborado por</th></tr>' +
-              '<tr><td class="firma"></td></tr>' +
-              '<tr><td>' + RCR.esc(d.nombre) + '</td></tr>' +
-              '<tr><td>' + RCR.esc(d.cargo) + '</td></tr>' +
-              '<tr><td>' + RCR.esc(d.cedula) + '</td></tr>' +
-            '</table>') +
+        '<table class="infdoc-val infdoc-val-solo">' +
+          '<tr><th>Elaborado por</th></tr>' +
+          '<tr><td class="firma"></td></tr>' +
+          '<tr><td>' + RCR.esc(d.nombre) + '</td></tr>' +
+          '<tr><td>' + RCR.esc(d.cargo) + '</td></tr>' +
+          '<tr><td>' + RCR.esc(d.cedula) + '</td></tr>' +
+        '</table>' +
       '</div>' +
       (a.sinPie ? '' :
         '<div data-bloque="aliados" data-atomico="1" data-borde="1">' +
