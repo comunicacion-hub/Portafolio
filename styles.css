@@ -115,10 +115,12 @@ html,body{
    TOPBAR
    ========================================================================== */
 .topbar{
-  position:sticky;top:0;z-index:100;
+  position:fixed;top:16px;left:16px;right:16px;z-index:100;
   background:var(--white);
-  border-bottom:1px solid var(--border);
-  padding:14px 20px;padding-top:calc(14px + var(--safe-top));
+  border:1px solid var(--border);
+  border-radius:24px;
+  box-shadow:0 8px 28px rgba(20,30,60,.08);
+  padding:12px 20px;margin-top:var(--safe-top);
   display:flex;align-items:center;justify-content:space-between;gap:12px;
 }
 .topbar-left{display:flex;align-items:center;gap:10px;min-width:0;}
@@ -166,7 +168,7 @@ html,body{
    LAYOUT PRINCIPAL
    ========================================================================== */
 .main{
-  padding:24px 24px 60px;
+  padding:calc(88px + var(--safe-top)) 24px 60px;
   max-width:900px;margin:0 auto;
 }
 
@@ -200,8 +202,15 @@ html,body{
 
 /* Deja espacio a la izquierda para el nav lateral en pantallas grandes */
 @media (min-width:721px){
-  .main{ margin-left:150px; max-width:820px; }
-  .subvista-body{ margin-left:130px; }
+  .main{
+    margin-left:126px;         /* hueco para el nav lateral */
+    margin-right:0;
+    max-width:none;
+    padding-left:24px;padding-right:24px;
+  }
+  .main > *{ max-width:820px; margin-left:auto; margin-right:auto; }
+  .subvista-body{ margin-left:126px; }
+  .subvista-body > *{ max-width:820px; margin-left:auto; margin-right:auto; }
 }
 
 @media (max-width:720px){
@@ -214,7 +223,7 @@ html,body{
   .nav-btn{min-width:0; padding:9px 12px; flex-direction:row; gap:6px;}
   .nav-btn span{display:none;}
   .nav-btn svg{width:22px;height:22px;}
-  .main{padding:20px 16px calc(90px + var(--safe-bottom));}
+  .main{padding:calc(84px + var(--safe-top)) 16px calc(90px + var(--safe-bottom));}
 }
 
 /* ==========================================================================
@@ -260,7 +269,13 @@ html,body{
   border:1px solid var(--border);
   padding:22px 24px;margin-bottom:16px;box-shadow:var(--shadow-sm);
 }
-.card-top{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+.card-top{display:flex;align-items:center;gap:14px;margin-bottom:10px;}
+.card-badge-soft{
+  width:52px;height:52px;border-radius:var(--r-md);flex-shrink:0;
+  background:#eaf3fd;color:var(--blue2);
+  display:flex;align-items:center;justify-content:center;
+}
+.card-badge-soft svg{width:23px;height:23px;}
 .card-badge{
   width:46px;height:46px;border-radius:var(--r-sm);flex-shrink:0;
   background:var(--grad-b);color:var(--white);
@@ -619,25 +634,23 @@ a:focus-visible,
    CURRÍCULUM — RESUMEN Y ASISTENTE POR PASOS
    ========================================================================== */
 .cv-resumen{
-  background:var(--white);border:1.5px solid var(--border);border-radius:var(--r-lg);
-  padding:18px;box-shadow:var(--shadow-sm);
+  background:var(--white);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:36px 28px;box-shadow:var(--shadow-sm);
 }
-.cv-res-top{display:flex;align-items:center;gap:14px;margin-bottom:16px;}
-.cv-res-foto{
-  width:58px;height:58px;border-radius:50%;flex-shrink:0;
-  background:var(--grad-c);color:var(--white);
-  display:flex;align-items:center;justify-content:center;
-  font-size:18px;font-weight:800;overflow:hidden;
+.cv-res-head{text-align:center;margin-bottom:22px;}
+.cv-res-head strong{display:block;font-size:22px;font-weight:700;color:var(--text);}
+.cv-res-prof{font-size:14.5px;color:var(--text-muted);margin-top:6px;}
+.cv-res-loc{
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  font-size:13.5px;color:var(--text-muted);margin-top:8px;
 }
-.cv-res-foto img{width:100%;height:100%;object-fit:cover;}
-.cv-res-info{flex:1;min-width:0;}
-.cv-res-info strong{display:block;font-size:16px;font-weight:700;}
-.cv-res-info small{display:block;font-size:12.5px;color:var(--text-muted);margin-top:1px;}
-.cv-barra{height:7px;border-radius:20px;background:var(--border);overflow:hidden;margin-bottom:7px;}
+.cv-res-loc svg{width:15px;height:15px;flex-shrink:0;}
+.cv-barra-txt{font-size:13px;color:var(--text-muted);margin-bottom:10px;text-align:left;}
+.cv-pct{color:var(--teal);font-weight:700;}
+.cv-barra{height:7px;border-radius:20px;background:var(--border);overflow:hidden;margin-bottom:24px;}
 .cv-barra span{display:block;height:100%;border-radius:20px;background:var(--grad-c);transition:width .4s;}
-.cv-barra-txt{font-size:12px;color:var(--text-muted);margin-bottom:16px;}
-.cv-res-btns{display:flex;gap:8px;}
-.cv-res-btns .btn{padding:11px 8px;font-size:13px;}
+.cv-res-btns{display:flex;gap:10px;padding-top:20px;border-top:1px solid var(--border);flex-wrap:wrap;}
+.cv-res-btns .btn{padding:12px 14px;font-size:13.5px;min-width:110px;}
 
 .cv-steps{display:flex;gap:5px;margin-bottom:18px;}
 .cv-step{
@@ -944,15 +957,18 @@ a:focus-visible,
 .fir-stamp img{width:100%;height:100%;object-fit:contain;pointer-events:none;}
 .fir-stamp-del{
   position:absolute;top:-11px;right:-11px;width:24px;height:24px;
-  border-radius:50%;background:var(--danger);color:#fff;border:2px solid #fff;
+  border-radius:50%;background:var(--red);color:#fff;border:2px solid #fff;
   display:flex;align-items:center;justify-content:center;cursor:pointer;
   font-size:0;box-shadow:0 1px 4px rgba(0,0,0,.3);
 }
+.fir-stamp-del svg{width:13px;height:13px;stroke:#fff;}
 .fir-stamp-resize{
-  position:absolute;bottom:-9px;right:-9px;width:20px;height:20px;
-  border-radius:50%;background:var(--brand-2);border:2px solid #fff;
+  position:absolute;bottom:-9px;right:-9px;width:22px;height:22px;
+  border-radius:50%;background:var(--green);border:2px solid #fff;
   cursor:nwse-resize;touch-action:none;box-shadow:0 1px 4px rgba(0,0,0,.3);
+  display:flex;align-items:center;justify-content:center;
 }
+.fir-stamp-resize svg{width:12px;height:12px;stroke:#fff;pointer-events:none;}
 
 /* Barra de acciones del visor */
 .fir-toolbar{
