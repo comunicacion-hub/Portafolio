@@ -261,7 +261,6 @@ var INF = {
       return '' +
       '<div class="card">' +
         '<div class="card-top">' +
-          '<div class="inf-area-badge" style="background:' + color + '">' + RCR.esc(sigla) + '</div>' +
           '<div class="card-info">' +
             '<strong>' + RCR.esc(d.mes + ' ' + d.anio) + '</strong>' +
             '<small>' + RCR.esc(nomArea) + ' · ' + filas + ' actividad' + (filas === 1 ? '' : 'es') + '</small>' +
