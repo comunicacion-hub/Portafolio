@@ -300,7 +300,7 @@ html,body{
    MODALES
    ========================================================================== */
 .modal-overlay{
-  display:none;position:fixed;inset:0;z-index:200;
+  display:none;position:fixed;inset:0;z-index:1000;
   background:rgba(30,30,50,0.45);
   align-items:flex-end;justify-content:center;
   padding-bottom:var(--safe-bottom);
@@ -976,8 +976,8 @@ a:focus-visible,
 .subvista-body .form-wrap{ max-width:760px; margin:0 auto; }
 /* barra de acciones fija abajo dentro de la subvista */
 .subvista-actions{
-  position:sticky; bottom:0; margin:20px -16px -40px;
-  padding:14px 16px; background:var(--surface,#fff);
+  margin:22px 0 0;
+  padding:16px 0 0;
   border-top:1px solid var(--border,#e6e8ee);
   display:flex; gap:10px; justify-content:flex-end;
 }
