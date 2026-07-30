@@ -274,6 +274,7 @@ var INF = {
         '<div class="cv-res-btns">' +
           '<button class="btn btn-glass" onclick="INF.ver(\'' + d._docId + '\')">' + ico('eye', 15) + 'Ver</button>' +
           '<button class="btn btn-glass" onclick="INF.abrirForm(\'' + d._docId + '\')">' + ico('edit', 15) + 'Editar</button>' +
+          '<button class="btn btn-glass" onclick="INF.compartir(\'' + d._docId + '\')">' + ico('link', 15) + 'Compartir</button>' +
           '<button class="btn btn-primary" onclick="INF.descargar(\'' + d._docId + '\',this)">' + ico('download', 15) + 'Descargar PDF</button>' +
           '<button class="btn-ico danger" style="height:auto" aria-label="Eliminar informe"' +
             ' onclick="INF.pedirBorrar(\'' + d._docId + '\')">' + ico('trash', 15) + '</button>' +
@@ -691,6 +692,45 @@ var INF = {
   /* ==========================================================================
      VER — formulario de solo lectura (no el PDF), a pantalla completa
      ========================================================================== */
+  /* ==========================================================================
+     COMPARTIR — link público de solo lectura (ver-informe.html), sin login.
+     No guarda nada nuevo: el link apunta al mismo documento por su ID.
+     ========================================================================== */
+  compartir: function (docId) {
+    var base = location.href.replace(/[^/]*$/, '');
+    var url = base + 'ver-informe.html?id=' + encodeURIComponent(docId);
+
+    RCR.modal({
+      id: 'm-inf-compartir',
+      titulo: 'Link para ver el informe',
+      sub: 'Cualquiera con este enlace puede ver el PDF, sin iniciar sesión.',
+      cuerpo:
+        '<div class="form-grp" style="margin-bottom:0">' +
+          '<input class="form-inp" id="inf-link-url" value="' + RCR.esc(url) + '" readonly ' +
+            'onclick="this.select()">' +
+        '</div>',
+      acciones:
+        '<button class="btn btn-primary" style="width:100%" onclick="INF.copiarLink()">' +
+          ico('link', 15) + 'Copiar enlace</button>'
+    });
+  },
+
+  copiarLink: function () {
+    var input = document.getElementById('inf-link-url');
+    if (!input) return;
+    var hacerToastYcerrar = function () {
+      RCR.toast('Enlace copiado');
+      RCR.cerrarModal('m-inf-compartir');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(input.value).then(hacerToastYcerrar, function () {
+        input.select(); document.execCommand('copy'); hacerToastYcerrar();
+      });
+    } else {
+      input.select(); document.execCommand('copy'); hacerToastYcerrar();
+    }
+  },
+
   ver: function (docId) {
     var d = INF.datos.find(function (x) { return x._docId === docId; });
     if (!d) return;
