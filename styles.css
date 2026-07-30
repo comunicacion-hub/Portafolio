@@ -91,7 +91,12 @@ html,body{
   border-radius:var(--r-md);background:var(--grad-b);color:var(--white);
   font-size:17px;font-weight:800;letter-spacing:.6px;
 }
-.login-card h1{font-size:24px;font-weight:800;margin-bottom:24px;color:var(--blue,#3b82f6);}
+.login-card h1{
+  font-size:24px;font-weight:800;margin-bottom:24px;
+  background:linear-gradient(90deg,#33a8de,#9745ff);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;
+}
 .login-google{
   display:flex;align-items:center;justify-content:center;
   width:120px;height:56px;margin:0 auto;
