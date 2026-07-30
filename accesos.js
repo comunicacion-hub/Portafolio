@@ -71,6 +71,27 @@ RCR.initLogin = function () {
   return true;
 };
 
+/* Botón propio: dispara el flujo de Google. Si el One Tap no aparece,
+   se hace clic en el botón oficial (oculto) como respaldo. */
+RCR.loginGoogle = function () {
+  if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+    RCR.loginError('No se pudo cargar Google. Revisa tu conexión.');
+    return;
+  }
+  try {
+    google.accounts.id.prompt(function (notif) {
+      if (notif && (notif.isNotDisplayed && notif.isNotDisplayed() ||
+                    notif.isSkippedMoment && notif.isSkippedMoment())) {
+        var oficial = document.querySelector('#g-login-btn div[role="button"]');
+        if (oficial) oficial.click();
+      }
+    });
+  } catch (e) {
+    var oficial = document.querySelector('#g-login-btn div[role="button"]');
+    if (oficial) oficial.click();
+  }
+};
+
 RCR.loginError = function (msg) {
   var box = document.getElementById('login-error');
   if (!box) return;
