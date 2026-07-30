@@ -166,27 +166,22 @@ var CV = {
 
     var d   = CV.datos;
     var pct = CV.completitud(d);
-    var ini = RCR.iniciales(d.nombre);
-    var sub = [d.perfil.profesion, d.ciudad].filter(Boolean).join(' · ');
+    var profesion = d.perfil.profesion || '';
 
     cont.innerHTML =
       '<div class="cv-resumen">' +
-        '<div class="cv-res-top">' +
-          '<div class="cv-res-foto">' +
-            (d.foto_b64 ? '<img src="' + d.foto_b64 + '" alt="">' : RCR.esc(ini)) +
-          '</div>' +
-          '<div class="cv-res-info">' +
-            '<strong>' + RCR.esc(d.nombre) + '</strong>' +
-            '<small>' + RCR.esc(sub || d.correo) + '</small>' +
-          '</div>' +
+        '<div class="cv-res-head">' +
+          '<strong>' + RCR.esc(d.nombre) + '</strong>' +
+          (profesion ? '<p class="cv-res-prof">' + RCR.esc(profesion) + '</p>' : '') +
+          (d.ciudad ? '<div class="cv-res-loc">' + ico('mapPin', 15) + RCR.esc(d.ciudad) + '</div>' : '') +
         '</div>' +
-        '<div class="cv-barra"><span style="width:' + pct + '%"></span></div>' +
-        '<div class="cv-barra-txt">Ficha completa al ' + pct + '%' +
+        '<div class="cv-barra-txt">Ficha completa al <b class="cv-pct">' + pct + '%</b>' +
           (pct < 100 ? ' — puedes seguir llenándola cuando quieras' : '') + '</div>' +
+        '<div class="cv-barra"><span style="width:' + pct + '%"></span></div>' +
         '<div class="cv-res-btns">' +
           '<button class="btn btn-glass" onclick="CV.ver()">' + ico('eye', 15) + 'Ver</button>' +
           '<button class="btn btn-glass" onclick="CV.abrirForm()">' + ico('edit', 15) + 'Editar</button>' +
-          '<button class="btn btn-primary" id="cv-pdf" onclick="CV.descargar()">' + ico('download', 15) + 'PDF</button>' +
+          '<button class="btn btn-primary" id="cv-pdf" onclick="CV.descargar()">' + ico('download', 15) + 'Descargar PDF</button>' +
         '</div>' +
       '</div>';
 
