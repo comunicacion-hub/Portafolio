@@ -14,19 +14,13 @@ window.RCR = window.RCR || { modulos: {} };
 
 RCR.modulos.firmas = {
   id: 'firmas',
-  titulo: 'Firmar PDF',
+  titulo: 'Firmas',
   icono: 'firmas',
   enNav: true,
   fab: null,                 // no usa botón flotante; el flujo es guiado
 
   mount: function (root) {
     root.innerHTML =
-      '<div class="section-header">' +
-        '<div>' +
-          '<div class="section-title">Firmar un PDF</div>' +
-          '<div class="section-sub">Coloca tu firma y descarga. No se guarda ninguna copia.</div>' +
-        '</div>' +
-      '</div>' +
       '<div id="fir-root" class="fir-wrap"></div>';
     FIR.reset();
     FIR.pintarInicio();
