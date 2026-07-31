@@ -114,36 +114,41 @@ var SEM = {
     }
 
     list.innerHTML = SEM.datos.map(function (r) {
-      var mes    = SEM.fmtMes(r.Mes) || '—';
-      var partes = mes.split(' ');
-      var corto  = (partes[0] || '').substring(0, 3).toUpperCase();
-      var anio   = partes[1] || '';
+      var mes = SEM.fmtMes(r.Mes) || '—';
 
-      var chips = SEM.CAMPOS.map(function (c) {
+      var filas = SEM.CAMPOS.map(function (c) {
         var v = r[c.label];
         if (!v) return '';
         var o = SEM.OPCIONES.find(function (x) { return x.val === v; });
         var cls = o ? o.color : 'neutro';
-        return '<span class="chip ' + cls + '"><span class="chip-dot"></span>' +
-               RCR.esc(c.corto) + ': ' + RCR.esc(v) + '</span>';
+        return '<div class="sem-fila">' +
+                 '<span class="sem-fila-lbl"><span class="chip-dot ' + cls + '"></span>' + RCR.esc(c.corto) + '</span>' +
+                 '<span class="chip ' + cls + '">' + RCR.esc(v) + '</span>' +
+               '</div>';
       }).join('');
 
       var texto = r[SEM.CAMPO_TEXTO] || r['¿Cómo te sentiste este mes?'] || '';
 
       return '' +
-      '<div class="card">' +
-        '<div class="card-top">' +
-          '<div class="card-info">' +
+      '<div class="card sem-card">' +
+        '<div class="sem-card-head">' +
+          '<div>' +
             '<strong>' + RCR.esc(mes) + '</strong>' +
             '<small>' + RCR.esc(SEM.fechaLegible(r.Fecha)) + '</small>' +
           '</div>' +
-          '<div class="card-actions">' +
-            '<button class="btn-ico danger" title="Eliminar" aria-label="Eliminar registro de ' + RCR.esc(mes) + '"' +
-              ' onclick="SEM.pedirBorrar(\'' + RCR.esc(String(r._docId || '')) + '\')">' + ico('trash', 16) + '</button>' +
-          '</div>' +
+          '<button class="btn-ico danger" title="Eliminar" aria-label="Eliminar registro de ' + RCR.esc(mes) + '"' +
+            ' onclick="SEM.pedirBorrar(\'' + RCR.esc(String(r._docId || '')) + '\')">' + ico('trash', 16) + '</button>' +
         '</div>' +
-        '<div class="chips-row">' + chips + '</div>' +
-        (texto ? '<div class="card-note">' + RCR.esc(texto) + '</div>' : '') +
+        '<div class="sem-sec-tit">Estado del mes</div>' +
+        '<div class="sem-filas">' + filas + '</div>' +
+        (texto
+          ? '<div class="sem-sec-tit">Comentario</div>' +
+            '<p class="sem-comentario">' + RCR.esc(texto) + '</p>'
+          : '') +
+        '<div class="card-icobar">' +
+          '<button class="btn-ico danger" title="Eliminar" aria-label="Eliminar registro"' +
+            ' onclick="SEM.pedirBorrar(\'' + RCR.esc(String(r._docId || '')) + '\')">' + ico('trash', 17) + '</button>' +
+        '</div>' +
       '</div>';
     }).join('');
   },
