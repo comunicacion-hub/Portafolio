@@ -50,7 +50,9 @@ html,body{
   min-height:100vh;min-height:100dvh;
   font-size:15px;
   -webkit-font-smoothing:antialiased;
-  overflow-x:hidden;
+  /* SIN overflow aquí: en iOS Safari, overflow en html/body puede volver
+     "relativos" a los elementos position:fixed (bug histórico de WebKit),
+     haciendo que el banner se mueva con el scroll en vez de quedar fijo. */
 }
 
 /* Utilidades */
@@ -130,14 +132,20 @@ html,body{
   font-size:15px;font-weight:600;color:var(--text);text-transform:lowercase;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
-.user-avatar{
+.tb-sec{color:var(--text-muted);font-weight:600;}
+.user-avatar-wrap{
+  display:flex;align-items:center;gap:5px;
+  background:none;border:none;cursor:pointer;padding:0;
+  flex-shrink:0;font-family:'Outfit',sans-serif;
+  -webkit-tap-highlight-color:transparent;
+}
+.user-avatar-ini{
   width:38px;height:38px;border-radius:50%;
   background:var(--white);border:1.5px solid var(--border);
   color:var(--text);font-weight:700;font-size:13px;
   display:flex;align-items:center;justify-content:center;
-  cursor:pointer;flex-shrink:0;font-family:'Outfit',sans-serif;
-  -webkit-tap-highlight-color:transparent;
 }
+.user-avatar-chev{font-size:11px;color:var(--text-muted);line-height:1;}
 
 /* Menú de usuario */
 .user-menu{
@@ -171,6 +179,7 @@ html,body{
 .main{
   padding:calc(104px + var(--safe-top)) 24px 60px;
   max-width:900px;margin:0 auto;
+  overflow-x:hidden;   /* protege contra scroll horizontal sin tocar html/body */
 }
 
 /* ==========================================================================
@@ -233,15 +242,30 @@ html,body{
    ========================================================================== */
 .fab{
   position:fixed;
-  bottom:calc(26px + var(--safe-bottom));
-  right:calc(26px + var(--safe-right));
   z-index:80;
-  width:54px;height:54px;border-radius:50%;border:none;
+  width:56px;height:56px;border-radius:50%;border:none;
   background:var(--grad-b);color:var(--white);
   cursor:pointer;display:flex;align-items:center;justify-content:center;
   box-shadow:0 4px 16px rgba(80,108,255,0.40);
   transition:transform .2s,box-shadow .2s;
   -webkit-tap-highlight-color:transparent;
+}
+/* Desktop: el FAB se ancla justo debajo de la cápsula del nav lateral,
+   centrado con ella (nav en left:22px, ancho ~92px -> centro ~68px). */
+@media (min-width:721px){
+  .fab{
+    left:22px; right:auto;
+    top:calc(50% + 190px);        /* debajo del nav (que está centrado en 50%) */
+    transform:translateX(0);
+    margin-left:18px;              /* centra el FAB (56px) bajo la cápsula (~92px) */
+  }
+}
+/* Móvil: esquina inferior derecha, sobre la barra de nav */
+@media (max-width:720px){
+  .fab{
+    bottom:calc(90px + var(--safe-bottom));
+    right:calc(20px + var(--safe-right));
+  }
 }
 .fab svg{width:24px;height:24px;}
 .fab:hover{transform:scale(1.07);}
@@ -308,6 +332,11 @@ html,body{
 .btn-ico svg{width:16px;height:16px;}
 .btn-ico:hover{border-color:var(--blue);color:var(--blue);background:#f0f9ff;}
 .btn-ico.danger:hover{border-color:var(--pink);color:var(--pink);background:#fff0f4;}
+/* Barra de acciones (solo íconos) al pie de la tarjeta */
+.card-icobar{
+  display:flex;gap:8px;flex-wrap:wrap;
+  margin-top:16px;padding-top:16px;border-top:1px solid var(--border);
+}
 
 /* ==========================================================================
    CHIPS DE SEMÁFORO / ETIQUETAS
@@ -1002,19 +1031,25 @@ a:focus-visible,
 .subvista.open{ transform:translateX(0); }
 .subvista.hidden{ display:none; }
 .subvista-bar{
-  display:flex; align-items:center; gap:10px;
-  padding:14px 16px; background:var(--surface,#fff);
-  border-bottom:1px solid var(--border,#e6e8ee);
-  position:sticky; top:0; z-index:2;
+  display:flex; align-items:center; gap:14px;
+  margin:16px 16px 0; padding:12px 18px;
+  background:rgba(255,255,255,.72);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--border,#e6e8ee);
+  border-radius:24px;
+  box-shadow:0 8px 28px rgba(20,30,60,.08);
+  position:sticky; top:16px; z-index:2;
 }
 .subvista-back{
-  width:38px; height:38px; border-radius:var(--r-md,10px);
-  border:none; background:var(--surface-2,#eef1f6); color:var(--brand,#0778bf);
-  display:flex; align-items:center; justify-content:center; cursor:pointer;
-  flex-shrink:0;
+  height:38px; padding:0 14px 0 10px; border-radius:20px;
+  border:none; background:var(--surface-2,#eef1f6); color:var(--blue2,#0778bf);
+  display:flex; align-items:center; gap:6px; cursor:pointer;
+  flex-shrink:0; font-family:'Outfit',sans-serif; font-size:13.5px; font-weight:600;
+  -webkit-tap-highlight-color:transparent;
 }
 .subvista-back:hover{ background:var(--surface-3,#e3e8f0); }
-.subvista-bar h2{ font-size:16px; font-weight:600; color:var(--text,#1b1b1b); margin:0; }
+.subvista-back svg{ width:18px; height:18px; }
+.subvista-bar h2{ font-size:15px; font-weight:600; color:var(--text,#1b1b1b); margin:0; }
 .subvista-body{
   flex:1; overflow-y:auto; padding:20px 16px 40px;
 }
