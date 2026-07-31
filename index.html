@@ -75,12 +75,15 @@
   <header class="topbar">
     <div class="topbar-left">
       <div class="topbar-titles">
-        <h1 id="topbar-titulo">mi redes con rostro</h1>
+        <h1 id="topbar-titulo"><span class="tb-app">mi redes con rostro</span><span class="tb-sec" id="topbar-seccion"></span></h1>
       </div>
     </div>
     <div style="position:relative;">
-      <button class="user-avatar" id="user-avatar" aria-label="Menú de usuario"
-              aria-expanded="false" onclick="RCR.toggleMenu()">?</button>
+      <button class="user-avatar-wrap" id="user-avatar" aria-label="Menú de usuario"
+              aria-expanded="false" onclick="RCR.toggleMenu()">
+        <span class="user-avatar-ini" id="user-avatar-ini">?</span>
+        <span class="user-avatar-chev">▾</span>
+      </button>
       <div class="user-menu" id="user-menu" role="menu">
         <div class="user-menu-head">
           <strong id="menu-nombre">—</strong>
@@ -99,8 +102,9 @@
   <!-- Subvista nivel 2: pantalla completa para fichas (informe, CV) -->
   <section class="subvista hidden" id="subvista" aria-hidden="true">
     <header class="subvista-bar">
-      <button class="subvista-back" id="subvista-back" aria-label="Volver">
+      <button class="subvista-back" id="subvista-back" aria-label="Regresar">
         <span id="subvista-back-ico"></span>
+        <span class="subvista-back-txt">Regresar</span>
       </button>
       <h2 id="subvista-titulo">—</h2>
     </header>
@@ -338,7 +342,9 @@ RCR.ir = function (id) {
   var btn = document.getElementById('nav-' + id);
   if (btn) btn.classList.add('active');
 
-  /* El título de la topbar queda fijo ("mi redes con rostro"); ya no cambia por sección */
+  /* Junto al nombre de la app se muestra la sección: "mi redes con rostro / X" */
+  var sec = document.getElementById('topbar-seccion');
+  if (sec) sec.textContent = mod.titulo ? ' / ' + mod.titulo.toLowerCase() : '';
 
   /* FAB de la sección */
   var fab = document.getElementById('fab');
@@ -365,7 +371,7 @@ RCR.entrar = function () {
   document.getElementById('app-screen').classList.remove('hidden');
 
 
-  document.getElementById('user-avatar').textContent = RCR.user.iniciales;
+  document.getElementById('user-avatar-ini').textContent = RCR.user.iniciales;
   document.getElementById('menu-nombre').textContent = RCR.user.nombre;
   document.getElementById('menu-correo').textContent = RCR.user.correo;
   document.getElementById('menu-rol').textContent = RCR.user.rol;
