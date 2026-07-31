@@ -15,9 +15,6 @@ RCR.modulos.semaforo = {
 
   mount: function (root) {
     root.innerHTML =
-      '<div class="section-header">' +
-        '<div class="count-badge" id="sem-count">0</div>' +
-      '</div>' +
       '<div id="sem-list"></div>';
     SEM.cargar();
   },
