@@ -67,50 +67,60 @@ var FIR = {
     var firmaOk = !!FIR.firmaDataUrl;
     var pdfOk = !!FIR.pdfBytes;
 
+    function paso(n, titulo, hecho, cuerpo) {
+      return '<div class="fir-paso ' + (hecho ? 'ok' : '') + '">' +
+        '<div class="fir-paso-head">' +
+          '<span class="fir-paso-num">' + (hecho ? ico('check', 16) : n) + '</span>' +
+          '<span class="fir-paso-tit">' + titulo + '</span>' +
+          '<span class="fir-paso-estado ' + (hecho ? 'ok' : '') + '">' + (hecho ? 'Completado' : 'Pendiente') + '</span>' +
+        '</div>' +
+        '<div class="fir-paso-body">' + cuerpo + '</div>' +
+      '</div>';
+    }
+
+    var pasoFirma = paso(1, 'Crea tu firma', firmaOk,
+      (firmaOk
+        ? '<div class="fir-firma-info">' +
+            '<div><span class="fir-mini-lbl">Método utilizado</span><p>Firma adjuntada</p></div>' +
+            '<img class="fir-firma-prev" src="' + FIR.firmaDataUrl + '" alt="Vista previa de tu firma">' +
+          '</div>'
+        : '<p class="fir-paso-desc">Sube una imagen de tu firma o dibújala aquí mismo.</p>') +
+      '<div class="fir-paso-btns">' +
+        '<button class="btn btn-glass" onclick="FIR.pedirImagen()">' + ico('upload', 15) + (firmaOk ? 'Cambiar imagen' : 'Subir imagen') + '</button>' +
+        '<button class="btn btn-glass" onclick="FIR.abrirDibujo()">' + ico('edit', 15) + 'Dibujar firma</button>' +
+      '</div>');
+
+    var pasoDoc = paso(2, 'Adjunta el PDF', pdfOk,
+      (pdfOk
+        ? '<div class="fir-doc-info">' + ico('filePdf', 20) +
+            '<div><p class="fir-doc-nombre">' + RCR.esc(FIR.pdfNombre) + '</p>' +
+            '<span class="fir-mini-lbl">' + (FIR.pdfPeso || '') + '</span></div>' +
+          '</div>'
+        : '<p class="fir-paso-desc">Adjunta el documento PDF que vas a firmar.</p>') +
+      '<div class="fir-paso-btns">' +
+        '<button class="btn btn-glass" onclick="FIR.pedirPdf()">' + ico('upload', 15) + (pdfOk ? 'Cambiar archivo' : 'Adjuntar PDF') + '</button>' +
+      '</div>');
+
+    var pasoRevisar = paso(3, 'Coloca tu firma', false,
+      '<p class="fir-paso-desc">Cuando la firma y el documento estén listos, continúa para colocar tu firma sobre el PDF.</p>');
+
     root.innerHTML =
-      '<div class="fir-slots">' +
-
-        /* Slot 1: la firma */
-        '<div class="fir-slot ' + (firmaOk ? 'ok' : '') + '">' +
-          '<div class="fir-slot-ico">' + ico(firmaOk ? 'check' : 'edit', 20) + '</div>' +
-          '<div class="fir-slot-txt">' +
-            '<strong>1. Tu firma</strong>' +
-            (firmaOk
-              ? '<small>Firma lista</small>'
-              : '<small>Sube una imagen o dibújala</small>') +
-          '</div>' +
-          '<div class="fir-slot-act">' +
-            (firmaOk
-              ? '<img class="fir-firma-prev" src="' + FIR.firmaDataUrl + '" alt="Firma">'
-              : '') +
-          '</div>' +
-        '</div>' +
-        '<div style="display:flex;gap:10px;margin:-6px 0 4px">' +
-          '<button class="btn btn-glass" style="flex:1" onclick="FIR.pedirImagen()">' +
-            ico('upload', 15) + (firmaOk ? 'Cambiar imagen' : 'Subir imagen') + '</button>' +
-          '<button class="btn btn-glass" style="flex:1" onclick="FIR.abrirDibujo()">' +
-            ico('edit', 15) + 'Dibujar firma</button>' +
-        '</div>' +
-
-        /* Slot 2: el PDF */
-        '<div class="fir-slot ' + (pdfOk ? 'ok' : '') + '" style="margin-top:10px">' +
-          '<div class="fir-slot-ico">' + ico(pdfOk ? 'check' : 'filePdf', 20) + '</div>' +
-          '<div class="fir-slot-txt">' +
-            '<strong>2. El documento</strong>' +
-            '<small>' + (pdfOk ? RCR.esc(FIR.pdfNombre) : 'Adjunta el PDF que vas a firmar') + '</small>' +
-          '</div>' +
-          '<div class="fir-slot-act">' +
-            '<button class="btn btn-glass" onclick="FIR.pedirPdf()">' +
-              ico('upload', 15) + (pdfOk ? 'Cambiar' : 'Adjuntar') + '</button>' +
-          '</div>' +
-        '</div>' +
-
+      '<div class="fir-stepper">' +
+        '<div class="fir-step ' + (firmaOk ? 'done' : 'now') + '"><span>1</span>Firma</div>' +
+        '<div class="fir-step-line"></div>' +
+        '<div class="fir-step ' + (pdfOk ? 'done' : (firmaOk ? 'now' : '')) + '"><span>2</span>Documento</div>' +
+        '<div class="fir-step-line"></div>' +
+        '<div class="fir-step ' + (firmaOk && pdfOk ? 'now' : '') + '"><span>3</span>Revisar</div>' +
       '</div>' +
 
-      '<button class="btn btn-primary" style="width:100%"' +
+      '<div class="fir-pasos">' + pasoFirma + pasoDoc + pasoRevisar + '</div>' +
+
+      '<button class="btn btn-primary fir-continuar"' +
         (firmaOk && pdfOk ? '' : ' disabled') +
         ' onclick="FIR.abrirVisor()">' +
         ico('chevronRight', 16) + 'Continuar y colocar la firma</button>' +
+
+      '<p class="fir-nota">' + ico('info', 14) + ' Tu documento es seguro. No guardamos copias.</p>' +
 
       '<input type="file" id="fir-file-img" accept="image/png,image/jpeg" style="display:none" onchange="FIR.recibirImagen(event)">' +
       '<input type="file" id="fir-file-pdf" accept="application/pdf" style="display:none" onchange="FIR.recibirPdf(event)">';
@@ -265,6 +275,7 @@ var FIR = {
     reader.onload = function () {
       FIR.pdfBytes = reader.result;      // ArrayBuffer
       FIR.pdfNombre = file.name;
+      FIR.pdfPeso = (file.size / 1024 / 1024).toFixed(1) + ' MB';
       FIR.pintarInicio();
     };
     reader.onerror = function () { RCR.toast('No se pudo leer el PDF'); };
