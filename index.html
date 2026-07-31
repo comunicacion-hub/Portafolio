@@ -171,12 +171,15 @@ RCR.cargando = function (texto) {
 
 /* ── Subvista nivel 2: ficha a pantalla completa (informe, CV) ───────────── */
 RCR.subvista = function (o) {
-  /* o = { titulo, cuerpo, onCerrar } */
+  /* o = { titulo, cuerpo, onCerrar, sinBarra } */
   var sv   = document.getElementById('subvista');
   var body = document.getElementById('subvista-body');
   document.getElementById('subvista-titulo').textContent = o.titulo || '';
   document.getElementById('subvista-back-ico').innerHTML = ico('chevronLeft', 20, 2.4);
   body.innerHTML = o.cuerpo || '';
+
+  /* Modo sin barra: el cuerpo aporta sus propios controles flotantes */
+  sv.classList.toggle('sin-barra', !!o.sinBarra);
 
   var back = document.getElementById('subvista-back');
   RCR._subvistaCerrar = o.onCerrar || function () { RCR.cerrarSubvista(); };
