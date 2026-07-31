@@ -1039,73 +1039,82 @@ a:focus-visible,
   background:var(--surface-2);border-radius:var(--r-lg);
   padding:14px;max-height:70vh;overflow:auto;margin-bottom:16px;
 }
-/* Visor a pantalla completa: panel de miniaturas + área de páginas */
+/* Visor a pantalla completa: panel izquierdo (menú + miniaturas) + documento */
 .subvista.sin-barra .fir-visor-layout{
   display:flex;height:100vh;height:100dvh;
 }
-.fir-minis{
-  width:118px;flex-shrink:0;overflow-y:auto;
+.fir-panel{
+  width:184px;flex-shrink:0;overflow-y:auto;
   background:var(--surface-2);border-right:1px solid var(--border);
-  padding:80px 10px 24px;display:flex;flex-direction:column;gap:12px;align-items:center;
+  padding:calc(16px + var(--safe-top)) 14px 24px;
+  display:flex;flex-direction:column;gap:14px;
 }
+/* Menú (barra) arriba del panel, con liquid glass */
+.fir-bar{
+  position:sticky;top:0;z-index:3;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  background:rgba(255,255,255,.55);
+  backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);
+  border:1px solid rgba(255,255,255,.6);
+  border-radius:30px;padding:7px;
+  box-shadow:0 8px 24px rgba(20,30,60,.14), inset 0 1px 0 rgba(255,255,255,.7);
+}
+.fir-bar-btn{
+  width:42px;height:42px;border-radius:50%;border:none;cursor:pointer;
+  background:none;color:var(--text);
+  display:flex;align-items:center;justify-content:center;
+  transition:background .16s,color .16s;-webkit-tap-highlight-color:transparent;
+}
+.fir-bar-btn svg{width:21px;height:21px;}
+.fir-bar-btn:hover{background:rgba(255,255,255,.6);color:var(--blue2);}
+.fir-bar-btn:active{transform:scale(.92);}
+.fir-bar-btn:disabled{opacity:.5;pointer-events:none;}
+
+/* Miniaturas: ocupan el ancho del panel, en columna */
+.fir-minis{display:flex;flex-direction:column;gap:14px;align-items:stretch;}
 .fir-mini{
-  border:2px solid transparent;border-radius:8px;padding:0;cursor:pointer;
-  background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.12);position:relative;
-  display:block;line-height:0;-webkit-tap-highlight-color:transparent;
+  border:2px solid transparent;border-radius:10px;padding:0;cursor:pointer;
+  background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.12);position:relative;
+  display:block;line-height:0;width:100%;-webkit-tap-highlight-color:transparent;
 }
-.fir-mini canvas{display:block;border-radius:6px;width:88px;height:auto;}
+.fir-mini canvas{display:block;border-radius:8px;width:100%;height:auto;}
 .fir-mini span{
-  position:absolute;bottom:4px;right:4px;
-  background:rgba(0,0,0,.55);color:#fff;font-size:10px;font-weight:700;
-  border-radius:10px;padding:1px 6px;line-height:1.4;
+  position:absolute;bottom:6px;right:6px;
+  background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:700;
+  border-radius:12px;padding:2px 8px;line-height:1.4;
 }
 .fir-mini.activa{border-color:var(--blue2);}
+
 .subvista.sin-barra .fir-viewer{
   flex:1;border-radius:0;max-height:none;height:100vh;height:100dvh;margin:0;
-  padding:80px 20px 40px;
+  padding:24px;
 }
 .subvista.sin-barra .subvista-bar{display:none;}
 .subvista.sin-barra .subvista-body{padding:0;}
 .subvista.sin-barra .subvista-body > *{max-width:none;margin:0;}
 @media (max-width:640px){
-  /* En móvil las miniaturas pasan a una tira horizontal arriba; el documento
-     ocupa todo el ancho debajo. */
   .subvista.sin-barra .fir-visor-layout{flex-direction:column;}
-  .fir-minis{
-    width:100%;flex-direction:row;flex-shrink:0;
+  .fir-panel{
+    width:100%;flex-direction:row;align-items:center;flex-shrink:0;
     border-right:none;border-bottom:1px solid var(--border);
-    padding:74px 12px 10px;gap:8px;overflow-x:auto;overflow-y:hidden;
+    padding:calc(12px + var(--safe-top)) 12px 12px;gap:12px;
+    overflow-x:auto;overflow-y:hidden;
   }
-  .fir-mini canvas{width:44px;}
-  .subvista.sin-barra .fir-viewer{padding:16px 10px 40px;height:auto;flex:1;}
+  .fir-bar{position:static;flex-shrink:0;}
+  .fir-minis{flex-direction:row;gap:10px;}
+  .fir-mini{width:88px;flex-shrink:0;}
+  .subvista.sin-barra .fir-viewer{padding:14px 12px 40px;height:auto;flex:1;}
 }
-
-/* Barra flotante del visor de firma (arriba-derecha, blanca, íconos en línea) */
-.fir-bar{
-  position:fixed;z-index:910;
-  top:calc(20px + var(--safe-top));right:20px;
-  display:flex;align-items:center;gap:6px;
-  background:var(--white);border:1px solid var(--border);
-  border-radius:30px;padding:8px;
-  box-shadow:0 8px 28px rgba(20,30,60,.18);
-}
-.fir-bar-btn{
-  width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;
-  background:none;color:var(--text);
-  display:flex;align-items:center;justify-content:center;
-  transition:background .16s,color .16s;-webkit-tap-highlight-color:transparent;
-}
-.fir-bar-btn svg{width:22px;height:22px;}
-.fir-bar-btn:hover{background:var(--surface-2);color:var(--blue2);}
-.fir-bar-btn:active{transform:scale(.92);}
-.fir-bar-btn:disabled{opacity:.5;pointer-events:none;}
 .fir-stamp.arrastrando{z-index:920;opacity:.92;box-shadow:0 8px 24px rgba(0,0,0,.25);}
+
+/* Página del documento: ancho fluido (se reajusta al redimensionar) */
 .fir-page-wrap{
   position:relative;margin:0 auto 16px;background:#fff;
-  box-shadow:0 2px 10px rgba(0,0,0,.12);width:fit-content;
+  box-shadow:0 2px 10px rgba(0,0,0,.12);
+  width:100%;max-width:820px;
 }
 .fir-page-wrap:last-child{margin-bottom:0;}
-.fir-page-canvas{display:block;}
+.fir-page-canvas{display:block;width:100%;height:100%;}
 
 /* Firma colocada sobre el PDF (arrastrable) */
 .fir-stamp{
