@@ -1068,27 +1068,38 @@ a:focus-visible,
 .subvista.sin-barra .subvista-body{padding:0;}
 .subvista.sin-barra .subvista-body > *{max-width:none;margin:0;}
 @media (max-width:640px){
-  .fir-minis{width:82px;padding-top:80px;}
-  .fir-mini canvas{width:58px;}
-  .subvista.sin-barra .fir-viewer{padding:80px 10px 40px;}
+  /* En móvil las miniaturas pasan a una tira horizontal arriba; el documento
+     ocupa todo el ancho debajo. */
+  .subvista.sin-barra .fir-visor-layout{flex-direction:column;}
+  .fir-minis{
+    width:100%;flex-direction:row;flex-shrink:0;
+    border-right:none;border-bottom:1px solid var(--border);
+    padding:74px 12px 10px;gap:8px;overflow-x:auto;overflow-y:hidden;
+  }
+  .fir-mini canvas{width:44px;}
+  .subvista.sin-barra .fir-viewer{padding:16px 10px 40px;height:auto;flex:1;}
 }
 
-/* Botones flotantes del visor de firma */
-.fir-fab{
+/* Barra flotante del visor de firma (arriba-derecha, blanca, íconos en línea) */
+.fir-bar{
   position:fixed;z-index:910;
-  width:56px;height:56px;border-radius:50%;border:none;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;color:#fff;
-  box-shadow:0 6px 20px rgba(20,30,60,.25);transition:transform .18s;
-  -webkit-tap-highlight-color:transparent;
+  top:calc(20px + var(--safe-top));right:20px;
+  display:flex;align-items:center;gap:6px;
+  background:var(--white);border:1px solid var(--border);
+  border-radius:30px;padding:8px;
+  box-shadow:0 8px 28px rgba(20,30,60,.18);
 }
-.fir-fab svg{width:24px;height:24px;}
-.fir-fab:hover{transform:scale(1.07);}
-.fir-fab:active{transform:scale(.94);}
-.fir-fab.volver{top:calc(20px + var(--safe-top));left:20px;background:var(--grad-b);}
-.fir-fab.add{top:calc(20px + var(--safe-top));right:20px;background:var(--grad-b);}
-.fir-fab.firmar{top:calc(90px + var(--safe-top));right:20px;background:var(--grad-c);}
-.fir-fab:disabled{opacity:.5;pointer-events:none;}
-.fir-stamp.arrastrando{z-index:920;opacity:.92;}
+.fir-bar-btn{
+  width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;
+  background:none;color:var(--text);
+  display:flex;align-items:center;justify-content:center;
+  transition:background .16s,color .16s;-webkit-tap-highlight-color:transparent;
+}
+.fir-bar-btn svg{width:22px;height:22px;}
+.fir-bar-btn:hover{background:var(--surface-2);color:var(--blue2);}
+.fir-bar-btn:active{transform:scale(.92);}
+.fir-bar-btn:disabled{opacity:.5;pointer-events:none;}
+.fir-stamp.arrastrando{z-index:920;opacity:.92;box-shadow:0 8px 24px rgba(0,0,0,.25);}
 .fir-page-wrap{
   position:relative;margin:0 auto 16px;background:#fff;
   box-shadow:0 2px 10px rgba(0,0,0,.12);width:fit-content;
