@@ -1039,6 +1039,29 @@ a:focus-visible,
   background:var(--surface-2);border-radius:var(--r-lg);
   padding:14px;max-height:70vh;overflow:auto;margin-bottom:16px;
 }
+/* En el visor a pantalla completa (subvista sin barra) ocupa todo */
+.subvista.sin-barra .fir-viewer{
+  border-radius:0;max-height:none;height:100vh;height:100dvh;margin:0;
+  padding:80px 14px 40px;
+}
+.subvista.sin-barra .subvista-bar{display:none;}
+.subvista.sin-barra .subvista-body{padding:0;}
+.subvista.sin-barra .subvista-body > *{max-width:none;margin:0;}
+
+/* Botones flotantes del visor de firma */
+.fir-fab{
+  position:fixed;z-index:910;
+  width:56px;height:56px;border-radius:50%;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:#fff;
+  box-shadow:0 6px 20px rgba(20,30,60,.25);transition:transform .18s;
+  -webkit-tap-highlight-color:transparent;
+}
+.fir-fab:hover{transform:scale(1.07);}
+.fir-fab:active{transform:scale(.94);}
+.fir-fab.volver{top:calc(20px + var(--safe-top));left:20px;background:var(--grad-b);}
+.fir-fab.add{top:calc(20px + var(--safe-top));right:20px;background:var(--grad-b);}
+.fir-fab.firmar{top:calc(90px + var(--safe-top));right:20px;background:var(--grad-c);}
+.fir-fab:disabled{opacity:.5;pointer-events:none;}
 .fir-page-wrap{
   position:relative;margin:0 auto 16px;background:#fff;
   box-shadow:0 2px 10px rgba(0,0,0,.12);width:fit-content;
