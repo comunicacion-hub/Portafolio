@@ -104,10 +104,6 @@ RCR.modulos.informes = {
   mount: function (root) {
     root.innerHTML =
       '<div class="section-header">' +
-        '<div>' +
-          '<div class="section-title">Mis informes</div>' +
-          '<div class="section-sub">Un informe por mes y por área</div>' +
-        '</div>' +
         '<div class="count-badge" id="inf-count">0</div>' +
       '</div>' +
       '<div id="inf-list"></div>';
@@ -271,13 +267,12 @@ var INF = {
         (pend ? '<div class="chips-row" style="margin-bottom:12px">' +
                   '<span class="chip amarillo"><span class="chip-dot"></span>' +
                   pend + ' por ejecutar</span></div>' : '') +
-        '<div class="cv-res-btns">' +
-          '<button class="btn btn-glass" onclick="INF.ver(\'' + d._docId + '\')">' + ico('eye', 15) + 'Ver</button>' +
-          '<button class="btn btn-glass" onclick="INF.abrirForm(\'' + d._docId + '\')">' + ico('edit', 15) + 'Editar</button>' +
-          '<button class="btn btn-glass" onclick="INF.compartir(\'' + d._docId + '\')">' + ico('link', 15) + 'Compartir</button>' +
-          '<button class="btn btn-primary" onclick="INF.descargar(\'' + d._docId + '\',this)">' + ico('download', 15) + 'Descargar PDF</button>' +
-          '<button class="btn-ico danger" style="height:auto" aria-label="Eliminar informe"' +
-            ' onclick="INF.pedirBorrar(\'' + d._docId + '\')">' + ico('trash', 15) + '</button>' +
+        '<div class="card-icobar">' +
+          '<button class="btn-ico" title="Ver" aria-label="Ver informe" onclick="INF.ver(\'' + d._docId + '\')">' + ico('eye', 17) + '</button>' +
+          '<button class="btn-ico" title="Editar" aria-label="Editar informe" onclick="INF.abrirForm(\'' + d._docId + '\')">' + ico('edit', 17) + '</button>' +
+          '<button class="btn-ico" title="Compartir enlace" aria-label="Compartir enlace" onclick="INF.compartir(\'' + d._docId + '\')">' + ico('link', 17) + '</button>' +
+          '<button class="btn-ico" title="Descargar PDF" aria-label="Descargar PDF" onclick="INF.descargar(\'' + d._docId + '\',this)">' + ico('download', 17) + '</button>' +
+          '<button class="btn-ico danger" title="Eliminar" aria-label="Eliminar informe" onclick="INF.pedirBorrar(\'' + d._docId + '\')">' + ico('trash', 17) + '</button>' +
         '</div>' +
       '</div>';
     }).join('');
