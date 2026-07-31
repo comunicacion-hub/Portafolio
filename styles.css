@@ -81,36 +81,60 @@ html,body{
   min-height:100vh;min-height:100dvh;
   display:flex;align-items:center;justify-content:center;
   padding:24px;padding-top:calc(24px + var(--safe-top));
+  background:var(--bg);
 }
-.login-card{
-  background:var(--white);border-radius:var(--r-xl);
-  padding:40px 32px;max-width:400px;width:100%;
-  box-shadow:var(--shadow-lg);text-align:center;
+.login-box{
+  display:flex;flex-direction:column;align-items:center;gap:18px;width:100%;max-width:360px;
 }
-.login-mark{
-  display:flex;align-items:center;justify-content:center;
-  width:54px;height:54px;margin:0 auto 18px;
-  border-radius:var(--r-md);background:var(--grad-b);color:var(--white);
-  font-size:17px;font-weight:800;letter-spacing:.6px;
+/* Cápsula título: "mi redes con rostro" + / grande */
+.login-titulo{
+  display:flex;align-items:center;justify-content:center;gap:14px;
+  width:100%;padding:26px 34px;
+  background:rgba(255,255,255,.55);
+  backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
+  border:1px solid rgba(255,255,255,.6);border-radius:28px;
+  box-shadow:0 6px 22px rgba(20,30,60,.07), inset 0 1px 0 rgba(255,255,255,.7);
 }
-.login-card h1{
-  font-size:24px;font-weight:700;margin-bottom:24px;
-  color:var(--text);text-transform:lowercase;
+.login-app{
+  font-size:30px;font-weight:700;line-height:1.15;color:var(--text);
+  letter-spacing:-.5px;
 }
+.login-slash{
+  font-size:52px;font-weight:400;color:var(--text-muted);line-height:1;
+}
+/* Cápsula botón Google */
 .login-google{
-  display:flex;align-items:center;justify-content:center;
-  width:120px;height:56px;margin:0 auto;
-  background:var(--white);border:1.5px solid var(--border,#e6e8ee);
-  border-radius:var(--r-lg,14px);cursor:pointer;transition:border-color .15s,box-shadow .15s;
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  width:100%;height:auto;padding:18px 24px;margin:0;
+  background:rgba(255,255,255,.55);
+  backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
+  border:1px solid rgba(255,255,255,.6);border-radius:24px;cursor:pointer;
+  box-shadow:0 6px 22px rgba(20,30,60,.07), inset 0 1px 0 rgba(255,255,255,.7);
+  transition:box-shadow .18s,transform .18s;
+  -webkit-tap-highlight-color:transparent;
 }
-.login-google:hover{border-color:var(--blue,#3b82f6);box-shadow:0 2px 10px rgba(0,0,0,.06);}
-.login-pie{font-size:13px;color:var(--text-muted);margin-top:22px;line-height:1.5;}
+.login-google:hover{box-shadow:0 10px 28px rgba(20,30,60,.12), inset 0 1px 0 rgba(255,255,255,.7);}
+.login-google:active{transform:scale(.98);}
+.login-google-txt{font-size:19px;font-weight:500;color:var(--text);}
+.login-google-txt b{
+  font-weight:700;
+  background:linear-gradient(90deg,#4285F4,#9745ff);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;
+}
+.login-google svg{width:26px;height:26px;flex-shrink:0;}
+.login-pie{font-size:14px;color:var(--text-muted);margin-top:6px;line-height:1.5;text-align:center;}
 #g-login-btn{display:flex;justify-content:center;min-height:0;}
 #g-login-btn.hidden{position:absolute;left:-9999px;height:0;overflow:hidden;}
 .login-error{
-  margin-top:16px;padding:10px 14px;border-radius:var(--r-sm);
+  margin-top:4px;padding:10px 14px;border-radius:var(--r-sm);
   background:#fff1f2;border:1px solid #fecdd3;color:#be123c;
-  font-size:13px;line-height:1.4;text-align:left;
+  font-size:13px;line-height:1.4;text-align:center;width:100%;
+}
+@media (max-width:420px){
+  .login-app{font-size:25px;}
+  .login-slash{font-size:44px;}
+  .login-titulo{padding:22px 24px;}
 }
 
 /* ==========================================================================
@@ -263,9 +287,11 @@ html,body{
 /* Móvil: esquina inferior derecha, sobre la barra de nav */
 @media (max-width:720px){
   .fab{
-    bottom:calc(90px + var(--safe-bottom));
-    right:calc(20px + var(--safe-right));
+    width:48px;height:48px;
+    bottom:calc(104px + var(--safe-bottom));
+    right:calc(18px + var(--safe-right));
   }
+  .fab svg{width:22px;height:22px;}
 }
 .fab svg{width:24px;height:24px;}
 .fab:hover{transform:scale(1.07);}
@@ -295,6 +321,8 @@ html,body{
   border:1px solid var(--border);
   padding:22px 24px;margin-bottom:16px;box-shadow:var(--shadow-sm);
 }
+/* Listado de informes: tarjetas más angostas (no ocupan todo el ancho) */
+#inf-list{max-width:620px;margin:0 auto;}
 .card-top{display:flex;align-items:center;gap:14px;margin-bottom:10px;}
 .card-badge-soft{
   width:52px;height:52px;border-radius:var(--r-md);flex-shrink:0;
@@ -621,7 +649,6 @@ a:focus-visible,
 @media (max-width:374px){
   .main{padding:16px 12px;padding-bottom:calc(var(--nav-h) + 34px + var(--safe-bottom));}
   .topbar{padding:10px 12px;padding-top:calc(10px + var(--safe-top));}
-  .login-card{padding:28px 20px;}
   .sema-options{gap:6px;}
   .sema-opt{padding:10px 4px;}
   .sema-opt-dot{width:18px;height:18px;}
@@ -1168,28 +1195,24 @@ a:focus-visible,
 }
 .subvista.open{ transform:translateX(0); }
 .subvista.hidden{ display:none; }
-.subvista-bar{
-  display:flex; align-items:center; gap:14px;
-  margin:16px 16px 0; padding:12px 18px;
-  background:rgba(255,255,255,.72);
-  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-  border:1px solid var(--border,#e6e8ee);
-  border-radius:24px;
-  box-shadow:0 8px 28px rgba(20,30,60,.08);
-  position:sticky; top:16px; z-index:2;
-}
-.subvista-back{
-  height:38px; padding:0 14px 0 10px; border-radius:20px;
-  border:none; background:var(--surface-2,#eef1f6); color:var(--blue2,#0778bf);
-  display:flex; align-items:center; gap:6px; cursor:pointer;
-  flex-shrink:0; font-family:'Outfit',sans-serif; font-size:13.5px; font-weight:600;
+.subvista-salir{
+  position:fixed; z-index:912;
+  top:calc(18px + var(--safe-top)); right:18px;
+  width:44px; height:44px; border-radius:50%;
+  border:1px solid rgba(255,255,255,.55);
+  background:rgba(255,255,255,.5);
+  backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6);
+  color:var(--text); cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:background .16s,color .16s,transform .16s;
   -webkit-tap-highlight-color:transparent;
 }
-.subvista-back:hover{ background:var(--surface-3,#e3e8f0); }
-.subvista-back svg{ width:18px; height:18px; }
-.subvista-bar h2{ font-size:15px; font-weight:600; color:var(--text,#1b1b1b); margin:0; }
+.subvista-salir:hover{ background:rgba(255,255,255,.75); color:var(--blue2); }
+.subvista-salir:active{ transform:scale(.92); }
+.subvista-salir svg{ width:22px; height:22px; }
 .subvista-body{
-  flex:1; overflow-y:auto; padding:20px 16px 40px;
+  flex:1; overflow-y:auto; padding:calc(74px + var(--safe-top)) 16px 40px;
 }
 .subvista-body .form-wrap{ max-width:760px; margin:0 auto; }
 /* barra de acciones fija abajo dentro de la subvista */
