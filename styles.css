@@ -678,10 +678,50 @@ a:focus-visible,
 .cv-res-loc svg{width:15px;height:15px;flex-shrink:0;}
 .cv-barra-txt{font-size:13px;color:var(--text-muted);margin-bottom:10px;text-align:left;}
 .cv-pct{color:var(--teal);font-weight:700;}
-.cv-barra{height:7px;border-radius:20px;background:var(--border);overflow:hidden;margin-bottom:24px;}
+.cv-barra{height:7px;border-radius:20px;background:var(--border);overflow:hidden;}
 .cv-barra span{display:block;height:100%;border-radius:20px;background:var(--grad-c);transition:width .4s;}
 .cv-res-btns{display:flex;gap:10px;padding-top:20px;border-top:1px solid var(--border);flex-wrap:wrap;}
 .cv-res-btns .btn{padding:12px 14px;font-size:13.5px;min-width:110px;}
+
+/* Tarjeta CV — dos columnas (según diseño) */
+.cv-card{
+  background:var(--white);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:32px;box-shadow:var(--shadow-sm);
+}
+.cv-card-body{display:flex;gap:32px;align-items:flex-start;}
+.cv-col-izq{flex:1;min-width:0;border-right:1px solid var(--border);padding-right:32px;}
+.cv-nombre{display:block;font-size:22px;font-weight:800;color:var(--text);line-height:1.2;}
+.cv-prof{font-size:14px;color:var(--text-muted);margin-top:8px;line-height:1.4;}
+.cv-loc{display:flex;align-items:center;gap:5px;font-size:13.5px;color:var(--text-muted);margin-top:12px;}
+.cv-loc svg{width:15px;height:15px;flex-shrink:0;}
+.cv-col-der{flex:1.2;min-width:0;}
+.cv-pct-big{font-size:34px;font-weight:800;color:var(--teal);line-height:1;margin-bottom:14px;}
+.cv-pct-big span{display:block;font-size:15px;font-weight:600;margin-top:2px;}
+.cv-falt{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);margin-top:12px;}
+.cv-falt svg{width:15px;height:15px;color:var(--teal);flex-shrink:0;}
+.cv-card-btns{
+  display:flex;gap:10px;margin-top:28px;padding-top:22px;
+  border-top:1px solid var(--border);flex-wrap:wrap;
+}
+.cv-card-btns .btn{flex:1;min-width:150px;padding:13px 16px;font-size:14px;}
+@media (max-width:560px){
+  .cv-card-body{flex-direction:column;gap:20px;}
+  .cv-col-izq{border-right:none;border-bottom:1px solid var(--border);padding-right:0;padding-bottom:20px;width:100%;}
+}
+
+/* Tarjeta Semáforo — Estado del mes en filas + Comentario (según diseño) */
+.sem-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px;}
+.sem-card-head strong{display:block;font-size:19px;font-weight:800;color:var(--text);}
+.sem-card-head small{display:block;font-size:13px;color:var(--text-muted);margin-top:2px;}
+.sem-sec-tit{font-size:15px;font-weight:700;color:var(--text);margin:18px 0 12px;}
+.sem-filas{display:flex;flex-direction:column;}
+.sem-fila{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;}
+.sem-fila-lbl{display:flex;align-items:center;gap:9px;font-size:14px;color:var(--text);}
+.sem-comentario{font-size:13.5px;color:var(--text-muted);line-height:1.6;}
+.chip-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--text-muted);}
+.chip-dot.verde{background:#22c55e;}
+.chip-dot.amarillo{background:#f59e0b;}
+.chip-dot.rojo{background:#ef4444;}
 
 .cv-steps{display:flex;gap:5px;margin-bottom:18px;}
 .cv-step{
@@ -932,26 +972,54 @@ a:focus-visible,
 /* ==========================================================================
    FIRMAS — generador de firma visual sobre PDF
    ========================================================================== */
-.fir-wrap{max-width:900px;margin:0 auto;}
+.fir-wrap{max-width:760px;margin:0 auto;}
 
-/* Paso a paso: tarjetas de "adjuntar" */
-.fir-slots{display:flex;flex-direction:column;gap:14px;margin-bottom:20px;}
-.fir-slot{
-  border:1.5px solid var(--border);border-radius:var(--r-lg);
-  padding:16px;background:var(--surface);
-  display:flex;align-items:center;gap:14px;
+/* Stepper superior (1 Firma · 2 Documento · 3 Revisar) */
+.fir-stepper{display:flex;align-items:center;margin-bottom:22px;}
+.fir-step{
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0;
 }
-.fir-slot-ico{
-  width:44px;height:44px;border-radius:var(--r-md);flex-shrink:0;
+.fir-step span{
+  width:34px;height:34px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
-  background:var(--surface-2);color:var(--brand-2);
+  background:var(--surface-2);color:var(--text-muted);font-size:14px;font-weight:700;
+  border:2px solid var(--border);
 }
-.fir-slot.ok .fir-slot-ico{background:#e8f7ee;color:#1c8a4b;}
-.fir-slot-txt{flex:1;min-width:0;}
-.fir-slot-txt strong{display:block;font-size:14px;color:var(--text);}
-.fir-slot-txt small{display:block;font-size:12px;color:var(--text-muted);margin-top:2px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.fir-slot-act{flex-shrink:0;}
+.fir-step.now{color:var(--blue2);}
+.fir-step.now span{background:var(--white);color:var(--blue2);border-color:var(--blue2);}
+.fir-step.done{color:var(--teal);}
+.fir-step.done span{background:var(--teal);color:#fff;border-color:var(--teal);}
+.fir-step-line{flex:1;height:2px;background:var(--border);margin:0 6px;margin-bottom:22px;}
+
+/* Tarjetas por paso */
+.fir-pasos{display:flex;flex-direction:column;gap:14px;margin-bottom:22px;}
+.fir-paso{
+  border:1px solid var(--border);border-radius:var(--r-lg);
+  background:var(--white);box-shadow:var(--shadow-sm);padding:20px;
+}
+.fir-paso.ok{border-color:#bbf7d0;}
+.fir-paso-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+.fir-paso-num{
+  width:30px;height:30px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--surface-2);color:var(--text-muted);font-size:14px;font-weight:700;
+}
+.fir-paso.ok .fir-paso-num{background:var(--teal);color:#fff;}
+.fir-paso-tit{flex:1;font-size:15.5px;font-weight:700;color:var(--text);}
+.fir-paso-estado{font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--surface-2);color:var(--text-muted);}
+.fir-paso-estado.ok{background:#e8f7ee;color:#1c8a4b;}
+.fir-paso-desc{font-size:13.5px;color:var(--text-muted);line-height:1.5;margin-bottom:14px;}
+.fir-paso-btns{display:flex;gap:10px;flex-wrap:wrap;}
+.fir-paso-btns .btn{flex:1;min-width:140px;}
+.fir-mini-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);}
+.fir-firma-info{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px;}
+.fir-firma-info p{font-size:14px;color:var(--text);margin-top:2px;}
+.fir-doc-info{display:flex;align-items:center;gap:12px;margin-bottom:14px;color:var(--blue2);}
+.fir-doc-nombre{font-size:14px;color:var(--text);font-weight:600;word-break:break-all;}
+.fir-continuar{width:100%;}
+.fir-nota{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12.5px;color:var(--text-muted);margin-top:14px;}
+.fir-nota svg{width:14px;height:14px;flex-shrink:0;}
 
 /* Firma: vista previa de la imagen elegida */
 .fir-firma-prev{
