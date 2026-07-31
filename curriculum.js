@@ -72,12 +72,6 @@ RCR.modulos.curriculum = {
 
   mount: function (root) {
     root.innerHTML =
-      '<div class="section-header">' +
-        '<div>' +
-          '<div class="section-title">Mi currículum</div>' +
-          '<div class="section-sub">Llena la ficha una vez y descarga tu CV cuando lo necesites</div>' +
-        '</div>' +
-      '</div>' +
       '<div id="cv-cont"></div>';
     CV.cargar();
   },
