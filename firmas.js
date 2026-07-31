@@ -290,6 +290,7 @@ var FIR = {
 
     RCR.subvista({
       titulo: 'Colocar firma',
+      sinBarra: true,
       cuerpo: '<div id="fir-visor-wrap">' + RCR.cargando('Abriendo el documento') + '</div>',
       onCerrar: function () { FIR.volverInicio(); }
     });
@@ -308,11 +309,10 @@ var FIR = {
       FIR.paginas = [];
 
       root.innerHTML =
-        '<div class="fir-toolbar">' +
-          '<span class="fir-hint">' + ico('info', 14) +
-            ' Arrastra la firma al lugar exacto. Puedes colocar varias.</span>' +
-          '<button class="btn btn-glass" onclick="FIR.agregarEstampa()">' + ico('plus', 15) + 'Añadir firma</button>' +
-          '<button class="btn btn-primary" id="fir-btn-firmar" onclick="FIR.firmar()">' + ico('check', 15) + 'Firmar</button>' +
+        '<div class="fir-fabs">' +
+          '<button class="fir-fab volver" title="Regresar" aria-label="Regresar" onclick="RCR._subvistaCerrar()">' + ico('chevronLeft', 24, 2.6) + '</button>' +
+          '<button class="fir-fab add" title="Añadir otra firma" aria-label="Añadir otra firma" onclick="FIR.agregarEstampa()">' + ico('plus', 24, 2.6) + '</button>' +
+          '<button class="fir-fab firmar" id="fir-btn-firmar" title="Firmar" aria-label="Firmar" onclick="FIR.firmar()">' + ico('edit', 22, 2.4) + '</button>' +
         '</div>' +
         '<div class="fir-viewer" id="fir-viewer"></div>';
 
