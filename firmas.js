@@ -309,12 +309,14 @@ var FIR = {
       FIR.paginas = [];
 
       root.innerHTML =
-        '<div class="fir-fabs">' +
-          '<button class="fir-fab volver" title="Regresar" aria-label="Regresar" onclick="FIR.volverInicio()">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>' +
+        '<div class="fir-bar">' +
+          '<button class="fir-bar-btn" title="Regresar" aria-label="Regresar" onclick="FIR.volverInicio()">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 19l-7-7 7-7"/><path d="M3 12h18"/></svg>' +
           '</button>' +
-          '<button class="fir-fab add" title="Añadir otra firma" aria-label="Añadir otra firma" onclick="FIR.agregarEstampa(FIR.paginaVisible())">' + ico('plus', 24, 2.6) + '</button>' +
-          '<button class="fir-fab firmar" id="fir-btn-firmar" title="Firmar" aria-label="Firmar" onclick="FIR.firmar()">' + ico('edit', 22, 2.4) + '</button>' +
+          '<button class="fir-bar-btn" title="Añadir otra firma" aria-label="Añadir otra firma" onclick="FIR.agregarEstampa(FIR.paginaVisible())">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>' +
+          '</button>' +
+          '<button class="fir-bar-btn" id="fir-btn-firmar" title="Firmar" aria-label="Firmar" onclick="FIR.firmar()">' + ico('edit', 21, 2.2) + '</button>' +
         '</div>' +
         '<div class="fir-visor-layout">' +
           '<aside class="fir-minis" id="fir-minis"></aside>' +
@@ -323,9 +325,17 @@ var FIR = {
 
       var viewer = document.getElementById('fir-viewer');
       var minis  = document.getElementById('fir-minis');
+
+      /* Escala responsiva: el PDF se ajusta al ancho disponible del visor
+         (con tope, para no agrandar de más en pantallas grandes). */
+      var page1 = await FIR.pdfDoc.getPage(1);
+      var base = page1.getViewport({ scale: 1 });
+      var dispo = viewer.clientWidth - 40;               // menos el padding
+      var escala = Math.min(FIR.ESCALA, Math.max(0.5, dispo / base.width));
+
       for (var n = 1; n <= FIR.pdfDoc.numPages; n++) {
         var page = await FIR.pdfDoc.getPage(n);
-        var viewport = page.getViewport({ scale: FIR.ESCALA });
+        var viewport = page.getViewport({ scale: escala });
 
         var wrap = document.createElement('div');
         wrap.className = 'fir-page-wrap';
@@ -350,7 +360,7 @@ var FIR = {
         mini.dataset.pagina = n;
         mini.title = 'Página ' + n;
         var mc = document.createElement('canvas');
-        var mvp = page.getViewport({ scale: 0.22 });
+        var mvp = page.getViewport({ scale: 0.2 });
         mc.width = Math.round(mvp.width); mc.height = Math.round(mvp.height);
         await page.render({ canvasContext: mc.getContext('2d'), viewport: mvp }).promise;
         mini.appendChild(mc);
@@ -477,51 +487,64 @@ var FIR = {
       return { x: t ? t.clientX : e.clientX, y: t ? t.clientY : e.clientY };
     }
 
-    /* Mover (permite pasar la firma de una página a otra) */
+    /* Mover: durante el arrastre la estampa pasa a position:fixed sobre todo,
+       así puede cruzar de una página a otra y funciona aunque haya scroll.
+       Al soltar, se calcula sobre qué página cayó y se reinserta ahí. */
     function iniMover(e) {
       if (e.target === resize || e.target.closest('.fir-stamp-del')) return;
       e.preventDefault();
-      var pag = pagInfo(); if (!pag) return;
-      var rect = pag.wrap.getBoundingClientRect();
+
+      var er = el.getBoundingClientRect();
       var p = punto(e);
-      var offX = p.x - (rect.left + st.xRel * rect.width);
-      var offY = p.y - (rect.top + st.yRel * rect.height);
+      var offX = p.x - er.left;         // desfase del cursor dentro de la estampa
+      var offY = p.y - er.top;
+      var w = er.width, h = er.height;
+
+      /* Sacar del flujo: fija en pantalla, siguiendo el cursor */
       el.classList.add('arrastrando');
+      el.style.position = 'fixed';
+      el.style.width = w + 'px';
+      el.style.height = h + 'px';
+      el.style.left = er.left + 'px';
+      el.style.top = er.top + 'px';
 
       function mover(ev) {
         ev.preventDefault();
         var q = punto(ev);
-        var nx = (q.x - offX - rect.left) / rect.width;
-        var ny = (q.y - offY - rect.top) / rect.height;
-        st.xRel = Math.max(0, Math.min(1 - st.wRel, nx));
-        st.yRel = Math.max(0, Math.min(1 - st.hRel, ny));
-        el.style.left = (st.xRel * 100) + '%';
-        el.style.top = (st.yRel * 100) + '%';
+        el.style.left = (q.x - offX) + 'px';
+        el.style.top = (q.y - offY) + 'px';
       }
-      function soltar(ev) {
-        el.classList.remove('arrastrando');
+      function soltar() {
         document.removeEventListener('mousemove', mover);
         document.removeEventListener('mouseup', soltar);
         document.removeEventListener('touchmove', mover);
         document.removeEventListener('touchend', soltar);
 
-        /* ¿El centro de la estampa cayó sobre otra página? -> reubicar */
-        var er = el.getBoundingClientRect();
-        var cx = er.left + er.width / 2, cy = er.top + er.height / 2;
+        var r2 = el.getBoundingClientRect();
+        var cx = r2.left + r2.width / 2, cy = r2.top + r2.height / 2;
+
+        /* Página bajo el centro; si ninguna, se queda en la actual */
         var destino = FIR.paginas.find(function (pp) {
           var r = pp.wrap.getBoundingClientRect();
           return cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom;
-        });
-        if (destino && destino.num !== st.pagina) {
-          var r = destino.wrap.getBoundingClientRect();
-          st.pagina = destino.num;
-          st.xRel = Math.max(0, Math.min(1 - st.wRel, (cx - r.left) / r.width - st.wRel / 2));
-          st.yRel = Math.max(0, Math.min(1 - st.hRel, (cy - r.top) / r.height - st.hRel / 2));
-          el.style.left = (st.xRel * 100) + '%';
-          el.style.top = (st.yRel * 100) + '%';
-          destino.wrap.appendChild(el);
-          FIR.marcarMiniActiva(destino.num);
-        }
+        }) || FIR.paginas.find(function (pp) { return pp.num === st.pagina; });
+
+        /* Volver a coordenadas relativas de la página destino */
+        var pr = destino.wrap.getBoundingClientRect();
+        st.pagina = destino.num;
+        st.wRel = w / pr.width;
+        st.hRel = h / pr.height;
+        st.xRel = Math.max(0, Math.min(1 - st.wRel, (r2.left - pr.left) / pr.width));
+        st.yRel = Math.max(0, Math.min(1 - st.hRel, (r2.top - pr.top) / pr.height));
+
+        el.classList.remove('arrastrando');
+        el.style.position = 'absolute';
+        el.style.width = (st.wRel * 100) + '%';
+        el.style.height = (st.hRel * 100) + '%';
+        el.style.left = (st.xRel * 100) + '%';
+        el.style.top = (st.yRel * 100) + '%';
+        destino.wrap.appendChild(el);
+        FIR.marcarMiniActiva(destino.num);
       }
       document.addEventListener('mousemove', mover);
       document.addEventListener('mouseup', soltar);
