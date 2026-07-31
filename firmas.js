@@ -26,7 +26,12 @@ RCR.modulos.firmas = {
     FIR.pintarInicio();
   },
 
-  onShow: function () {}
+  onShow: function () {
+    /* Al volver a entrar a la sección, se empieza limpio (sin cache) */
+    FIR.reset();
+    FIR.pdfFirmado = null;
+    FIR.pintarInicio();
+  }
 };
 
 var FIR = {
@@ -309,29 +314,28 @@ var FIR = {
       FIR.paginas = [];
 
       root.innerHTML =
-        '<div class="fir-bar">' +
-          '<button class="fir-bar-btn" title="Regresar" aria-label="Regresar" onclick="FIR.volverInicio()">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 19l-7-7 7-7"/><path d="M3 12h18"/></svg>' +
-          '</button>' +
-          '<button class="fir-bar-btn" title="Añadir otra firma" aria-label="Añadir otra firma" onclick="FIR.agregarEstampa(FIR.paginaVisible())">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>' +
-          '</button>' +
-          '<button class="fir-bar-btn" id="fir-btn-firmar" title="Firmar" aria-label="Firmar" onclick="FIR.firmar()">' + ico('edit', 21, 2.2) + '</button>' +
-        '</div>' +
         '<div class="fir-visor-layout">' +
-          '<aside class="fir-minis" id="fir-minis"></aside>' +
+          '<aside class="fir-panel">' +
+            '<div class="fir-bar">' +
+              '<button class="fir-bar-btn" title="Regresar" aria-label="Regresar" onclick="FIR.volverInicio()">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 19l-7-7 7-7"/><path d="M3 12h18"/></svg>' +
+              '</button>' +
+              '<button class="fir-bar-btn" title="Añadir otra firma" aria-label="Añadir otra firma" onclick="FIR.agregarEstampa(FIR.paginaVisible())">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>' +
+              '</button>' +
+              '<button class="fir-bar-btn" id="fir-btn-firmar" title="Firmar" aria-label="Firmar" onclick="FIR.firmar()">' + ico('edit', 21, 2.2) + '</button>' +
+            '</div>' +
+            '<div class="fir-minis" id="fir-minis"></div>' +
+          '</aside>' +
           '<div class="fir-viewer" id="fir-viewer"></div>' +
         '</div>';
 
       var viewer = document.getElementById('fir-viewer');
       var minis  = document.getElementById('fir-minis');
 
-      /* Escala responsiva: el PDF se ajusta al ancho disponible del visor
-         (con tope, para no agrandar de más en pantallas grandes). */
-      var page1 = await FIR.pdfDoc.getPage(1);
-      var base = page1.getViewport({ scale: 1 });
-      var dispo = viewer.clientWidth - 40;               // menos el padding
-      var escala = Math.min(FIR.ESCALA, Math.max(0.5, dispo / base.width));
+      /* Render a buena resolución fija; el ajuste al ancho lo hace el CSS
+         (canvas width:100%), así redimensionar la ventana reescala solo. */
+      var escala = FIR.ESCALA;
 
       for (var n = 1; n <= FIR.pdfDoc.numPages; n++) {
         var page = await FIR.pdfDoc.getPage(n);
@@ -339,8 +343,8 @@ var FIR = {
 
         var wrap = document.createElement('div');
         wrap.className = 'fir-page-wrap';
-        wrap.style.width = Math.round(viewport.width) + 'px';
-        wrap.style.height = Math.round(viewport.height) + 'px';
+        /* proporción de la página para que el alto acompañe al ancho fluido */
+        wrap.style.aspectRatio = viewport.width + ' / ' + viewport.height;
         wrap.dataset.pagina = n;
 
         var canvas = document.createElement('canvas');
@@ -360,7 +364,7 @@ var FIR = {
         mini.dataset.pagina = n;
         mini.title = 'Página ' + n;
         var mc = document.createElement('canvas');
-        var mvp = page.getViewport({ scale: 0.2 });
+        var mvp = page.getViewport({ scale: 0.5 });
         mc.width = Math.round(mvp.width); mc.height = Math.round(mvp.height);
         await page.render({ canvasContext: mc.getContext('2d'), viewport: mvp }).promise;
         mini.appendChild(mc);
@@ -391,10 +395,9 @@ var FIR = {
   },
 
   volverInicio: function () {
-    FIR.pdfDoc = null;
-    FIR.paginas = [];
-    FIR.estampas = [];
     RCR.cerrarSubvista();
+    FIR.reset();            // borra firma y documento (no queda cache al volver)
+    FIR.pdfFirmado = null;
     FIR.pintarInicio();
   },
 
