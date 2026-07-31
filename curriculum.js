@@ -160,22 +160,30 @@ var CV = {
 
     var d   = CV.datos;
     var pct = CV.completitud(d);
+    var falt = CV.faltantes(d);
     var profesion = d.perfil.profesion || '';
 
     cont.innerHTML =
-      '<div class="cv-resumen">' +
-        '<div class="cv-res-head">' +
-          '<strong>' + RCR.esc(d.nombre) + '</strong>' +
-          (profesion ? '<p class="cv-res-prof">' + RCR.esc(profesion) + '</p>' : '') +
-          (d.ciudad ? '<div class="cv-res-loc">' + ico('mapPin', 15) + RCR.esc(d.ciudad) + '</div>' : '') +
+      '<div class="cv-card">' +
+        '<div class="cv-card-body">' +
+          '<div class="cv-col-izq">' +
+            '<strong class="cv-nombre">' + RCR.esc(d.nombre) + '</strong>' +
+            (profesion ? '<p class="cv-prof">' + RCR.esc(profesion) + '</p>' : '') +
+            (d.ciudad ? '<div class="cv-loc">' + ico('mapPin', 15) + RCR.esc(d.ciudad) + '</div>' : '') +
+          '</div>' +
+          '<div class="cv-col-der">' +
+            '<div class="cv-pct-big">' + pct + '%<span>completado</span></div>' +
+            '<div class="cv-barra"><span style="width:' + pct + '%"></span></div>' +
+            '<div class="cv-falt">' + ico('check', 15) +
+              (falt > 0 ? ' Faltan ' + falt + ' secci' + (falt === 1 ? 'ón' : 'ones') + ' para completarlo'
+                        : ' Ficha completa') +
+            '</div>' +
+          '</div>' +
         '</div>' +
-        '<div class="cv-barra-txt">Ficha completa al <b class="cv-pct">' + pct + '%</b>' +
-          (pct < 100 ? ' — puedes seguir llenándola cuando quieras' : '') + '</div>' +
-        '<div class="cv-barra"><span style="width:' + pct + '%"></span></div>' +
-        '<div class="cv-res-btns">' +
-          '<button class="btn btn-glass" onclick="CV.ver()">' + ico('eye', 15) + 'Ver</button>' +
-          '<button class="btn btn-glass" onclick="CV.abrirForm()">' + ico('edit', 15) + 'Editar</button>' +
-          '<button class="btn btn-primary" id="cv-pdf" onclick="CV.descargar()">' + ico('download', 15) + 'Descargar PDF</button>' +
+        '<div class="cv-card-btns">' +
+          '<button class="btn btn-primary" onclick="CV.abrirForm()">' + ico('edit', 16) + 'Editar currículo</button>' +
+          '<button class="btn btn-glass" onclick="CV.ver()">' + ico('eye', 16) + 'Ver CV</button>' +
+          '<button class="btn btn-glass" id="cv-pdf" onclick="CV.descargar()">' + ico('download', 16) + 'Descargar PDF</button>' +
         '</div>' +
       '</div>';
 
@@ -190,7 +198,10 @@ var CV = {
   },
 
   completitud: function (d) {
-    var checks = [
+    return Math.round(CV.checksHechos(d) / CV.CHECKS_TOTAL(d).length * 100);
+  },
+  CHECKS_TOTAL: function (d) {
+    return [
       !!d.ciudad, !!d.provincia, !!d.telefono,
       !!d.perfil.profesion, !!d.perfil.anios_experiencia,
       d.perfil.areas_experiencia.length > 0, !!d.perfil.fortalezas,
@@ -198,7 +209,13 @@ var CV = {
       CV_CAT.competencias.some(function (g) { return (d.competencias[g.key] || []).length > 0; }),
       d.experiencia_social.length > 0, d.idiomas.length > 0
     ];
-    return Math.round(checks.filter(Boolean).length / checks.length * 100);
+  },
+  checksHechos: function (d) {
+    return CV.CHECKS_TOTAL(d).filter(Boolean).length;
+  },
+  faltantes: function (d) {
+    var c = CV.CHECKS_TOTAL(d);
+    return c.length - c.filter(Boolean).length;
   },
 
   /* ==========================================================================
