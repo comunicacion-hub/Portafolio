@@ -84,46 +84,42 @@ html,body{
   background:var(--bg);
 }
 .login-box{
-  display:flex;flex-direction:column;align-items:center;gap:18px;width:100%;max-width:360px;
+  display:flex;flex-direction:column;align-items:center;gap:16px;width:100%;max-width:520px;
 }
-/* Cápsula título: "mi redes con rostro" + / grande */
+.login-bienvenida{
+  font-size:24px;font-weight:500;color:var(--text-muted);margin-bottom:60px;
+}
+/* Cápsula título: "mi redes con rostro /" en una línea */
 .login-titulo{
-  display:flex;align-items:center;justify-content:center;gap:14px;
-  width:100%;padding:26px 34px;
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  width:100%;padding:22px 40px;
   background:rgba(255,255,255,.55);
   backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
-  border:1px solid rgba(255,255,255,.6);border-radius:28px;
+  border:1px solid rgba(255,255,255,.6);border-radius:26px;
   box-shadow:0 6px 22px rgba(20,30,60,.07), inset 0 1px 0 rgba(255,255,255,.7);
 }
 .login-app{
-  font-size:30px;font-weight:700;line-height:1.15;color:var(--text);
-  letter-spacing:-.5px;
+  font-size:32px;font-weight:600;line-height:1.1;color:var(--text);
+  letter-spacing:-.5px;white-space:nowrap;
 }
 .login-slash{
-  font-size:52px;font-weight:400;color:var(--text-muted);line-height:1;
+  font-size:36px;font-weight:400;color:var(--text-muted);line-height:1;
 }
-/* Cápsula botón Google */
+/* Cápsula botón Google (solo el logo) */
 .login-google{
-  display:flex;align-items:center;justify-content:center;gap:12px;
-  width:100%;height:auto;padding:18px 24px;margin:0;
+  display:flex;align-items:center;justify-content:center;
+  width:100%;height:auto;padding:20px 24px;margin:0;
   background:rgba(255,255,255,.55);
   backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
-  border:1px solid rgba(255,255,255,.6);border-radius:24px;cursor:pointer;
+  border:1px solid rgba(255,255,255,.6);border-radius:26px;cursor:pointer;
   box-shadow:0 6px 22px rgba(20,30,60,.07), inset 0 1px 0 rgba(255,255,255,.7);
   transition:box-shadow .18s,transform .18s;
   -webkit-tap-highlight-color:transparent;
 }
 .login-google:hover{box-shadow:0 10px 28px rgba(20,30,60,.12), inset 0 1px 0 rgba(255,255,255,.7);}
 .login-google:active{transform:scale(.98);}
-.login-google-txt{font-size:19px;font-weight:500;color:var(--text);}
-.login-google-txt b{
-  font-weight:700;
-  background:linear-gradient(90deg,#4285F4,#9745ff);
-  -webkit-background-clip:text;background-clip:text;
-  -webkit-text-fill-color:transparent;color:transparent;
-}
 .login-google svg{width:26px;height:26px;flex-shrink:0;}
-.login-pie{font-size:14px;color:var(--text-muted);margin-top:6px;line-height:1.5;text-align:center;}
+.login-pie{font-size:15px;color:var(--text-muted);margin-top:70px;line-height:1.5;text-align:center;}
 #g-login-btn{display:flex;justify-content:center;min-height:0;}
 #g-login-btn.hidden{position:absolute;left:-9999px;height:0;overflow:hidden;}
 .login-error{
@@ -131,10 +127,12 @@ html,body{
   background:#fff1f2;border:1px solid #fecdd3;color:#be123c;
   font-size:13px;line-height:1.4;text-align:center;width:100%;
 }
-@media (max-width:420px){
-  .login-app{font-size:25px;}
-  .login-slash{font-size:44px;}
-  .login-titulo{padding:22px 24px;}
+@media (max-width:480px){
+  .login-app{font-size:24px;}
+  .login-slash{font-size:28px;}
+  .login-titulo{padding:20px 24px;}
+  .login-bienvenida{font-size:21px;margin-bottom:40px;}
+  .login-pie{margin-top:48px;}
 }
 
 /* ==========================================================================
