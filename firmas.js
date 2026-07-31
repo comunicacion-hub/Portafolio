@@ -310,13 +310,19 @@ var FIR = {
 
       root.innerHTML =
         '<div class="fir-fabs">' +
-          '<button class="fir-fab volver" title="Regresar" aria-label="Regresar" onclick="RCR._subvistaCerrar()">' + ico('chevronLeft', 24, 2.6) + '</button>' +
-          '<button class="fir-fab add" title="Añadir otra firma" aria-label="Añadir otra firma" onclick="FIR.agregarEstampa()">' + ico('plus', 24, 2.6) + '</button>' +
+          '<button class="fir-fab volver" title="Regresar" aria-label="Regresar" onclick="FIR.volverInicio()">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>' +
+          '</button>' +
+          '<button class="fir-fab add" title="Añadir otra firma" aria-label="Añadir otra firma" onclick="FIR.agregarEstampa(FIR.paginaVisible())">' + ico('plus', 24, 2.6) + '</button>' +
           '<button class="fir-fab firmar" id="fir-btn-firmar" title="Firmar" aria-label="Firmar" onclick="FIR.firmar()">' + ico('edit', 22, 2.4) + '</button>' +
         '</div>' +
-        '<div class="fir-viewer" id="fir-viewer"></div>';
+        '<div class="fir-visor-layout">' +
+          '<aside class="fir-minis" id="fir-minis"></aside>' +
+          '<div class="fir-viewer" id="fir-viewer"></div>' +
+        '</div>';
 
       var viewer = document.getElementById('fir-viewer');
+      var minis  = document.getElementById('fir-minis');
       for (var n = 1; n <= FIR.pdfDoc.numPages; n++) {
         var page = await FIR.pdfDoc.getPage(n);
         var viewport = page.getViewport({ scale: FIR.ESCALA });
@@ -337,7 +343,31 @@ var FIR = {
         await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
 
         FIR.paginas.push({ wrap: wrap, ancho: canvas.width, alto: canvas.height, num: n });
+
+        /* Miniatura lateral (clic = salta a esa página) */
+        var mini = document.createElement('button');
+        mini.className = 'fir-mini';
+        mini.dataset.pagina = n;
+        mini.title = 'Página ' + n;
+        var mc = document.createElement('canvas');
+        var mvp = page.getViewport({ scale: 0.22 });
+        mc.width = Math.round(mvp.width); mc.height = Math.round(mvp.height);
+        await page.render({ canvasContext: mc.getContext('2d'), viewport: mvp }).promise;
+        mini.appendChild(mc);
+        var lbl = document.createElement('span'); lbl.textContent = n; mini.appendChild(lbl);
+        mini.onclick = (function (num) { return function () { FIR.irPagina(num); }; })(n);
+        minis.appendChild(mini);
       }
+      FIR.marcarMiniActiva(1);
+
+      /* Al hacer scroll, resalta la miniatura de la página visible */
+      viewer.addEventListener('scroll', function () {
+        if (FIR._scrollTO) return;
+        FIR._scrollTO = setTimeout(function () {
+          FIR._scrollTO = null;
+          FIR.marcarMiniActiva(FIR.paginaVisible());
+        }, 120);
+      });
 
       /* Una primera firma lista para arrastrar, en la primera página */
       FIR.agregarEstampa();
@@ -354,6 +384,7 @@ var FIR = {
     FIR.pdfDoc = null;
     FIR.paginas = [];
     FIR.estampas = [];
+    RCR.cerrarSubvista();
     FIR.pintarInicio();
   },
 
@@ -401,6 +432,37 @@ var FIR = {
     FIR.estampas.splice(i, 1);
   },
 
+  /* Salta a una página (scroll) y la marca activa en el panel de miniaturas */
+  irPagina: function (num) {
+    var pag = FIR.paginas.find(function (p) { return p.num === num; });
+    if (!pag) return;
+    pag.wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    FIR.marcarMiniActiva(num);
+  },
+
+  /* Devuelve el número de la página más visible en el viewer */
+  paginaVisible: function () {
+    var viewer = document.getElementById('fir-viewer');
+    if (!viewer || !FIR.paginas.length) return 1;
+    var vr = viewer.getBoundingClientRect();
+    var centro = vr.top + vr.height / 2;
+    var mejor = FIR.paginas[0].num, minDist = Infinity;
+    FIR.paginas.forEach(function (p) {
+      var r = p.wrap.getBoundingClientRect();
+      var c = r.top + r.height / 2;
+      var d = Math.abs(c - centro);
+      if (d < minDist) { minDist = d; mejor = p.num; }
+    });
+    return mejor;
+  },
+
+  marcarMiniActiva: function (num) {
+    var minis = document.querySelectorAll('.fir-mini');
+    minis.forEach(function (m) {
+      m.classList.toggle('activa', Number(m.dataset.pagina) === num);
+    });
+  },
+
   /* Arrastre y redimensión de una estampa, en coordenadas relativas a su página */
   hacerArrastrable: function (st) {
     var el = st.el;
@@ -415,7 +477,7 @@ var FIR = {
       return { x: t ? t.clientX : e.clientX, y: t ? t.clientY : e.clientY };
     }
 
-    /* Mover */
+    /* Mover (permite pasar la firma de una página a otra) */
     function iniMover(e) {
       if (e.target === resize || e.target.closest('.fir-stamp-del')) return;
       e.preventDefault();
@@ -424,6 +486,7 @@ var FIR = {
       var p = punto(e);
       var offX = p.x - (rect.left + st.xRel * rect.width);
       var offY = p.y - (rect.top + st.yRel * rect.height);
+      el.classList.add('arrastrando');
 
       function mover(ev) {
         ev.preventDefault();
@@ -435,11 +498,30 @@ var FIR = {
         el.style.left = (st.xRel * 100) + '%';
         el.style.top = (st.yRel * 100) + '%';
       }
-      function soltar() {
+      function soltar(ev) {
+        el.classList.remove('arrastrando');
         document.removeEventListener('mousemove', mover);
         document.removeEventListener('mouseup', soltar);
         document.removeEventListener('touchmove', mover);
         document.removeEventListener('touchend', soltar);
+
+        /* ¿El centro de la estampa cayó sobre otra página? -> reubicar */
+        var er = el.getBoundingClientRect();
+        var cx = er.left + er.width / 2, cy = er.top + er.height / 2;
+        var destino = FIR.paginas.find(function (pp) {
+          var r = pp.wrap.getBoundingClientRect();
+          return cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom;
+        });
+        if (destino && destino.num !== st.pagina) {
+          var r = destino.wrap.getBoundingClientRect();
+          st.pagina = destino.num;
+          st.xRel = Math.max(0, Math.min(1 - st.wRel, (cx - r.left) / r.width - st.wRel / 2));
+          st.yRel = Math.max(0, Math.min(1 - st.hRel, (cy - r.top) / r.height - st.hRel / 2));
+          el.style.left = (st.xRel * 100) + '%';
+          el.style.top = (st.yRel * 100) + '%';
+          destino.wrap.appendChild(el);
+          FIR.marcarMiniActiva(destino.num);
+        }
       }
       document.addEventListener('mousemove', mover);
       document.addEventListener('mouseup', soltar);
