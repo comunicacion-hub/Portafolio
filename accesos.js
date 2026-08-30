@@ -100,10 +100,25 @@ RCR.loginError = function (msg) {
   box.innerHTML = msg;
 };
 
+/* El payload del JWT viene en base64url y con el texto en UTF-8.
+   atob() devuelve un binary string —un carácter por byte—, así que "Gutiérrez"
+   llegaría como "GutiÃ©rrez" y ese nombre roto es el que se guardaría en
+   Firestore. Hay que reinterpretar los bytes como UTF-8. Además atob() no
+   acepta los caracteres - y _ propios de base64url, y sin convertirlos algunos
+   tokens hacen fallar el inicio de sesión entero. */
+RCR.decodificarJWT = function (token) {
+  var b64 = String(token).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) b64 += '=';
+  var bin = atob(b64);
+  var bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+};
+
 RCR.onCredential = async function (response) {
   RCR.loginError('');
   try {
-    var payload = JSON.parse(atob(response.credential.split('.')[1]));
+    var payload = RCR.decodificarJWT(response.credential);
     var correo  = (payload.email || '').toLowerCase();
     var nombreG = payload.name || correo;
 

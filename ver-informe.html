@@ -123,7 +123,7 @@ RCR.cargarLib = function (url) {
     await RCR.cargarLib(INF.LIB_PDFMAKE);
     if (window.registrarOutfit) registrarOutfit();
 
-    var doc = INF.docDefinicion(d, a);
+    var doc = await INF.prepararDoc(d, a);
 
     pdfMake.createPdf(doc).getBlob(function (blob) {
       var url = URL.createObjectURL(blob);

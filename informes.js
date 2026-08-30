@@ -806,6 +806,29 @@ var INF = {
      ========================================================================== */
   LIB_PDFMAKE: 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js',
 
+  /* pdfmake solo revela cuántas páginas ocupa el informe una vez que lo arma.
+     Se hace una pasada en vacío que únicamente cuenta, para saber cuál es la
+     última página: ahí es donde va la franja de aliados del pie. */
+  contarPaginas: function (d, a) {
+    var doc = INF.docDefinicion(d, a);
+    var max = 1;
+    doc.background = function (currentPage) {
+      if (currentPage > max) max = currentPage;
+      return null;                           // en el conteo no se dibuja nada
+    };
+    return new Promise(function (resolve) {
+      pdfMake.createPdf(doc).getBuffer(function () { resolve(max); });
+    });
+  },
+
+  /* Documento final, ya con la franja ubicada en la última página. Lo usan
+     por igual la descarga y la vista pública (ver-informe.html); si alguna
+     arma el documento sin pasar por aquí, la franja termina en la página 1. */
+  prepararDoc: async function (d, a) {
+    INF.totalPaginas = await INF.contarPaginas(d, a);
+    return INF.docDefinicion(d, a);
+  },
+
   descargar: async function (docId, btn) {
     if (INF.generando) return;
     var d = INF.datos.find(function (x) { return x._docId === docId; });
@@ -826,25 +849,7 @@ var INF = {
 
       var nombre = 'Informe ' + a.nombre + ' - ' + d.mes + ' ' + d.anio + '.pdf';
 
-      /* 1ª pasada: contar páginas. El background va contando el nº de página
-         más alto que pdfmake solicita; así sabemos cuál es la última para
-         colocar la franja solo ahí. */
-      INF.totalPaginas = 1;
-      INF._contando = true; INF._maxPag = 1;
-      var docConteo = INF.docDefinicion(d, a);
-      var bgOriginal = docConteo.background;
-      docConteo.background = function (currentPage) {
-        if (currentPage > INF._maxPag) INF._maxPag = currentPage;
-        return null;                         // en el conteo no se dibuja nada
-      };
-      await new Promise(function (resolve) {
-        pdfMake.createPdf(docConteo).getBuffer(function () { resolve(); });
-      });
-      INF._contando = false;
-      INF.totalPaginas = INF._maxPag;
-
-      /* 2ª pasada: documento real, ya con el total de páginas conocido. */
-      var doc = INF.docDefinicion(d, a);
+      var doc = await INF.prepararDoc(d, a);
 
       await new Promise(function (resolve, reject) {
         try {
