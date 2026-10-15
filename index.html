@@ -30,11 +30,14 @@
 <script src="fuente.js"></script>
 <script src="accesos.js"></script>
 
-<!-- Módulos (el orden define el orden de la navegación) -->
+<!-- Módulos del perfil "colaborador" (el orden define el orden de la navegación) -->
 <script src="semaforo.js"></script>
 <script src="curriculum.js"></script>
 <script src="informes.js"></script>
 <script src="firmas.js"></script>
+
+<!-- Módulos del perfil "bienestar" (gestión de bienestar del equipo) -->
+<script src="bienestar.js"></script>
 </head>
 
 <body>
@@ -77,10 +80,13 @@
 <div id="app-screen" class="hidden">
 
   <header class="topbar">
-    <div class="topbar-left">
-      <div class="topbar-titles">
+    <div class="topbar-left" style="position:relative;">
+      <button class="ws-switch" id="ws-switch" aria-haspopup="menu" aria-expanded="false"
+              aria-label="Cambiar de perfil" onclick="RCR.toggleWorkspaceMenu()">
         <h1 id="topbar-titulo"><span class="tb-app">mi redes con rostro</span><span class="tb-sec" id="topbar-seccion"></span></h1>
-      </div>
+        <span class="ws-chev" aria-hidden="true">▾</span>
+      </button>
+      <div class="ws-menu" id="ws-menu" role="menu"></div>
     </div>
     <div style="position:relative;">
       <button class="user-avatar-wrap" id="user-avatar" aria-label="Menú de usuario"
@@ -292,12 +298,14 @@ RCR.cerrarMenu = function () {
 
 document.addEventListener('click', function (e) {
   if (!e.target.closest('#user-avatar') && !e.target.closest('#user-menu')) RCR.cerrarMenu();
+  if (!e.target.closest('#ws-switch') && !e.target.closest('#ws-menu')) RCR.cerrarWorkspaceMenu();
 });
 
 document.addEventListener('keydown', function (e) {
   if (e.key !== 'Escape') return;
   document.querySelectorAll('.modal-overlay.open').forEach(function (el) { RCR.cerrarModal(el.id); });
   RCR.cerrarMenu();
+  RCR.cerrarWorkspaceMenu();
 });
 
 /* ==========================================================================
@@ -305,10 +313,79 @@ document.addEventListener('keydown', function (e) {
    ========================================================================== */
 RCR.activo = null;
 
+/* ── Perfiles / espacios de trabajo ──────────────────────────────────────
+   Cada módulo pertenece a un perfil (m.workspace); si no lo declara, se asume
+   "colaborador". El perfil activo decide qué módulos salen en la navegación. */
+RCR.workspaces = [
+  { id: 'colaborador', titulo: 'colaborador' },
+  { id: 'bienestar',   titulo: 'bienestar' }
+];
+RCR.workspaceActivo = 'colaborador';
+
+RCR.workspacesVisibles = function () {
+  return RCR.workspaces.filter(function (w) { return !w.soloAdmin || RCR.esAdmin(); });
+};
+
 RCR.visibles = function () {
   return Object.keys(RCR.modulos)
     .map(function (k) { return RCR.modulos[k]; })
-    .filter(function (m) { return m.enNav && (!m.soloAdmin || RCR.esAdmin()); });
+    .filter(function (m) {
+      return m.enNav
+        && (m.workspace || 'colaborador') === RCR.workspaceActivo
+        && (!m.soloAdmin || RCR.esAdmin());
+    });
+};
+
+RCR.construirWorkspaceMenu = function () {
+  var menu = document.getElementById('ws-menu');
+  if (!menu) return;
+  menu.innerHTML = RCR.workspacesVisibles().map(function (w) {
+    var activo = w.id === RCR.workspaceActivo;
+    return '<button class="ws-item' + (activo ? ' active' : '') + '" role="menuitem"' +
+             ' onclick="RCR.cambiarWorkspace(\'' + w.id + '\')">' +
+             '<span><span class="ws-app">mi redes con rostro</span> / ' + RCR.esc(w.titulo) + '</span>' +
+             (activo ? '<span class="ws-item-check">' + ico('check', 16) + '</span>' : '') +
+           '</button>';
+  }).join('');
+};
+
+RCR.toggleWorkspaceMenu = function () {
+  var m = document.getElementById('ws-menu');
+  var abierto = m.classList.toggle('open');
+  document.getElementById('ws-switch').setAttribute('aria-expanded', abierto ? 'true' : 'false');
+};
+
+RCR.cerrarWorkspaceMenu = function () {
+  var m = document.getElementById('ws-menu');
+  if (m) m.classList.remove('open');
+  var b = document.getElementById('ws-switch');
+  if (b) b.setAttribute('aria-expanded', 'false');
+};
+
+RCR.cambiarWorkspace = function (id) {
+  var w = RCR.workspaces.find(function (x) { return x.id === id; });
+  if (!w) return;
+  if (w.soloAdmin && !RCR.esAdmin()) { RCR.toast('Ese perfil es solo para administradores'); return; }
+
+  RCR.workspaceActivo = id;
+
+  /* Junto al nombre de la app se muestra el perfil: "mi redes con rostro / X" */
+  var sec = document.getElementById('topbar-seccion');
+  if (sec) sec.textContent = ' / ' + w.titulo;
+
+  RCR.construirNav();
+  RCR.construirWorkspaceMenu();
+  RCR.cerrarWorkspaceMenu();
+
+  var primera = RCR.visibles()[0];
+  if (primera) {
+    RCR.activo = null;
+    RCR.ir(primera.id);
+  } else {
+    document.querySelectorAll('#view > .vista').forEach(function (v) { v.classList.add('hidden'); });
+    document.getElementById('view').innerHTML =
+      RCR.vacio('alert', 'Este perfil aún no tiene secciones disponibles', '');
+  }
 };
 
 RCR.construirNav = function () {
@@ -346,9 +423,7 @@ RCR.ir = function (id) {
   var btn = document.getElementById('nav-' + id);
   if (btn) btn.classList.add('active');
 
-  /* Junto al nombre de la app se muestra siempre el perfil: "mi redes con rostro / colaborador" */
-  var sec = document.getElementById('topbar-seccion');
-  if (sec) sec.textContent = ' / colaborador';
+  /* El "/ perfil" del topbar lo fija RCR.cambiarWorkspace, no cada sección. */
 
   /* FAB de la sección */
   var fab = document.getElementById('fab');
@@ -386,14 +461,8 @@ RCR.entrar = function () {
 
   document.querySelector('.menu-item.danger').innerHTML = ico('logout', 15) + '<span>Cerrar sesión</span>';
 
-  RCR.construirNav();
-  var primera = RCR.visibles()[0];
-  if (primera) {
-    RCR.ir(primera.id);
-  } else {
-    document.getElementById('view').innerHTML =
-      RCR.vacio('alert', 'No hay secciones disponibles', 'Escribe a comunicacion@redesconrostro.org.');
-  }
+  RCR.construirWorkspaceMenu();
+  RCR.cambiarWorkspace(RCR.workspaceActivo);
 };
 
 RCR.mostrarLogin = function () {
