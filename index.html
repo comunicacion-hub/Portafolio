@@ -346,9 +346,9 @@ RCR.ir = function (id) {
   var btn = document.getElementById('nav-' + id);
   if (btn) btn.classList.add('active');
 
-  /* Junto al nombre de la app se muestra la sección: "mi redes con rostro / X" */
+  /* Junto al nombre de la app se muestra siempre el perfil: "mi redes con rostro / colaborador" */
   var sec = document.getElementById('topbar-seccion');
-  if (sec) sec.textContent = mod.titulo ? ' / ' + mod.titulo.toLowerCase() : '';
+  if (sec) sec.textContent = ' / colaborador';
 
   /* FAB de la sección */
   var fab = document.getElementById('fab');
