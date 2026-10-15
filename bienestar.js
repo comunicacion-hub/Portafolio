@@ -525,17 +525,449 @@ var COL = {
 
 window.COL = COL;
 
-/* ── Seguimiento ────────────────────────────────────────────────────────── */
+/* ==========================================================================
+   SEGUIMIENTO
+   Acompañamiento de bienestar: varios registros por colaborador. Se elige un
+   colaborador, se listan sus registros y cada uno abre una ficha con barras de
+   escala. (Los dos paneles comparativos de Bienestar360 se adaptan aquí a una
+   lista + ficha, más adecuada a móvil.)
+   ========================================================================== */
 RCR.modulos['seguimiento-bienestar'] = {
   id: 'seguimiento-bienestar',
   titulo: 'Seguimiento',
   icono: 'heart',
   workspace: 'bienestar',
   enNav: true,
+  fab: { icono: 'plus', label: 'Nuevo registro', accion: function () { SEG.abrirForm(null); } },
+  mount: function (root) { SEG.mount(root); },
+  onShow: function () { if (SEG.datos.length) { SEG.poblarColabSel(); SEG.render(); } }
+};
+
+var SEG = {
+  COL_NOMBRE: 'Seguimiento',
+  datos: [],
+  _colabNombres: [],
+  colabSel: '',
+  guardando: false,
+  borrando: false,
+  pendienteBorrar: null,
+
+  /* Escalas: casi todo es 1–10; estos campos son 1–5 */
+  MAX: {
+    'Manejo emocional': 5, 'Escucha': 5, 'Empatía': 5, 'Comunicación asertiva': 5,
+    'Claridad de la comunicación interna': 5, 'Nivel de interés en contenidos': 5
+  },
+  scaleMax: function (k) { return SEG.MAX[k] || 10; },
+
+  /* Estructura del formulario (grupos y campos) */
+  SECCIONES: [
+    { grupo: null, campos: [
+      { k: 'Seguimiento', tipo: 'select', ops: ['Primero', 'Segundo', 'Tercero'] }
+    ] },
+    { grupo: 'Apertura del semestre', campos: [
+      { k: '¿Cómo inicias este semestre a nivel personal y laboral?', tipo: 'textarea' },
+      { k: 'Asuntos personales / familiares / salud que debamos considerar', tipo: 'textarea' },
+      { k: 'Metas laborales', tipo: 'textarea' },
+      { k: 'Retos laborales', tipo: 'textarea' }
+    ] },
+    { grupo: 'Satisfacción laboral', campos: [
+      { k: 'Nivel de satisfacción laboral (1–10)', tipo: 'num' },
+      { k: '¿Qué está dificultando más tu desempeño actualmente?', tipo: 'textarea' },
+      { k: '¿Qué hace que estés en ese número y no más bajo?', tipo: 'textarea' },
+      { k: '¿Qué necesitarías para subir 1 punto?', tipo: 'textarea' }
+    ] },
+    { grupo: 'Dimensiones organizacionales (1–10)', par: true, campos: [
+      { k: 'Clima laboral con todo el equipo RCR', tipo: 'num' },
+      { k: 'Relación con liderazgo', tipo: 'num' },
+      { k: 'Trabajo en equipo con su equipo', tipo: 'num' },
+      { k: 'Reconocimiento', tipo: 'num' },
+      { k: 'Desarrollo profesional', tipo: 'num' },
+      { k: 'Carga laboral', tipo: 'num' },
+      { k: 'Autonomía', tipo: 'num' },
+      { k: 'Sentido/propósito', tipo: 'num' }
+    ] },
+    { grupo: null, campos: [
+      { k: 'Profundizar solo en la dimensión más baja', tipo: 'textarea' }
+    ] },
+    { grupo: 'Habilidades blandas (1–5)', par: true, campos: [
+      { k: 'Manejo emocional', tipo: 'num' },
+      { k: 'Escucha', tipo: 'num' },
+      { k: 'Empatía', tipo: 'num' },
+      { k: 'Comunicación asertiva', tipo: 'num' }
+    ] },
+    { grupo: null, campos: [
+      { k: '¿Cuál deberías fortalecer este semestre para mejorar tu impacto?', tipo: 'textarea' }
+    ] },
+    { grupo: 'Comunicación interna', campos: [
+      { k: 'Claridad de la comunicación interna', tipo: 'num' },
+      { k: 'Nivel de interés en contenidos', tipo: 'num' },
+      { k: '¿Revisas canales internos regularmente?', tipo: 'select', ops: ['Sí', 'No'] },
+      { k: '¿Qué deberíamos mejorar como equipo en comunicación?', tipo: 'textarea' }
+    ] }
+  ],
+
+  /* Orden y etiquetas cortas de la ficha de detalle */
+  FICHA: [
+    { t: 'texto', l: '¿Cómo inicias este semestre?', k: '¿Cómo inicias este semestre a nivel personal y laboral?' },
+    { t: 'texto', l: 'Asuntos personales / familiares / salud', k: 'Asuntos personales / familiares / salud que debamos considerar' },
+    { t: 'texto', l: 'Metas laborales', k: 'Metas laborales' },
+    { t: 'texto', l: 'Retos laborales', k: 'Retos laborales' },
+    { t: 'escala', l: 'Satisfacción laboral', k: 'Nivel de satisfacción laboral (1–10)' },
+    { t: 'texto', l: '¿Qué está dificultando tu desempeño?', k: '¿Qué está dificultando más tu desempeño actualmente?' },
+    { t: 'texto', l: '¿Qué te mantiene en ese número?', k: '¿Qué hace que estés en ese número y no más bajo?' },
+    { t: 'texto', l: '¿Qué necesitas para subir 1 punto?', k: '¿Qué necesitarías para subir 1 punto?' },
+    { t: 'sep', l: 'Dimensiones organizacionales' },
+    { t: 'dim', l: 'Clima laboral con el equipo RCR', k: 'Clima laboral con todo el equipo RCR' },
+    { t: 'dim', l: 'Relación con liderazgo', k: 'Relación con liderazgo' },
+    { t: 'dim', l: 'Trabajo en equipo', k: 'Trabajo en equipo con su equipo' },
+    { t: 'dim', l: 'Reconocimiento', k: 'Reconocimiento' },
+    { t: 'dim', l: 'Desarrollo profesional', k: 'Desarrollo profesional' },
+    { t: 'dim', l: 'Carga laboral', k: 'Carga laboral' },
+    { t: 'dim', l: 'Autonomía', k: 'Autonomía' },
+    { t: 'dim', l: 'Sentido/propósito', k: 'Sentido/propósito' },
+    { t: 'texto', l: 'Profundizar en la dimensión más baja', k: 'Profundizar solo en la dimensión más baja' },
+    { t: 'sep', l: 'Habilidades blandas' },
+    { t: 'dim', l: 'Manejo emocional', k: 'Manejo emocional' },
+    { t: 'dim', l: 'Escucha', k: 'Escucha' },
+    { t: 'dim', l: 'Empatía', k: 'Empatía' },
+    { t: 'dim', l: 'Comunicación asertiva', k: 'Comunicación asertiva' },
+    { t: 'texto', l: '¿Cuál habilidad fortalecer?', k: '¿Cuál deberías fortalecer este semestre para mejorar tu impacto?' },
+    { t: 'sep', l: 'Comunicación interna' },
+    { t: 'dim', l: 'Claridad de la comunicación interna', k: 'Claridad de la comunicación interna' },
+    { t: 'dim', l: 'Interés en contenidos', k: 'Nivel de interés en contenidos' },
+    { t: 'texto', l: '¿Revisas canales internos?', k: '¿Revisas canales internos regularmente?' },
+    { t: 'texto', l: '¿Qué mejorar en comunicación?', k: '¿Qué deberíamos mejorar como equipo en comunicación?' }
+  ],
+
+  /* ── Fechas (soporta Timestamp de Firestore, objeto plano o texto) ──────── */
+  fmtFecha: function (d) {
+    if (!d || d === '' || d === 'undefined') return '';
+    try {
+      if (typeof d.toDate === 'function') return d.toDate().toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' });
+      if (d.seconds != null) return new Date(d.seconds * 1000).toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' });
+      var s = String(d).trim();
+      var date = new Date(s.indexOf('T') >= 0 ? s : s + 'T12:00:00');
+      if (isNaN(date.getTime())) return s;
+      return date.toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch (e) { return String(d); }
+  },
+  fechaInput: function (val) {
+    if (!val) return '';
+    var d = null;
+    if (typeof val.toDate === 'function') d = val.toDate();
+    else if (val.seconds != null) d = new Date(val.seconds * 1000);
+    else {
+      var s = String(val).trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      var p = new Date(s); if (!isNaN(p.getTime())) d = p;
+    }
+    if (!d || isNaN(d.getTime())) return '';
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  },
+  hoy: function () {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  },
+
+  nombresColabs: function () {
+    if (window.COL && COL.datos && COL.datos.length) {
+      return COL.datos.map(function (c) { return c.Colaborador; }).filter(Boolean);
+    }
+    if (SEG._colabNombres.length) return SEG._colabNombres;
+    return SEG.datos.map(function (r) { return r.Colaborador; })
+      .filter(Boolean).filter(function (v, i, a) { return a.indexOf(v) === i; })
+      .sort(function (a, b) { return String(a).localeCompare(String(b), 'es'); });
+  },
+
+  /* ── Montaje ───────────────────────────────────────────────────────────── */
   mount: function (root) {
-    RCR._bienestarProximamente(root, 'Seguimiento', 'Acompañamiento de bienestar');
+    root.innerHTML =
+      '<div class="section-header">' +
+        '<div>' +
+          '<div class="section-title">Seguimiento</div>' +
+          '<div class="section-sub">Acompañamiento de bienestar</div>' +
+        '</div>' +
+        '<div class="count-badge" id="seg-count">0</div>' +
+      '</div>' +
+      '<select class="form-inp seg-colab-sel" id="seg-colab-sel" onchange="SEG.onColab()">' +
+        '<option value="">Selecciona un colaborador…</option>' +
+      '</select>' +
+      '<div id="seg-list">' + RCR.cargando('Cargando registros') + '</div>';
+    SEG.cargar();
+  },
+
+  cargar: async function () {
+    try {
+      var snap = await RCR.db.collection(SEG.COL_NOMBRE).get();
+      SEG.datos = snap.docs.map(function (d) { return Object.assign({ _docId: d.id }, d.data()); });
+    } catch (e) {
+      console.error('SEG.cargar:', e);
+      var list = document.getElementById('seg-list');
+      if (list) list.innerHTML = RCR.vacio('alert', 'No se pudieron cargar los registros', 'Revisa tu conexión y vuelve a intentar.');
+      return;
+    }
+    if (!(window.COL && COL.datos && COL.datos.length)) {
+      try {
+        var cs = await RCR.db.collection('Colaboradores').get();
+        SEG._colabNombres = cs.docs.map(function (d) { return d.data().Colaborador; })
+          .filter(Boolean).sort(function (a, b) { return String(a).localeCompare(String(b), 'es'); });
+      } catch (e) { /* sin colaboradores: se derivan de los registros */ }
+    }
+    SEG.poblarColabSel();
+    SEG.render();
+  },
+
+  poblarColabSel: function () {
+    var sel = document.getElementById('seg-colab-sel');
+    if (!sel) return;
+    var actual = SEG.colabSel || sel.value;
+    sel.innerHTML = '<option value="">Selecciona un colaborador…</option>' +
+      SEG.nombresColabs().map(function (n) { return '<option>' + RCR.esc(n) + '</option>'; }).join('');
+    if (actual) sel.value = actual;
+  },
+
+  onColab: function () {
+    var sel = document.getElementById('seg-colab-sel');
+    SEG.colabSel = sel ? sel.value : '';
+    SEG.render();
+  },
+
+  registrosDe: function (nombre) {
+    return SEG.datos.filter(function (r) { return r.Colaborador === nombre; })
+      .sort(function (a, b) {
+        return String(SEG.fechaInput(b.Fecha)).localeCompare(String(SEG.fechaInput(a.Fecha)));
+      });
+  },
+
+  render: function () {
+    var list = document.getElementById('seg-list');
+    if (!list) return;
+    var cnt = document.getElementById('seg-count');
+
+    if (!SEG.colabSel) {
+      if (cnt) cnt.textContent = SEG.datos.length;
+      list.innerHTML = RCR.vacio('heart', 'Selecciona un colaborador', 'Elige a alguien para ver sus registros de bienestar.');
+      return;
+    }
+
+    var recs = SEG.registrosDe(SEG.colabSel);
+    if (cnt) cnt.textContent = recs.length;
+
+    if (!recs.length) {
+      list.innerHTML = RCR.vacio('inbox', 'Sin registros', 'Aún no hay registros para ' + RCR.esc(SEG.colabSel) + '. Toca + para crear uno.');
+      return;
+    }
+
+    list.innerHTML = recs.map(function (r) {
+      var id = r._docId;
+      var sat = r['Nivel de satisfacción laboral (1–10)'];
+      return '' +
+      '<div class="card col-card" onclick="SEG.abrirFicha(\'' + id + '\')">' +
+        '<div class="card-top">' +
+          '<div class="card-badge-soft">' + ico('heart', 20) + '</div>' +
+          '<div class="card-info">' +
+            '<strong>' + RCR.esc(r.Seguimiento || 'Seguimiento') + '</strong>' +
+            '<small>' + RCR.esc(SEG.fmtFecha(r.Fecha) || 'Sin fecha') + '</small>' +
+          '</div>' +
+          '<div class="card-actions" onclick="event.stopPropagation();">' +
+            '<button class="btn-ico" title="Editar" onclick="SEG.abrirForm(\'' + id + '\')">' + ico('edit', 16) + '</button>' +
+            '<button class="btn-ico danger" title="Eliminar" onclick="SEG.pedirBorrar(\'' + id + '\')">' + ico('trash', 16) + '</button>' +
+          '</div>' +
+        '</div>' +
+        (sat ? '<div class="chips-row"><span class="chip neutro">Satisfacción ' + RCR.esc(sat) + '/10</span></div>' : '') +
+      '</div>';
+    }).join('');
+  },
+
+  /* ── Ficha de detalle ──────────────────────────────────────────────────── */
+  abrirFicha: function (docId) {
+    var r = SEG.datos.find(function (x) { return x._docId === docId; });
+    if (!r) return;
+
+    var escala = function (l, k) {
+      var v = r[k]; if (v === '' || v == null) return '';
+      var n = parseFloat(v) || 0, max = SEG.scaleMax(k);
+      if (!(n > 0 && n <= max)) return '';
+      var pct = Math.max(0, Math.min(100, (n / max) * 100));
+      return '<div class="seg-blk"><div class="seg-lbl">' + RCR.esc(l) + '</div>' +
+        '<div class="seg-scale-row"><div class="seg-track"><div class="seg-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="seg-num">' + n + '/' + max + '</div></div></div>';
+    };
+    var texto = function (l, k) {
+      var v = r[k]; if (!v) return '';
+      return '<div class="seg-blk"><div class="seg-lbl">' + RCR.esc(l) + '</div>' +
+        '<div class="seg-val">' + RCR.esc(v) + '</div></div>';
+    };
+
+    var html = '', dimBuffer = [];
+    var flushDims = function () {
+      if (dimBuffer.length) { html += '<div class="seg-dims">' + dimBuffer.join('') + '</div>'; dimBuffer = []; }
+    };
+    SEG.FICHA.forEach(function (f) {
+      if (f.t === 'sep') { flushDims(); html += '<div class="seg-sep">' + RCR.esc(f.l) + '</div>'; return; }
+      if (f.t === 'dim') { var e = escala(f.l, f.k); if (e) dimBuffer.push(e); return; }
+      flushDims();
+      html += (f.t === 'escala') ? escala(f.l, f.k) : texto(f.l, f.k);
+    });
+    flushDims();
+
+    var colab = (window.COL && COL.datos) ? COL.datos.find(function (c) { return c.Colaborador === r.Colaborador; }) : null;
+    var meta = [r.Seguimiento, SEG.fmtFecha(r.Fecha), colab && colab['Programa/Proyecto']].filter(Boolean).join(' · ');
+
+    RCR.modal({
+      id: 'm-seg-ficha',
+      titulo: r.Colaborador || 'Registro',
+      sub: RCR.esc(meta),
+      cuerpo: html || '<div class="section-sub" style="margin-top:12px;">Sin datos para este registro.</div>',
+      acciones:
+        '<button class="btn btn-danger" onclick="SEG.pedirBorrar(\'' + docId + '\', true)">Eliminar</button>' +
+        '<button class="btn btn-primary" onclick="RCR.cerrarModal(\'m-seg-ficha\'); SEG.abrirForm(\'' + docId + '\')">Editar</button>'
+    });
+  },
+
+  /* ── Formulario (alta / edición) ───────────────────────────────────────── */
+  campoHtml: function (f, val) {
+    val = (val == null) ? '' : val;
+    var inner;
+    if (f.tipo === 'select') {
+      inner = '<select class="form-inp" data-k="' + RCR.esc(f.k) + '"><option value="">Seleccionar…</option>' +
+        f.ops.map(function (o) { return '<option' + (String(o) === String(val) ? ' selected' : '') + '>' + RCR.esc(o) + '</option>'; }).join('') +
+        '</select>';
+    } else if (f.tipo === 'textarea') {
+      inner = '<textarea class="form-inp" rows="2" data-k="' + RCR.esc(f.k) + '">' + RCR.esc(val) + '</textarea>';
+    } else { /* num */
+      var max = SEG.scaleMax(f.k);
+      inner = '<input class="form-inp" type="number" min="1" max="' + max + '" data-k="' + RCR.esc(f.k) + '"' +
+        ' value="' + RCR.esc(val) + '" placeholder="1-' + max + '">';
+    }
+    var label = f.k;
+    return '<div class="form-grp"><label class="form-lbl">' + RCR.esc(label) + '</label>' + inner + '</div>';
+  },
+
+  abrirForm: function (docId) {
+    RCR.cerrarModal('m-seg-ficha');
+    var r = docId ? SEG.datos.find(function (x) { return x._docId === docId; }) : null;
+    var nombres = SEG.nombresColabs();
+    var colabActual = r ? (r.Colaborador || '') : (SEG.colabSel || '');
+
+    var opcionesColab = '<option value="">Seleccionar…</option>' +
+      nombres.map(function (n) { return '<option' + (n === colabActual ? ' selected' : '') + '>' + RCR.esc(n) + '</option>'; }).join('');
+
+    var secciones = SEG.SECCIONES.map(function (s) {
+      var campos = s.campos.map(function (f) { return SEG.campoHtml(f, r ? r[f.k] : ''); }).join('');
+      var bloque = s.par ? '<div class="form-grid-2">' + campos + '</div>' : campos;
+      return (s.grupo ? '<div class="seg-sep">' + RCR.esc(s.grupo) + '</div>' : '') + bloque;
+    }).join('');
+
+    RCR.modal({
+      id: 'm-seg-form',
+      persistente: true,
+      titulo: r ? 'Editar registro' : 'Nuevo registro de bienestar',
+      sub: 'Registra el acompañamiento del colaborador',
+      cuerpo:
+        '<div class="form-grid-2">' +
+          '<div class="form-grp"><label class="form-lbl">Colaborador *</label>' +
+            '<select class="form-inp" id="seg-f-colab">' + opcionesColab + '</select></div>' +
+          '<div class="form-grp"><label class="form-lbl">Fecha *</label>' +
+            '<input class="form-inp" type="date" id="seg-f-fecha" value="' + RCR.esc(r ? SEG.fechaInput(r.Fecha) : SEG.hoy()) + '"></div>' +
+        '</div>' +
+        secciones,
+      acciones:
+        '<button class="btn btn-glass" onclick="RCR.cerrarModal(\'m-seg-form\')">Cancelar</button>' +
+        '<button class="btn btn-primary" id="seg-save" onclick="SEG.guardar(' + (docId ? '\'' + docId + '\'' : 'null') + ')">Guardar</button>'
+    });
+  },
+
+  guardar: async function (docId) {
+    if (SEG.guardando) return;
+
+    var colab = (document.getElementById('seg-f-colab') || {}).value || '';
+    var fecha = (document.getElementById('seg-f-fecha') || {}).value || '';
+    if (!colab || !fecha) { RCR.toast('Colaborador y fecha son obligatorios'); return; }
+
+    /* Validar rangos de los campos numéricos */
+    var errores = [];
+    document.querySelectorAll('#m-seg-form [data-k]').forEach(function (el) {
+      if (el.type === 'number' && el.value !== '') {
+        var k = el.getAttribute('data-k'), max = SEG.scaleMax(k), n = parseFloat(el.value);
+        if (!isFinite(n) || n < 1 || n > max) errores.push(k + ': debe estar entre 1 y ' + max);
+      }
+    });
+    if (errores.length) { RCR.toast(errores[0]); return; }
+
+    var data = { Colaborador: colab, Fecha: fecha };
+    document.querySelectorAll('#m-seg-form [data-k]').forEach(function (el) {
+      data[el.getAttribute('data-k')] = el.value || '';
+    });
+
+    SEG.guardando = true;
+    var btn = document.getElementById('seg-save');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+
+    try {
+      var id = docId;
+      if (docId) {
+        await RCR.db.collection(SEG.COL_NOMBRE).doc(docId).update(data);
+      } else {
+        var ref = await RCR.db.collection(SEG.COL_NOMBRE).add(data);
+        id = ref.id;
+      }
+      var completo = Object.assign({ _docId: id }, data);
+      var i = SEG.datos.findIndex(function (x) { return x._docId === id; });
+      if (i >= 0) SEG.datos[i] = Object.assign(SEG.datos[i], completo);
+      else SEG.datos.push(completo);
+
+      SEG.colabSel = colab;
+      SEG.poblarColabSel();
+      SEG.render();
+      RCR.cerrarModal('m-seg-form');
+      RCR.toast(docId ? 'Registro actualizado' : 'Registro guardado');
+    } catch (e) {
+      console.error('SEG.guardar:', e);
+      RCR.toast('No se pudo guardar. Revisa tu conexión.');
+    }
+
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Guardar'; }
+    SEG.guardando = false;
+  },
+
+  /* ── Eliminar ──────────────────────────────────────────────────────────── */
+  pedirBorrar: function (docId, desdeFicha) {
+    var r = SEG.datos.find(function (x) { return x._docId === docId; });
+    SEG.pendienteBorrar = docId;
+    if (desdeFicha) RCR.cerrarModal('m-seg-ficha');
+    RCR.confirmar({
+      titulo: '¿Eliminar el registro?',
+      texto: 'El registro' + (r && r.Fecha ? ' del ' + RCR.esc(SEG.fmtFecha(r.Fecha)) : '') +
+             ' se eliminará. Esta acción no se puede deshacer.',
+      label: 'Eliminar',
+      onOk: 'SEG.borrar()'
+    });
+  },
+
+  borrar: async function () {
+    if (SEG.borrando || !SEG.pendienteBorrar) return;
+    SEG.borrando = true;
+    var id = SEG.pendienteBorrar;
+    var btn = document.getElementById('confirm-ok');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+    try {
+      await RCR.db.collection(SEG.COL_NOMBRE).doc(id).delete();
+      SEG.datos = SEG.datos.filter(function (x) { return x._docId !== id; });
+      SEG.render();
+      RCR.cerrarModal('m-confirm');
+      RCR.toast('Registro eliminado');
+    } catch (e) {
+      console.error('SEG.borrar:', e);
+      RCR.toast('No se pudo eliminar');
+    }
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Eliminar'; }
+    SEG.pendienteBorrar = null;
+    SEG.borrando = false;
   }
 };
+
+window.SEG = SEG;
 
 /* ── Semáforo (consolidado del equipo) ──────────────────────────────────── */
 RCR.modulos['semaforo-consolidado'] = {

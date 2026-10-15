@@ -449,6 +449,22 @@ html,body{
 @media(max-width:560px){.ficha-grid{grid-template-columns:1fr;}}
 
 /* ==========================================================================
+   SEGUIMIENTO (perfil bienestar)
+   ========================================================================== */
+.seg-colab-sel{margin-bottom:16px;}
+.seg-sep{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin:18px 0 8px;}
+.seg-sep:first-child{margin-top:4px;}
+.seg-blk{margin-bottom:12px;}
+.seg-blk .seg-lbl{font-size:12px;font-weight:700;color:var(--text-muted);}
+.seg-blk .seg-val{font-size:14px;color:var(--text);margin-top:3px;white-space:pre-wrap;word-break:break-word;}
+.seg-scale-row{display:flex;align-items:center;gap:10px;margin-top:4px;}
+.seg-track{flex:1;height:8px;border-radius:99px;background:var(--surface);overflow:hidden;}
+.seg-fill{height:100%;border-radius:99px;background:var(--grad-b);}
+.seg-num{font-size:12px;font-weight:700;color:var(--text);flex-shrink:0;min-width:40px;text-align:right;}
+.seg-dims{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;}
+@media(max-width:560px){.seg-dims{grid-template-columns:1fr;}}
+
+/* ==========================================================================
    ESTADO VACÍO
    ========================================================================== */
 .empty-state{text-align:center;padding:50px 20px;color:var(--text-muted);}
