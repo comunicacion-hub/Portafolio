@@ -20,14 +20,14 @@ RCR.G_CLIENT = '138746747295-auk51cb00qdqchmqhhjql2cbavgcga3i.apps.googleusercon
 
 /* ── Constantes de acceso ───────────────────────────────────────────────── */
 RCR.DOMINIO      = '@redesconrostro.org';
+RCR.ADMIN_EMAIL  = 'comunicacion@redesconrostro.org';  // admin raíz: siempre entra como Admin
 RCR.COL_USUARIOS = 'Usuarios';
 RCR.SESSION_KEY  = 'mircr_session';   // clave propia: no choca con rcr_session de ReCircula
 RCR.ROLES        = ['Admin', 'Editor', 'Visualizador'];
 
-/* Si es true, solo entran los correos dados de alta en la colección Usuarios.
-   Dejarlo en false hasta que la colección esté completa; el filtro de dominio
-   sigue activo en ambos casos. */
-RCR.EXIGIR_REGISTRO = false;
+/* Si es true, solo entran los correos dados de alta en la colección Usuarios
+   (más el admin raíz). El filtro de dominio sigue activo en ambos casos. */
+RCR.EXIGIR_REGISTRO = true;
 
 /* ── Estado global de sesión ────────────────────────────────────────────── */
 RCR.user = null;   // { correo, nombre, rol, area, iniciales }
@@ -141,12 +141,16 @@ RCR.onCredential = async function (response) {
       console.warn('Lectura de Usuarios falló:', e);
     }
 
-    if (!reg && RCR.EXIGIR_REGISTRO) {
+    /* El admin raíz siempre entra como Admin, aunque no esté en Usuarios
+       (evita quedar bloqueado al exigir registro). */
+    var esRaiz = correo === RCR.ADMIN_EMAIL;
+
+    if (!reg && RCR.EXIGIR_REGISTRO && !esRaiz) {
       await RCR.auth.signOut().catch(function () {});
       RCR.loginError('Tu cuenta todavía no está habilitada en Mi RCR. Escribe a comunicacion@redesconrostro.org.');
       return;
     }
-    if (reg && reg.Activo === false) {
+    if (reg && reg.Activo === false && !esRaiz) {
       await RCR.auth.signOut().catch(function () {});
       RCR.loginError('Tu acceso a Mi RCR está desactivado. Escribe a comunicacion@redesconrostro.org.');
       return;
@@ -155,9 +159,10 @@ RCR.onCredential = async function (response) {
     RCR.user = {
       correo:     correo,
       nombre:     (reg && reg.Nombre) ? reg.Nombre : nombreG,
-      rol:        (reg && reg.Rol)    ? reg.Rol    : 'Visualizador',
+      rol:        esRaiz ? 'Admin' : ((reg && reg.Rol) ? reg.Rol : 'Visualizador'),
       area:       (reg && reg.Area)   ? reg.Area   : '',
       docId:      reg ? reg._docId : null,
+      secciones:  (reg && reg.Secciones && typeof reg.Secciones === 'object') ? reg.Secciones : {},
       iniciales:  RCR.iniciales((reg && reg.Nombre) ? reg.Nombre : nombreG)
     };
 
@@ -293,14 +298,34 @@ var ACC = {
             '<span class="chip-dot"></span>' + (activo ? 'Activo' : 'Desactivado') +
           '</span>' +
         '</div>' +
+        ACC.resumenSecciones(u) +
       '</div>';
     }).join('');
   },
 
+  /* Resumen legible de las secciones que ve el usuario, bajo las chips */
+  resumenSecciones: function (u) {
+    if ((u.Rol || 'Visualizador') === 'Admin') {
+      return '<div class="acc-perm-resumen">Ve todas las pestañas y secciones</div>';
+    }
+    var sec = (u.Secciones && typeof u.Secciones === 'object') ? u.Secciones : {};
+    var matriz = (typeof RCR.permMatriz === 'function') ? RCR.permMatriz() : [];
+    var partes = matriz.map(function (g) {
+      var ids = Array.isArray(sec[g.ws.id]) ? sec[g.ws.id] : [];
+      if (!ids.length) return '';
+      var nombres = g.mods.filter(function (m) { return ids.indexOf(m.id) >= 0; })
+        .map(function (m) { return m.titulo; });
+      return '<strong>' + RCR.esc(g.ws.titulo) + ':</strong> ' + RCR.esc(nombres.join(', '));
+    }).filter(Boolean);
+    if (!partes.length) return '<div class="acc-perm-resumen">Sin secciones asignadas</div>';
+    return '<div class="acc-perm-resumen">' + partes.join(' · ') + '</div>';
+  },
+
   abrirForm: function (docId) {
     var u = docId ? ACC.datos.find(function (x) { return x._docId === docId; }) : null;
+    var rolActual = u ? (u.Rol || 'Visualizador') : 'Visualizador';  // nuevo usuario: mínimo privilegio
     var rolOpts = RCR.ROLES.map(function (r) {
-      return '<option value="' + r + '"' + (u && u.Rol === r ? ' selected' : '') + '>' + r + '</option>';
+      return '<option value="' + r + '"' + (rolActual === r ? ' selected' : '') + '>' + r + '</option>';
     }).join('');
 
     RCR.modal({
@@ -320,12 +345,20 @@ var ACC = {
         '<div class="form-grid-2">' +
           '<div class="form-grp">' +
             '<label class="form-lbl" for="acc-rol">Rol</label>' +
-            '<select class="form-inp" id="acc-rol">' + rolOpts + '</select>' +
+            '<select class="form-inp" id="acc-rol" onchange="ACC.onRolChange()">' + rolOpts + '</select>' +
           '</div>' +
           '<div class="form-grp">' +
             '<label class="form-lbl" for="acc-area">Área</label>' +
             '<input class="form-inp" id="acc-area" value="' + RCR.esc(u ? (u.Area || '') : '') + '" placeholder="Opcional">' +
           '</div>' +
+        '</div>' +
+        '<div class="form-help" style="margin:-2px 0 10px;">' +
+          '<strong>Admin:</strong> ve y edita todo. <strong>Editor:</strong> edita las secciones asignadas. <strong>Visualizador:</strong> solo lectura.' +
+        '</div>' +
+        '<div class="form-grp" id="acc-perms-grp">' +
+          '<label class="form-lbl">Pestañas y secciones que puede ver</label>' +
+          '<div id="acc-perms">' + ACC.permHtml(u) + '</div>' +
+          '<div class="form-help" id="acc-perms-admin" style="display:none;">El rol Admin ve y edita todo; no requiere selección.</div>' +
         '</div>' +
         '<div class="form-grp">' +
           '<label class="check-line">' +
@@ -339,6 +372,37 @@ var ACC = {
         '<button class="btn btn-primary" id="acc-save" onclick="ACC.guardar(' +
           (docId ? '\'' + docId + '\'' : 'null') + ')">Guardar</button>'
     });
+    ACC.onRolChange();
+  },
+
+  /* Casillas de permisos: una por módulo, agrupadas por pestaña */
+  permHtml: function (u) {
+    var sec = (u && u.Secciones && typeof u.Secciones === 'object') ? u.Secciones : {};
+    var matriz = (typeof RCR.permMatriz === 'function') ? RCR.permMatriz() : [];
+    if (!matriz.length) return '<div class="form-help">No hay secciones registradas.</div>';
+    return matriz.map(function (g) {
+      var permitidos = Array.isArray(sec[g.ws.id]) ? sec[g.ws.id] : [];
+      var checks = g.mods.map(function (m) {
+        var on = permitidos.indexOf(m.id) >= 0;
+        return '<label class="check-line acc-perm-mod">' +
+                 '<input type="checkbox" class="acc-perm" data-ws="' + RCR.esc(g.ws.id) + '" value="' + RCR.esc(m.id) + '"' + (on ? ' checked' : '') + '>' +
+                 '<span>' + RCR.esc(m.titulo) + '</span>' +
+               '</label>';
+      }).join('');
+      return '<div class="acc-perm-ws">' +
+               '<div class="acc-perm-ws-head">mi redes con rostro / ' + RCR.esc(g.ws.titulo) + '</div>' +
+               '<div class="acc-perm-mods">' + checks + '</div>' +
+             '</div>';
+    }).join('');
+  },
+
+  onRolChange: function () {
+    var rol = (document.getElementById('acc-rol') || {}).value;
+    var esAdmin = rol === 'Admin';
+    var perms = document.getElementById('acc-perms');
+    var note = document.getElementById('acc-perms-admin');
+    if (perms) perms.style.display = esAdmin ? 'none' : '';
+    if (note) note.style.display = esAdmin ? '' : 'none';
   },
 
   guardar: async function (docId) {
@@ -362,7 +426,14 @@ var ACC = {
     var btn = document.getElementById('acc-save');
     btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
 
-    var data = { Nombre: nombre, Correo: correo, Rol: rol, Area: area, Activo: activo };
+    /* Recolectar secciones marcadas, agrupadas por pestaña */
+    var secciones = {};
+    document.querySelectorAll('#acc-perms .acc-perm:checked').forEach(function (cb) {
+      var ws = cb.getAttribute('data-ws');
+      (secciones[ws] = secciones[ws] || []).push(cb.value);
+    });
+
+    var data = { Nombre: nombre, Correo: correo, Rol: rol, Area: area, Activo: activo, Secciones: secciones };
 
     try {
       if (docId) {

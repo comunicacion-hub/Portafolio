@@ -497,6 +497,18 @@ html,body{
 @media(max-width:560px){.sem-items{grid-template-columns:1fr;}}
 
 /* ==========================================================================
+   ACCESOS — permisos por pestaña y sección
+   ========================================================================== */
+.acc-perm-ws{border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;margin-bottom:10px;}
+.acc-perm-ws:last-child{margin-bottom:0;}
+.acc-perm-ws-head{font-size:12px;font-weight:700;color:var(--blue2);text-transform:lowercase;margin-bottom:8px;}
+.acc-perm-mods{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;}
+.acc-perm-mod span{font-weight:500;}
+.acc-perm-resumen{margin-top:10px;font-size:12px;color:var(--text-muted);line-height:1.5;}
+.acc-perm-resumen strong{color:var(--text);font-weight:700;}
+@media(max-width:560px){.acc-perm-mods{grid-template-columns:1fr;}}
+
+/* ==========================================================================
    ESTADO VACÍO
    ========================================================================== */
 .empty-state{text-align:center;padding:50px 20px;color:var(--text-muted);}

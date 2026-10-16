@@ -95,7 +95,7 @@ RCR.modulos.colaboradores = {
   icono: 'users',
   workspace: 'bienestar',
   enNav: true,
-  fab: { icono: 'plus', label: 'Nuevo colaborador', accion: function () { COL.abrirForm(null); } },
+  fab: { icono: 'plus', label: 'Nuevo colaborador', soloEditor: true, accion: function () { COL.abrirForm(null); } },
   mount: function (root) { COL.mount(root); },
   onShow: function () { if (COL.datos.length) COL.render(); }
 };
@@ -262,6 +262,7 @@ var COL = {
       return;
     }
 
+    var editable = RCR.puedeEditar();
     list.innerHTML = d.map(function (c) {
       var id = c._docId;
       var activo = (c.Estado || 'Activo') === 'Activo';
@@ -274,10 +275,11 @@ var COL = {
             '<strong>' + RCR.esc(c.Colaborador || '(sin nombre)') + '</strong>' +
             '<small>' + RCR.esc(cargo) + ' · ' + RCR.esc(prog) + '</small>' +
           '</div>' +
+          (editable ?
           '<div class="card-actions" onclick="event.stopPropagation();">' +
             '<button class="btn-ico" title="Editar" onclick="COL.abrirForm(\'' + id + '\')">' + ico('edit', 16) + '</button>' +
             '<button class="btn-ico danger" title="Eliminar" onclick="COL.pedirBorrar(\'' + id + '\')">' + ico('trash', 16) + '</button>' +
-          '</div>' +
+          '</div>' : '') +
         '</div>' +
         '<div class="chips-row">' +
           '<span class="chip ' + (activo ? 'verde' : 'rojo') + '">' +
@@ -315,8 +317,9 @@ var COL = {
                 : '<div class="section-sub" style="margin-top:12px;">Sin datos adicionales registrados.</div>'),
       acciones:
         '<button class="btn btn-glass" onclick="COL.pdfFicha(\'' + docId + '\')">PDF</button>' +
-        '<button class="btn btn-danger" onclick="COL.pedirBorrar(\'' + docId + '\', true)">Eliminar</button>' +
-        '<button class="btn btn-primary" onclick="RCR.cerrarModal(\'m-col-ficha\'); COL.abrirForm(\'' + docId + '\')">Editar</button>'
+        (RCR.puedeEditar() ?
+          '<button class="btn btn-danger" onclick="COL.pedirBorrar(\'' + docId + '\', true)">Eliminar</button>' +
+          '<button class="btn btn-primary" onclick="RCR.cerrarModal(\'m-col-ficha\'); COL.abrirForm(\'' + docId + '\')">Editar</button>' : '')
     });
   },
 
@@ -483,6 +486,7 @@ var COL = {
   },
 
   abrirForm: function (docId) {
+    if (!RCR.puedeEditar()) { RCR.toast('No tienes permiso para editar'); return; }
     RCR.cerrarModal('m-col-ficha');
     var c = docId ? COL.datos.find(function (x) { return x._docId === docId; }) : null;
     var nombre = c ? (c.Colaborador || '') : '';
@@ -557,6 +561,7 @@ var COL = {
 
   guardar: async function (docId) {
     if (COL.guardando) return;
+    if (!RCR.puedeEditar()) { RCR.toast('No tienes permiso para editar'); return; }
 
     var nombre = (document.getElementById('col-nombre').value || '').trim().replace(/[<>"]/g, '');
     if (!nombre) { RCR.toast('El nombre es obligatorio'); return; }
@@ -620,6 +625,7 @@ var COL = {
 
   /* ── Eliminar ──────────────────────────────────────────────────────────── */
   pedirBorrar: function (docId, desdeFicha) {
+    if (!RCR.puedeEditar()) { RCR.toast('No tienes permiso para eliminar'); return; }
     var c = COL.datos.find(function (x) { return x._docId === docId; });
     COL.pendienteBorrar = docId;
     if (desdeFicha) RCR.cerrarModal('m-col-ficha');
@@ -747,7 +753,7 @@ RCR.modulos['seguimiento-bienestar'] = {
   icono: 'heart',
   workspace: 'bienestar',
   enNav: true,
-  fab: { icono: 'plus', label: 'Nuevo registro', accion: function () { SEG.abrirForm(null); } },
+  fab: { icono: 'plus', label: 'Nuevo registro', soloEditor: true, accion: function () { SEG.abrirForm(null); } },
   mount: function (root) { SEG.mount(root); },
   onShow: function () { if (SEG.datos.length) { SEG.poblarColabSel(); SEG.render(); } }
 };
@@ -970,6 +976,7 @@ var SEG = {
       return;
     }
 
+    var editable = RCR.puedeEditar();
     list.innerHTML = recs.map(function (r) {
       var id = r._docId;
       var sat = r['Nivel de satisfacción laboral (1–10)'];
@@ -981,10 +988,11 @@ var SEG = {
             '<strong>' + RCR.esc(r.Seguimiento || 'Seguimiento') + '</strong>' +
             '<small>' + RCR.esc(SEG.fmtFecha(r.Fecha) || 'Sin fecha') + '</small>' +
           '</div>' +
+          (editable ?
           '<div class="card-actions" onclick="event.stopPropagation();">' +
             '<button class="btn-ico" title="Editar" onclick="SEG.abrirForm(\'' + id + '\')">' + ico('edit', 16) + '</button>' +
             '<button class="btn-ico danger" title="Eliminar" onclick="SEG.pedirBorrar(\'' + id + '\')">' + ico('trash', 16) + '</button>' +
-          '</div>' +
+          '</div>' : '') +
         '</div>' +
         (sat ? '<div class="chips-row"><span class="chip neutro">Satisfacción ' + RCR.esc(sat) + '/10</span></div>' : '') +
       '</div>';
@@ -1126,9 +1134,9 @@ var SEG = {
       titulo: r.Colaborador || 'Registro',
       sub: RCR.esc(meta),
       cuerpo: html || '<div class="section-sub" style="margin-top:12px;">Sin datos para este registro.</div>',
-      acciones:
-        '<button class="btn btn-danger" onclick="SEG.pedirBorrar(\'' + docId + '\', true)">Eliminar</button>' +
-        '<button class="btn btn-primary" onclick="RCR.cerrarModal(\'m-seg-ficha\'); SEG.abrirForm(\'' + docId + '\')">Editar</button>'
+      acciones: RCR.puedeEditar() ?
+        ('<button class="btn btn-danger" onclick="SEG.pedirBorrar(\'' + docId + '\', true)">Eliminar</button>' +
+         '<button class="btn btn-primary" onclick="RCR.cerrarModal(\'m-seg-ficha\'); SEG.abrirForm(\'' + docId + '\')">Editar</button>') : ''
     });
   },
 
@@ -1152,6 +1160,7 @@ var SEG = {
   },
 
   abrirForm: function (docId) {
+    if (!RCR.puedeEditar()) { RCR.toast('No tienes permiso para editar'); return; }
     RCR.cerrarModal('m-seg-ficha');
     var r = docId ? SEG.datos.find(function (x) { return x._docId === docId; }) : null;
     var nombres = SEG.nombresColabs();
@@ -1187,6 +1196,7 @@ var SEG = {
 
   guardar: async function (docId) {
     if (SEG.guardando) return;
+    if (!RCR.puedeEditar()) { RCR.toast('No tienes permiso para editar'); return; }
 
     var colab = (document.getElementById('seg-f-colab') || {}).value || '';
     var fecha = (document.getElementById('seg-f-fecha') || {}).value || '';
@@ -1240,6 +1250,7 @@ var SEG = {
 
   /* ── Eliminar ──────────────────────────────────────────────────────────── */
   pedirBorrar: function (docId, desdeFicha) {
+    if (!RCR.puedeEditar()) { RCR.toast('No tienes permiso para eliminar'); return; }
     var r = SEG.datos.find(function (x) { return x._docId === docId; });
     SEG.pendienteBorrar = docId;
     if (desdeFicha) RCR.cerrarModal('m-seg-ficha');
@@ -1469,6 +1480,7 @@ var SEMC = {
       return;
     }
 
+    var editable = RCR.puedeEditar();
     var tarjetas = d.map(function (r) {
       var id = r._docId;
       var items = SEMC.DIMS.map(function (dim) {
@@ -1484,9 +1496,10 @@ var SEMC = {
             '<strong>' + RCR.esc(r.Colaborador || '—') + '</strong>' +
             '<small>' + RCR.esc(SEMC.fmtMes(r.Mes) || 'Sin mes') + (SEMC.progDe(r.Colaborador) ? ' · ' + RCR.esc(SEMC.progDe(r.Colaborador)) : '') + '</small>' +
           '</div>' +
+          (editable ?
           '<div class="card-actions" onclick="event.stopPropagation();">' +
             '<button class="btn-ico danger" title="Eliminar" onclick="SEMC.pedirBorrar(\'' + id + '\')">' + ico('trash', 16) + '</button>' +
-          '</div>' +
+          '</div>' : '') +
         '</div>' +
         (items ? '<div class="sem-items">' + items + '</div>' : '') +
       '</div>';
@@ -1568,6 +1581,7 @@ var SEMC = {
 
   /* ── Eliminar ──────────────────────────────────────────────────────────── */
   pedirBorrar: function (docId) {
+    if (!RCR.puedeEditar()) { RCR.toast('No tienes permiso para eliminar'); return; }
     var r = SEMC.datos.find(function (x) { return x._docId === docId; });
     SEMC.pendienteBorrar = docId;
     RCR.confirmar({

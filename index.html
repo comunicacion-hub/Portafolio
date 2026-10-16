@@ -322,17 +322,47 @@ RCR.workspaces = [
 ];
 RCR.workspaceActivo = 'colaborador';
 
+/* ── Permisos por sección ─────────────────────────────────────────────────
+   Cada usuario tiene RCR.user.secciones = { <workspaceId>: [<moduleId>, …] }.
+   El Admin ve todo; los demás ven solo las secciones asignadas en Accesos. */
+RCR.secciones = function () { return (RCR.user && RCR.user.secciones) || {}; };
+
+RCR.puedeVerSeccion = function (wsId, modId) {
+  if (RCR.esAdmin()) return true;
+  var s = RCR.secciones()[wsId];
+  return Array.isArray(s) && s.indexOf(modId) >= 0;
+};
+
+RCR.puedeVerWorkspace = function (wsId) {
+  if (RCR.esAdmin()) return true;
+  var s = RCR.secciones()[wsId];
+  return Array.isArray(s) && s.length > 0;
+};
+
+/* Matriz de perfiles → secciones (para el formulario de Accesos) */
+RCR.permMatriz = function () {
+  return RCR.workspaces.map(function (w) {
+    var mods = Object.keys(RCR.modulos).map(function (k) { return RCR.modulos[k]; })
+      .filter(function (m) { return (m.workspace || 'colaborador') === w.id && m.enNav && !m.soloAdmin; });
+    return { ws: w, mods: mods };
+  }).filter(function (g) { return g.mods.length; });
+};
+
 RCR.workspacesVisibles = function () {
-  return RCR.workspaces.filter(function (w) { return !w.soloAdmin || RCR.esAdmin(); });
+  return RCR.workspaces.filter(function (w) {
+    return (!w.soloAdmin || RCR.esAdmin()) && RCR.puedeVerWorkspace(w.id);
+  });
 };
 
 RCR.visibles = function () {
   return Object.keys(RCR.modulos)
     .map(function (k) { return RCR.modulos[k]; })
     .filter(function (m) {
+      var ws = m.workspace || 'colaborador';
       return m.enNav
-        && (m.workspace || 'colaborador') === RCR.workspaceActivo
-        && (!m.soloAdmin || RCR.esAdmin());
+        && ws === RCR.workspaceActivo
+        && (!m.soloAdmin || RCR.esAdmin())
+        && RCR.puedeVerSeccion(ws, m.id);
     });
 };
 
@@ -401,6 +431,9 @@ RCR.ir = function (id) {
   var mod = RCR.modulos[id];
   if (!mod) return;
   if (mod.soloAdmin && !RCR.esAdmin()) { RCR.toast('Esta sección es solo para administradores'); return; }
+  if (!mod.soloAdmin && !RCR.puedeVerSeccion(mod.workspace || 'colaborador', id)) {
+    RCR.toast('No tienes acceso a esta sección'); return;
+  }
 
   /* Ocultar la vista actual */
   document.querySelectorAll('#view > .vista').forEach(function (v) { v.classList.add('hidden'); });
@@ -425,9 +458,9 @@ RCR.ir = function (id) {
 
   /* El "/ perfil" del topbar lo fija RCR.cambiarWorkspace, no cada sección. */
 
-  /* FAB de la sección */
+  /* FAB de la sección (los que editan datos solo para Admin/Editor) */
   var fab = document.getElementById('fab');
-  if (mod.fab) {
+  if (mod.fab && (!mod.fab.soloEditor || RCR.puedeEditar())) {
     fab.innerHTML = ico(mod.fab.icono || 'plus', 24, 2.4);
     fab.setAttribute('aria-label', mod.fab.label || 'Agregar');
     fab.onclick = mod.fab.accion;
@@ -462,7 +495,17 @@ RCR.entrar = function () {
   document.querySelector('.menu-item.danger').innerHTML = ico('logout', 15) + '<span>Cerrar sesión</span>';
 
   RCR.construirWorkspaceMenu();
-  RCR.cambiarWorkspace(RCR.workspaceActivo);
+
+  /* Arrancar en la primera pestaña que el usuario pueda ver */
+  var wsList = RCR.workspacesVisibles();
+  if (wsList.length) {
+    RCR.cambiarWorkspace(wsList[0].id);
+  } else {
+    document.getElementById('ws-switch').style.visibility = 'hidden';
+    document.getElementById('view').innerHTML =
+      RCR.vacio('alert', 'No tienes secciones asignadas',
+        'Pídele a un administrador que te habilite el acceso en comunicacion@redesconrostro.org.');
+  }
 };
 
 RCR.mostrarLogin = function () {
