@@ -29,6 +29,64 @@ RCR._bienestarProximamente = function (root, titulo, sub) {
 };
 
 /* ==========================================================================
+   PDF — helper compartido (encabezado, pie y carga de jsPDF)
+   Reusa el logo RCR de window.LOGOS.rcr y jsPDF 2.5.1 (igual que curriculum).
+   ========================================================================== */
+var BPDF = {
+  LIB: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+
+  cargar: async function () {
+    await RCR.cargarLib(BPDF.LIB);
+    return window.jspdf.jsPDF;
+  },
+
+  header: function (doc, titulo, subtitulo) {
+    doc.setFillColor(51, 168, 222);
+    doc.rect(0, 0, 210, 28, 'F');
+    try {
+      var L = window.LOGOS && window.LOGOS.rcr;
+      if (L && L.src) { var h = 18, w = h * (L.ar || 1.2267); doc.addImage(L.src, 'PNG', 10, 5, w, h); }
+    } catch (e) {}
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+    doc.text(titulo, 200, 12, { align: 'right' });
+    if (subtitulo) {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+      doc.text(subtitulo, 200, 20, { align: 'right' });
+    }
+    doc.setFontSize(7);
+    doc.text('Generado: ' + new Date().toLocaleDateString('es-EC'), 200, 26, { align: 'right' });
+    doc.setTextColor(51, 51, 51);
+    return 36;
+  },
+
+  footer: function (doc, page) {
+    var h = 297;
+    doc.setDrawColor(51, 168, 222); doc.setLineWidth(0.5);
+    doc.line(10, h - 14, 200, h - 14);
+    doc.setFontSize(7); doc.setTextColor(150, 150, 150);
+    doc.text('Redes Con Rostro · Mi RCR · Documento confidencial', 10, h - 8);
+    doc.text('Pág. ' + page, 200, h - 8, { align: 'right' });
+    doc.setTextColor(51, 51, 51);
+  },
+
+  /* Descarga una imagen (p. ej. foto de Drive) como data URI; null si falla */
+  imgDataURI: async function (url) {
+    try {
+      var res = await fetch(url);
+      var blob = await res.blob();
+      return await new Promise(function (resolve) {
+        var fr = new FileReader();
+        fr.onload = function (e) { resolve(e.target.result); };
+        fr.onerror = function () { resolve(null); };
+        fr.readAsDataURL(blob);
+      });
+    } catch (e) { return null; }
+  }
+};
+window.BPDF = BPDF;
+
+/* ==========================================================================
    COLABORADORES
    ========================================================================== */
 RCR.modulos.colaboradores = {
@@ -123,7 +181,10 @@ var COL = {
           '<div class="section-title">Colaboradores</div>' +
           '<div class="section-sub" id="col-sub">Cargando…</div>' +
         '</div>' +
-        '<div class="count-badge" id="col-count">0</div>' +
+        '<div style="display:flex;align-items:center;gap:10px;">' +
+          '<button class="btn-ico" title="Descargar PDF consolidado" onclick="COL.pdfConsolidado()">' + ico('download', 16) + '</button>' +
+          '<div class="count-badge" id="col-count">0</div>' +
+        '</div>' +
       '</div>' +
       '<div class="col-filtros">' +
         '<input class="form-inp col-buscar" id="col-f-nombre" type="search" placeholder="Buscar por nombre…" oninput="COL.render()">' +
@@ -169,18 +230,21 @@ var COL = {
     set('col-f-estado', COL.datos.map(function (c) { return c.Estado || 'Activo'; }), 'Estado');
   },
 
-  render: function () {
+  filtrados: function () {
     var val = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
     var q = val('col-f-nombre').toLowerCase().trim();
     var fc = val('col-f-cargo'), fp = val('col-f-programa'), fe = val('col-f-estado');
-
-    var d = COL.datos.filter(function (c) {
+    return COL.datos.filter(function (c) {
       if (q && String(c.Colaborador || '').toLowerCase().indexOf(q) < 0) return false;
       if (fc && c.Cargo !== fc) return false;
       if (fp && c['Programa/Proyecto'] !== fp) return false;
       if (fe && (c.Estado || 'Activo') !== fe) return false;
       return true;
     });
+  },
+
+  render: function () {
+    var d = COL.filtrados();
 
     var activos = COL.datos.filter(function (c) { return (c.Estado || 'Activo') === 'Activo'; }).length;
     var sub = document.getElementById('col-sub');
@@ -250,9 +314,154 @@ var COL = {
         (fields ? '<div class="ficha-grid">' + fields + '</div>'
                 : '<div class="section-sub" style="margin-top:12px;">Sin datos adicionales registrados.</div>'),
       acciones:
+        '<button class="btn btn-glass" onclick="COL.pdfFicha(\'' + docId + '\')">PDF</button>' +
         '<button class="btn btn-danger" onclick="COL.pedirBorrar(\'' + docId + '\', true)">Eliminar</button>' +
         '<button class="btn btn-primary" onclick="RCR.cerrarModal(\'m-col-ficha\'); COL.abrirForm(\'' + docId + '\')">Editar</button>'
     });
+  },
+
+  /* ── PDF: ficha individual ─────────────────────────────────────────────── */
+  pdfFicha: async function (docId) {
+    var r = COL.datos.find(function (x) { return x._docId === docId; });
+    if (!r) { RCR.toast('No se encontró el colaborador'); return; }
+    RCR.toast('Generando PDF…');
+    try {
+      var jsPDF = await BPDF.cargar();
+      var doc = new jsPDF('p', 'mm', 'a4');
+      var y = BPDF.header(doc, 'Ficha del Colaborador', r.Colaborador);
+
+      if (r.Foto) {
+        var b64 = await BPDF.imgDataURI(r.Foto);
+        if (b64) { try { doc.addImage(b64, 'JPEG', 10, y, 30, 30); } catch (e) {} }
+      }
+      var xi = r.Foto ? 45 : 10;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+      doc.text(r.Colaborador || '—', xi, y + 10);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(100, 100, 100);
+      doc.text((r.Cargo || '') + (r['Programa/Proyecto'] ? ' · ' + r['Programa/Proyecto'] : ''), xi, y + 18);
+      doc.setTextColor(51, 51, 51);
+
+      var est = r.Estado || 'Activo';
+      doc.setFillColor(est === 'Activo' ? 24 : 150, est === 'Activo' ? 174 : 150, est === 'Activo' ? 151 : 150);
+      doc.roundedRect(xi, y + 22, 20, 6, 2, 2, 'F');
+      doc.setTextColor(255, 255, 255); doc.setFontSize(7);
+      doc.text(est, xi + 10, y + 26.3, { align: 'center' });
+      doc.setTextColor(51, 51, 51);
+
+      y += 40;
+      doc.setDrawColor(220, 220, 230); doc.setLineWidth(0.3);
+      doc.line(10, y, 200, y);
+      y += 8;
+
+      var campos = [
+        ['Correo RCR', r['Correo de Redes Con Rostro']],
+        ['Correo personal', r['Correo personal']],
+        ['Teléfono principal', r['Teléfono principal']],
+        ['Teléfono secundario', r['Teléfono secundario']],
+        ['Fecha de nacimiento', r['Fecha de nacimiento']],
+        ['Documento de identidad', r['Documento de identidad']],
+        ['Fecha de inicio', r['Fecha de inicio']],
+        ['Fecha de finalización', r['Fecha de finalización']],
+        ['Domicilio', r.Domicilio],
+        ['Programa / Proyecto', r['Programa/Proyecto']],
+        ['Talla de chaleco', r['Talla de chaleco']],
+        ['Talla de camiseta', r['Talla de camiseta']]
+      ].filter(function (p) { return p[1] && p[1] !== ''; });
+
+      campos.forEach(function (p, i) {
+        var col = i % 2 === 0 ? 10 : 110;
+        if (i % 2 === 0 && i > 0) y += 14;
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(150, 150, 150);
+        doc.text(String(p[0]).toUpperCase(), col, y);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(51, 51, 51);
+        doc.text(String(p[1]), col, y + 5);
+      });
+
+      BPDF.footer(doc, 1);
+      doc.save('Ficha_' + (r.Colaborador || 'colaborador').replace(/\s+/g, '_') + '.pdf');
+      RCR.toast('PDF descargado');
+    } catch (e) {
+      console.error('COL.pdfFicha:', e);
+      RCR.toast('No se pudo generar el PDF');
+    }
+  },
+
+  /* ── PDF: consolidado (lista filtrada) ─────────────────────────────────── */
+  pdfConsolidado: async function () {
+    var colabs = COL.filtrados();
+    if (!colabs.length) { RCR.toast('No hay colaboradores para exportar'); return; }
+    RCR.toast('Generando PDF…');
+    try {
+      var jsPDF = await BPDF.cargar();
+      var doc = new jsPDF('p', 'mm', 'a4');
+      var titulo = 'Consolidado de Colaboradores';
+      var page = 1;
+      var y = BPDF.header(doc, titulo, 'Equipo RCR · ' + new Date().toLocaleDateString('es-EC'));
+
+      /* Registros de seguimiento (para el stat "con seguimiento") */
+      var segs = (window.SEG && SEG.datos && SEG.datos.length) ? SEG.datos : [];
+      if (!segs.length) {
+        try { var s = await RCR.db.collection('Seguimiento').get(); segs = s.docs.map(function (d) { return d.data(); }); } catch (e) {}
+      }
+      var conSeg = {};
+      segs.forEach(function (r) { conSeg[r.Colaborador] = true; });
+
+      var activos = colabs.filter(function (r) { return (r.Estado || 'Activo') === 'Activo'; }).length;
+      var conSegN = colabs.filter(function (c) { return conSeg[c.Colaborador]; }).length;
+
+      doc.setFillColor(248, 250, 255);
+      doc.rect(10, y, 190, 20, 'F');
+      var stats = [
+        ['Total', colabs.length], ['Activos', activos],
+        ['Inactivos', colabs.length - activos], ['Con seguimiento', conSegN]
+      ];
+      stats.forEach(function (p, i) {
+        var x = 10 + i * 48;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(150, 150, 150);
+        doc.text(String(p[0]).toUpperCase(), x + 4, y + 7);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(51, 168, 222);
+        doc.text(String(p[1]), x + 4, y + 16);
+      });
+      doc.setTextColor(51, 51, 51);
+      y += 26;
+
+      var cabecera = function () {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
+        doc.setFillColor(51, 168, 222); doc.rect(10, y, 190, 7, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.text('COLABORADOR', 13, y + 4.8);
+        doc.text('CARGO', 75, y + 4.8);
+        doc.text('PROGRAMA', 120, y + 4.8);
+        doc.text('ESTADO', 175, y + 4.8);
+        doc.setTextColor(51, 51, 51);
+        y += 7;
+      };
+      cabecera();
+
+      colabs.slice().sort(function (a, b) {
+        return String(a.Colaborador || '').localeCompare(String(b.Colaborador || ''), 'es');
+      }).forEach(function (r, i) {
+        if (y > 270) { BPDF.footer(doc, page); doc.addPage(); page++; y = BPDF.header(doc, titulo); cabecera(); }
+        doc.setFillColor(i % 2 === 0 ? 255 : 248, i % 2 === 0 ? 255 : 250, 255);
+        doc.rect(10, y, 190, 7, 'F');
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(51, 51, 51);
+        doc.text(String(r.Colaborador || '—').substring(0, 32), 13, y + 4.8);
+        doc.text(String(r.Cargo || '—').substring(0, 20), 75, y + 4.8);
+        doc.text(String(r['Programa/Proyecto'] || '—').substring(0, 22), 120, y + 4.8);
+        var est = r.Estado || 'Activo';
+        doc.setTextColor(est === 'Activo' ? 24 : 150, est === 'Activo' ? 174 : 150, est === 'Activo' ? 151 : 150);
+        doc.text(est, 175, y + 4.8);
+        doc.setTextColor(51, 51, 51);
+        y += 7;
+      });
+
+      BPDF.footer(doc, page);
+      doc.save('Consolidado_RCR_' + new Date().toISOString().split('T')[0] + '.pdf');
+      RCR.toast('PDF descargado');
+    } catch (e) {
+      console.error('COL.pdfConsolidado:', e);
+      RCR.toast('No se pudo generar el PDF');
+    }
   },
 
   /* ── Formulario (alta / edición) ───────────────────────────────────────── */
@@ -687,7 +896,10 @@ var SEG = {
           '<div class="section-title">Seguimiento</div>' +
           '<div class="section-sub">Acompañamiento de bienestar</div>' +
         '</div>' +
-        '<div class="count-badge" id="seg-count">0</div>' +
+        '<div style="display:flex;align-items:center;gap:10px;">' +
+          '<button class="btn-ico" title="Descargar PDF del colaborador" onclick="SEG.pdf()">' + ico('download', 16) + '</button>' +
+          '<div class="count-badge" id="seg-count">0</div>' +
+        '</div>' +
       '</div>' +
       '<select class="form-inp seg-colab-sel" id="seg-colab-sel" onchange="SEG.onColab()">' +
         '<option value="">Selecciona un colaborador…</option>' +
@@ -777,6 +989,101 @@ var SEG = {
         (sat ? '<div class="chips-row"><span class="chip neutro">Satisfacción ' + RCR.esc(sat) + '/10</span></div>' : '') +
       '</div>';
     }).join('');
+  },
+
+  /* ── PDF del colaborador (todos sus registros) ─────────────────────────── */
+  pdf: async function (nombre) {
+    nombre = nombre || SEG.colabSel;
+    if (!nombre) { RCR.toast('Selecciona un colaborador'); return; }
+    var recs = SEG.registrosDe(nombre);
+    if (!recs.length) { RCR.toast('No hay registros para este colaborador'); return; }
+    RCR.toast('Generando PDF…');
+
+    var escalas = [
+      ['Satisfacción laboral', 'Nivel de satisfacción laboral (1–10)'],
+      ['Clima laboral RCR', 'Clima laboral con todo el equipo RCR'],
+      ['Relación liderazgo', 'Relación con liderazgo'],
+      ['Trabajo en equipo', 'Trabajo en equipo con su equipo'],
+      ['Reconocimiento', 'Reconocimiento'],
+      ['Desarrollo profesional', 'Desarrollo profesional'],
+      ['Carga laboral', 'Carga laboral'],
+      ['Autonomía', 'Autonomía'],
+      ['Sentido/Propósito', 'Sentido/propósito'],
+      ['Manejo emocional', 'Manejo emocional'],
+      ['Escucha', 'Escucha'],
+      ['Empatía', 'Empatía'],
+      ['Comunicación asertiva', 'Comunicación asertiva'],
+      ['Interés contenidos', 'Nivel de interés en contenidos'],
+      ['Claridad comunicación', 'Claridad de la comunicación interna']
+    ];
+    var textos = [
+      ['Inicio del semestre', '¿Cómo inicias este semestre a nivel personal y laboral?'],
+      ['Dificultades', '¿Qué está dificultando más tu desempeño actualmente?'],
+      ['Observaciones adicionales', '¿Qué deberíamos mejorar como equipo en comunicación?']
+    ];
+
+    try {
+      var jsPDF = await BPDF.cargar();
+      var doc = new jsPDF('p', 'mm', 'a4');
+      var page = 1;
+      var y = BPDF.header(doc, 'Seguimiento de Bienestar', nombre);
+
+      var colab = (window.COL && COL.datos) ? COL.datos.find(function (c) { return c.Colaborador === nombre; }) : null;
+      doc.setFontSize(9); doc.setTextColor(100, 100, 100);
+      doc.text(((colab && colab.Cargo) || '') + (colab && colab['Programa/Proyecto'] ? ' · ' + colab['Programa/Proyecto'] : ''), 10, y);
+      doc.setTextColor(51, 51, 51);
+      y += 10;
+
+      recs.forEach(function (r, ri) {
+        if (y > 240) { BPDF.footer(doc, page); doc.addPage(); page++; y = BPDF.header(doc, 'Seguimiento de Bienestar', nombre); }
+
+        doc.setFillColor(245, 248, 255); doc.rect(10, y, 190, 8, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(51, 168, 222);
+        doc.text((r.Seguimiento || 'Seguimiento') + ' #' + (ri + 1), 13, y + 5.5);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 100, 100);
+        doc.text(SEG.fmtFecha(r.Fecha) || '', 200, y + 5.5, { align: 'right' });
+        doc.setTextColor(51, 51, 51);
+        y += 12;
+
+        var escVals = escalas.filter(function (e) { return r[e[1]] && r[e[1]] !== ''; });
+        escVals.forEach(function (e, i) {
+          var col = [10, 75, 140][i % 3];
+          if (i % 3 === 0 && i > 0) y += 12;
+          var val = parseFloat(r[e[1]]) || 0, max = SEG.scaleMax(e[1]);
+          var pct = max ? Math.max(0, Math.min(1, val / max)) : 0;
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(150, 150, 150);
+          doc.text(e[0].toUpperCase() + ' /' + max, col, y);
+          doc.setFillColor(230, 235, 245); doc.rect(col, y + 1.5, 55, 3, 'F');
+          var c = pct >= 0.7 ? [24, 174, 151] : pct >= 0.4 ? [245, 173, 33] : [255, 55, 111];
+          doc.setFillColor(c[0], c[1], c[2]); doc.rect(col, y + 1.5, 55 * pct, 3, 'F');
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(c[0], c[1], c[2]);
+          doc.text(val + '/' + max, col + 57, y + 4.5);
+          doc.setTextColor(51, 51, 51);
+        });
+        if (escVals.length) y += 16;
+
+        textos.filter(function (t) { return r[t[1]] && r[t[1]] !== ''; }).forEach(function (t) {
+          if (y > 260) { BPDF.footer(doc, page); doc.addPage(); page++; y = BPDF.header(doc, 'Seguimiento de Bienestar', nombre); }
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
+          doc.text(t[0].toUpperCase(), 10, y);
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(51, 51, 51);
+          var lines = doc.splitTextToSize(String(r[t[1]]), 185);
+          doc.text(lines, 10, y + 4);
+          y += 4 + lines.length * 4.5 + 4;
+        });
+
+        y += 6;
+        doc.setDrawColor(220, 220, 230); doc.line(10, y, 200, y);
+        y += 8;
+      });
+
+      BPDF.footer(doc, page);
+      doc.save('Seguimiento_' + nombre.replace(/\s+/g, '_') + '.pdf');
+      RCR.toast('PDF descargado');
+    } catch (e) {
+      console.error('SEG.pdf:', e);
+      RCR.toast('No se pudo generar el PDF');
+    }
   },
 
   /* ── Ficha de detalle ──────────────────────────────────────────────────── */
