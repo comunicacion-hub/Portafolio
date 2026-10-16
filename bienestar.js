@@ -969,14 +969,331 @@ var SEG = {
 
 window.SEG = SEG;
 
-/* ── Semáforo (consolidado del equipo) ──────────────────────────────────── */
+/* ==========================================================================
+   SEMÁFORO (consolidado del equipo)
+   Vista de gestión: los valores los registran los colaboradores (perfil
+   colaborador). Aquí es solo lectura + eliminar: resumen por dimensión,
+   rejilla de respuestas y ficha por colaborador. Colección "Semáforo".
+   ========================================================================== */
 RCR.modulos['semaforo-consolidado'] = {
   id: 'semaforo-consolidado',
   titulo: 'Semáforo',
   icono: 'semaforo',
   workspace: 'bienestar',
   enNav: true,
+  mount: function (root) { SEMC.mount(root); },
+  onShow: function () { if (SEMC.datos.length) { SEMC.poblarFiltros(); SEMC.render(); } }
+};
+
+var SEMC = {
+  COL_NOMBRE: 'Semáforo',
+  datos: [],
+  _colabs: [],
+  _fichaNombre: '',
+  borrando: false,
+  pendienteBorrar: null,
+
+  /* Dimensiones del semáforo (etiqueta corta → clave en Firestore) */
+  DIMS: [
+    ['Carga y ritmo', 'Carga y ritmo de trabajo'],
+    ['Liderazgo', 'Liderazgo y apoyo'],
+    ['Estado emocional', 'Estado emocional y energía'],
+    ['Clima y relaciones', 'Clima y relaciones']
+  ],
+
+  /* Clasifica un valor ("Estoy bien 🟢", "Más o menos 🟡", "No estoy bien 🔴") */
+  estado: function (valor) {
+    var v = String(valor || '').trim().toLowerCase();
+    if (!v) return '';
+    if (v.indexOf('no estoy bien') >= 0 || v.indexOf('🔴') >= 0 || v === 'mal') return 'mal';
+    if (v.indexOf('más o menos') >= 0 || v.indexOf('mas o menos') >= 0 || v.indexOf('🟡') >= 0 || v === 'regular') return 'reg';
+    if (v.indexOf('estoy bien') >= 0 || v.indexOf('🟢') >= 0 || v === 'bien') return 'bien';
+    return '';
+  },
+
+  fmtMes: function (val) {
+    if (!val) return '';
+    if (typeof val === 'string') return val;
+    try {
+      if (typeof val.toDate === 'function') return val.toDate().toLocaleDateString('es-EC', { month: 'long', year: 'numeric' });
+      if (val.seconds != null) return new Date(val.seconds * 1000).toLocaleDateString('es-EC', { month: 'long', year: 'numeric' });
+    } catch (e) {}
+    return String(val);
+  },
+
+  comentarioDe: function (r) { return r['¿Cómo te sentiste este mes? '] || r['¿Cómo te sentiste este mes?'] || ''; },
+
+  colabs: function () {
+    if (window.COL && COL.datos && COL.datos.length) {
+      return COL.datos.map(function (c) {
+        return { nombre: c.Colaborador, prog: c['Programa/Proyecto'] || '', estado: c.Estado || 'Activo' };
+      });
+    }
+    return SEMC._colabs;
+  },
+  progDe: function (nombre) {
+    var c = SEMC.colabs().find(function (x) { return x.nombre === nombre; });
+    return c ? c.prog : '';
+  },
+
+  /* ── Montaje ───────────────────────────────────────────────────────────── */
   mount: function (root) {
-    RCR._bienestarProximamente(root, 'Semáforo', 'Autopercepción mensual del equipo');
+    root.innerHTML =
+      '<div class="section-header">' +
+        '<div>' +
+          '<div class="section-title">Semáforo</div>' +
+          '<div class="section-sub">Autopercepción mensual del equipo</div>' +
+        '</div>' +
+        '<div class="count-badge" id="semc-count">0</div>' +
+      '</div>' +
+      '<div class="col-filtros">' +
+        '<input class="form-inp col-buscar" id="semc-f-nombre" type="search" placeholder="Buscar por nombre…" oninput="SEMC.render()">' +
+        '<select class="form-inp col-sel" id="semc-f-equipo" onchange="SEMC.render()"><option value="">Programa</option></select>' +
+        '<select class="form-inp col-sel" id="semc-f-mes" onchange="SEMC.render()"><option value="">Mes</option></select>' +
+      '</div>' +
+      '<div class="card sem-resumen" id="semc-resumen"></div>' +
+      '<div id="semc-list">' + RCR.cargando('Cargando semáforo') + '</div>';
+    SEMC.cargar();
+  },
+
+  cargar: async function () {
+    try {
+      var snap = await RCR.db.collection(SEMC.COL_NOMBRE).get();
+      SEMC.datos = snap.docs.map(function (d) { return Object.assign({ _docId: d.id }, d.data()); });
+    } catch (e) {
+      console.error('SEMC.cargar:', e);
+      var res = document.getElementById('semc-resumen'); if (res) res.style.display = 'none';
+      var list = document.getElementById('semc-list');
+      if (list) list.innerHTML = RCR.vacio('alert', 'No se pudo cargar el semáforo', 'Revisa tu conexión y vuelve a intentar.');
+      return;
+    }
+    if (!(window.COL && COL.datos && COL.datos.length)) {
+      try {
+        var cs = await RCR.db.collection('Colaboradores').get();
+        SEMC._colabs = cs.docs.map(function (d) {
+          var c = d.data();
+          return { nombre: c.Colaborador, prog: c['Programa/Proyecto'] || '', estado: c.Estado || 'Activo' };
+        });
+      } catch (e) {}
+    }
+    SEMC.poblarFiltros();
+    SEMC.render();
+  },
+
+  poblarFiltros: function () {
+    var setSel = function (id, valores, etiqueta) {
+      var sel = document.getElementById(id);
+      if (!sel) return;
+      var actual = sel.value;
+      var uniq = valores.filter(Boolean).filter(function (v, i, a) { return a.indexOf(v) === i; })
+        .sort(function (a, b) { return String(a).localeCompare(String(b), 'es'); });
+      sel.innerHTML = '<option value="">' + etiqueta + '</option>' +
+        uniq.map(function (v) { return '<option>' + RCR.esc(v) + '</option>'; }).join('');
+      if (uniq.indexOf(actual) >= 0) sel.value = actual;
+    };
+    var progs = SEMC.colabs().map(function (c) { return c.prog; })
+      .concat(SEMC.datos.map(function (r) { return r.Equipo || r['Programa/Proyecto']; }));
+    setSel('semc-f-equipo', progs, 'Programa');
+    setSel('semc-f-mes', SEMC.datos.map(function (r) { return SEMC.fmtMes(r.Mes).trim(); }), 'Mes');
+  },
+
+  render: function () {
+    var gv = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
+    var q = gv('semc-f-nombre').toLowerCase().trim(), eq = gv('semc-f-equipo'), mes = gv('semc-f-mes');
+
+    var d = SEMC.datos.filter(function (r) {
+      if (q && String(r.Colaborador || '').toLowerCase().indexOf(q) < 0) return false;
+      if (eq) {
+        var propio = r.Equipo || r['Programa/Proyecto'] || '';
+        if (propio !== eq && SEMC.progDe(r.Colaborador) !== eq) return false;
+      }
+      if (mes && SEMC.fmtMes(r.Mes).trim() !== mes.trim()) return false;
+      return true;
+    });
+
+    var cnt = document.getElementById('semc-count');
+    if (cnt) cnt.textContent = d.length;
+
+    /* Resumen por dimensión */
+    var res = document.getElementById('semc-resumen');
+    if (res) {
+      res.style.display = '';
+      var barras = SEMC.DIMS.map(function (dim) {
+        var b = 0, r = 0, m = 0;
+        d.forEach(function (reg) {
+          var e = SEMC.estado(reg[dim[1]]);
+          if (e === 'bien') b++; else if (e === 'reg') r++; else if (e === 'mal') m++;
+        });
+        var tot = b + r + m, barra;
+        if (!tot) {
+          barra = '<div class="sem-bar-vacia">Sin datos</div>';
+        } else {
+          var pB = Math.round((b / tot) * 100), pR = Math.round((r / tot) * 100), pM = 100 - pB - pR;
+          var segs = '';
+          if (pB > 0) segs += '<div class="sem-seg bien" style="flex:' + pB + '"><span>' + pB + '%</span></div>';
+          if (pR > 0) segs += '<div class="sem-seg reg" style="flex:' + pR + '"><span>' + pR + '%</span></div>';
+          if (pM > 0) segs += '<div class="sem-seg mal" style="flex:' + pM + '"><span>' + pM + '%</span></div>';
+          barra = '<div class="sem-bar">' + segs + '</div>';
+        }
+        return '<div class="sem-dim"><div class="sem-dim-lbl">' + RCR.esc(dim[0]) + '</div>' + barra + '</div>';
+      }).join('');
+      var foot = !d.length ? 'Sin respuestas en este filtro'
+        : '<strong>' + d.length + ' respuesta' + (d.length === 1 ? '' : 's') + '</strong>' + (mes ? ' en ' + RCR.esc(mes) : ' registradas');
+      res.innerHTML = '<div class="sem-res-title">Semáforo consolidado</div>' + barras +
+        '<div class="sem-res-foot">' + foot + '</div>';
+    }
+
+    /* Rejilla de respuestas */
+    var list = document.getElementById('semc-list');
+    if (!list) return;
+
+    var respondieron = {};
+    d.forEach(function (r) { respondieron[r.Colaborador] = true; });
+    var sinRespuesta = [];
+    if (!q && !eq && !mes) {
+      sinRespuesta = SEMC.colabs().filter(function (c) {
+        return (c.estado || 'Activo') === 'Activo' && !respondieron[c.nombre];
+      });
+    }
+
+    if (!d.length && !sinRespuesta.length) {
+      list.innerHTML = RCR.vacio('semaforo', 'Sin datos de semáforo',
+        SEMC.datos.length ? 'Prueba con otros filtros.' : 'Aún no hay respuestas registradas.');
+      return;
+    }
+
+    var tarjetas = d.map(function (r) {
+      var id = r._docId;
+      var items = SEMC.DIMS.map(function (dim) {
+        var e = SEMC.estado(r[dim[1]]);
+        if (!e) return '';
+        return '<div class="sem-item"><span class="sem-k">' + RCR.esc(dim[0]) + '</span><span class="sem-dot ' + e + '"></span></div>';
+      }).join('');
+      return '' +
+      '<div class="card col-card" onclick="SEMC.abrirFicha(\'' + id + '\')">' +
+        '<div class="card-top">' +
+          COL.avatar({ Colaborador: r.Colaborador }, 'col-foto') +
+          '<div class="card-info">' +
+            '<strong>' + RCR.esc(r.Colaborador || '—') + '</strong>' +
+            '<small>' + RCR.esc(SEMC.fmtMes(r.Mes) || 'Sin mes') + (SEMC.progDe(r.Colaborador) ? ' · ' + RCR.esc(SEMC.progDe(r.Colaborador)) : '') + '</small>' +
+          '</div>' +
+          '<div class="card-actions" onclick="event.stopPropagation();">' +
+            '<button class="btn-ico danger" title="Eliminar" onclick="SEMC.pedirBorrar(\'' + id + '\')">' + ico('trash', 16) + '</button>' +
+          '</div>' +
+        '</div>' +
+        (items ? '<div class="sem-items">' + items + '</div>' : '') +
+      '</div>';
+    }).join('');
+
+    var huerfanas = sinRespuesta.map(function (c) {
+      return '' +
+      '<div class="card col-card sem-card-sin">' +
+        '<div class="card-top">' +
+          COL.avatar({ Colaborador: c.nombre }, 'col-foto') +
+          '<div class="card-info">' +
+            '<strong>' + RCR.esc(c.nombre) + '</strong>' +
+            '<small>No ha completado el formulario</small>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    list.innerHTML = tarjetas + huerfanas;
+  },
+
+  /* ── Ficha por colaborador ─────────────────────────────────────────────── */
+  abrirFicha: function (docId) {
+    var r0 = SEMC.datos.find(function (x) { return x._docId === docId; });
+    if (!r0) return;
+    var nombre = r0.Colaborador;
+    SEMC._fichaNombre = nombre;
+
+    var meses = SEMC.datos.filter(function (s) { return s.Colaborador === nombre; })
+      .map(function (s) { return SEMC.fmtMes(s.Mes); }).filter(Boolean)
+      .filter(function (v, i, a) { return a.indexOf(v) === i; })
+      .sort(function (a, b) { return String(a).localeCompare(String(b), 'es'); });
+
+    var opc = '<option value="">Todos los meses</option>' +
+      meses.map(function (m) { return '<option>' + RCR.esc(m) + '</option>'; }).join('');
+
+    RCR.modal({
+      id: 'm-semc-ficha',
+      titulo: nombre || 'Semáforo',
+      sub: RCR.esc(SEMC.progDe(nombre)),
+      cuerpo:
+        '<div class="form-grp"><select class="form-inp" id="semc-ficha-mes" onchange="SEMC.renderFichaBody()">' + opc + '</select></div>' +
+        '<div id="semc-ficha-body"></div>'
+    });
+
+    var sel = document.getElementById('semc-ficha-mes');
+    if (sel && meses.length) sel.value = meses[meses.length - 1];
+    SEMC.renderFichaBody();
+  },
+
+  renderFichaBody: function () {
+    var nombre = SEMC._fichaNombre;
+    var mes = (document.getElementById('semc-ficha-mes') || {}).value || '';
+    var regs = SEMC.datos.filter(function (s) { return s.Colaborador === nombre; });
+    if (mes) regs = regs.filter(function (s) { return SEMC.fmtMes(s.Mes) === mes; });
+
+    var body = document.getElementById('semc-ficha-body');
+    if (!body) return;
+    if (!regs.length) {
+      body.innerHTML = '<div class="section-sub" style="margin-top:8px;">Sin respuestas' + (mes ? ' para ' + RCR.esc(mes) : '') + '.</div>';
+      return;
+    }
+
+    body.innerHTML = regs.map(function (r) {
+      var items = SEMC.DIMS.map(function (dim) {
+        var v = r[dim[1]]; if (!v) return '';
+        var e = SEMC.estado(v);
+        return '<div class="sem-item"><span class="sem-k">' + RCR.esc(dim[0]) + '</span>' +
+          '<span style="display:flex;align-items:center;gap:7px;font-weight:600;"><span class="sem-dot ' + e + '"></span>' + RCR.esc(v) + '</span></div>';
+      }).join('');
+      var com = SEMC.comentarioDe(r);
+      return '<div class="sem-ficha-reg">' +
+        '<div class="sem-ficha-mes">' + RCR.esc(SEMC.fmtMes(r.Mes) || '—') + '</div>' +
+        '<div class="sem-items" style="grid-template-columns:1fr;">' + items + '</div>' +
+        (com ? '<div class="sem-coment"><div class="sem-coment-lbl">¿Cómo te sentiste este mes?</div><div class="sem-coment-txt">' + RCR.esc(com) + '</div></div>' : '') +
+      '</div>';
+    }).join('');
+  },
+
+  /* ── Eliminar ──────────────────────────────────────────────────────────── */
+  pedirBorrar: function (docId) {
+    var r = SEMC.datos.find(function (x) { return x._docId === docId; });
+    SEMC.pendienteBorrar = docId;
+    RCR.confirmar({
+      titulo: '¿Eliminar la respuesta?',
+      texto: 'La respuesta de ' + (r ? '<strong>' + RCR.esc(r.Colaborador) + '</strong>' : 'este colaborador') +
+             (r && r.Mes ? ' (' + RCR.esc(SEMC.fmtMes(r.Mes)) + ')' : '') +
+             ' se eliminará. Esta acción no se puede deshacer.',
+      label: 'Eliminar',
+      onOk: 'SEMC.borrar()'
+    });
+  },
+
+  borrar: async function () {
+    if (SEMC.borrando || !SEMC.pendienteBorrar) return;
+    SEMC.borrando = true;
+    var id = SEMC.pendienteBorrar;
+    var btn = document.getElementById('confirm-ok');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+    try {
+      await RCR.db.collection(SEMC.COL_NOMBRE).doc(id).delete();
+      SEMC.datos = SEMC.datos.filter(function (x) { return x._docId !== id; });
+      SEMC.poblarFiltros();
+      SEMC.render();
+      RCR.cerrarModal('m-confirm');
+      RCR.toast('Respuesta eliminada');
+    } catch (e) {
+      console.error('SEMC.borrar:', e);
+      RCR.toast('No se pudo eliminar');
+    }
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Eliminar'; }
+    SEMC.pendienteBorrar = null;
+    SEMC.borrando = false;
   }
 };
+
+window.SEMC = SEMC;
