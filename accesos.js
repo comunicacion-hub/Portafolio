@@ -221,7 +221,7 @@ RCR.modulos.accesos = {
   icono: 'accesos',
   soloAdmin: true,
   enNav: false,           // se abre desde el menú de usuario
-  fab: { icono: 'plus', label: 'Agregar usuario', accion: function () { ACC.abrirForm(null); } },
+  crear: { label: 'Agregar usuario', accion: function () { ACC.abrirForm(null); } },
 
   mount: function (root) {
     root.innerHTML =

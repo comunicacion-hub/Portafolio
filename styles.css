@@ -345,7 +345,6 @@ html,body{
   width:44px;height:44px;min-width:44px;border-radius:50%;flex-shrink:0;
   background:var(--blue2);color:#fff;border:none;cursor:pointer;padding:0;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 3px 12px rgba(80,108,255,.3);
   transition:background .2s,transform .15s;
   -webkit-tap-highlight-color:transparent;
 }

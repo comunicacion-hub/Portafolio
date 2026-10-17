@@ -68,7 +68,7 @@ RCR.modulos.curriculum = {
   titulo: 'Currículum',
   icono: 'curriculum',
   enNav: true,
-  fab: { icono: 'plus', label: 'Llenar mi ficha', accion: function () { CV.abrirForm(); } },
+  crear: { label: 'Llenar mi ficha', accion: function () { CV.abrirForm(); } },
 
   mount: function (root) {
     root.innerHTML =

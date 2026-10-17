@@ -99,7 +99,7 @@ RCR.modulos.informes = {
   titulo: 'Informes',
   icono: 'informes',
   enNav: true,
-  fab: { icono: 'plus', label: 'Nuevo informe', accion: function () { INF.abrirForm(null); } },
+  crear: { label: 'Nuevo informe', accion: function () { INF.abrirForm(null); } },
 
   mount: function (root) {
     root.innerHTML =

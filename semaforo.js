@@ -11,7 +11,7 @@ RCR.modulos.semaforo = {
   titulo: 'Semáforo',
   icono: 'semaforo',
   enNav: true,
-  fab: { icono: 'plus', label: 'Nuevo registro', accion: function () { SEM.abrirForm(); } },
+  crear: { label: 'Nuevo registro', accion: function () { SEM.abrirForm(); } },
 
   mount: function (root) {
     root.innerHTML =
