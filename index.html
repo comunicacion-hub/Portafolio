@@ -88,7 +88,9 @@
       </button>
       <div class="ws-menu" id="ws-menu" role="menu"></div>
     </div>
-    <div style="position:relative;">
+    <div class="topbar-right">
+      <button class="btn-add topbar-add hidden" id="topbar-add" aria-label="Agregar" title="Agregar" onclick="RCR.crearActivo()"></button>
+      <div style="position:relative;">
       <button class="user-avatar-wrap" id="user-avatar" aria-label="Menú de usuario"
               aria-expanded="false" onclick="RCR.toggleMenu()">
         <span class="user-avatar-ini" id="user-avatar-ini">?</span>
@@ -103,6 +105,7 @@
         <button class="menu-item hidden" id="menu-accesos" role="menuitem"
                 onclick="RCR.ir('accesos'); RCR.cerrarMenu();"></button>
         <button class="menu-item danger" role="menuitem" onclick="RCR.logout()"></button>
+      </div>
       </div>
     </div>
   </header>
@@ -470,9 +473,26 @@ RCR.ir = function (id) {
     fab.onclick = null;
   }
 
+  /* Botón + del topbar (acción "crear" de la sección), junto al avatar */
+  var addBtn = document.getElementById('topbar-add');
+  if (addBtn) {
+    if (mod.crear && (!mod.crear.soloEditor || RCR.puedeEditar())) {
+      addBtn.innerHTML = ico('plus', 20, 2.4);
+      addBtn.title = mod.crear.label || 'Agregar';
+      addBtn.setAttribute('aria-label', mod.crear.label || 'Agregar');
+      RCR._crearAccion = mod.crear.accion;
+      addBtn.classList.remove('hidden');
+    } else {
+      addBtn.classList.add('hidden');
+      RCR._crearAccion = null;
+    }
+  }
+
   RCR.activo = id;
   window.scrollTo({ top: 0, behavior: 'instant' });
 };
+
+RCR.crearActivo = function () { if (typeof RCR._crearAccion === 'function') RCR._crearAccion(); };
 
 /* ==========================================================================
    ENTRADA A LA APLICACIÓN

@@ -352,6 +352,9 @@ html,body{
 .btn-add:hover{background:#405ae8;}
 .btn-add:active{transform:scale(.94);}
 .btn-add svg{width:20px;height:20px;}
+/* + en el topbar, junto al avatar */
+.topbar-right{display:flex;align-items:center;gap:10px;}
+.topbar-add{width:40px;height:40px;min-width:40px;}
 
 /* ==========================================================================
    TARJETAS DE REGISTRO (patrón compartido)
