@@ -753,7 +753,6 @@ RCR.modulos['seguimiento-bienestar'] = {
   icono: 'heart',
   workspace: 'bienestar',
   enNav: true,
-  fab: { icono: 'plus', label: 'Nuevo registro', soloEditor: true, accion: function () { SEG.abrirForm(null); } },
   mount: function (root) { SEG.mount(root); },
   onShow: function () { if (SEG.datos.length) { SEG.poblarColabSel(); SEG.render(); } }
 };
@@ -904,6 +903,7 @@ var SEG = {
         '</div>' +
         '<div style="display:flex;align-items:center;gap:10px;">' +
           '<button class="btn-ico" title="Descargar PDF del colaborador" onclick="SEG.pdf()">' + ico('download', 16) + '</button>' +
+          (RCR.puedeEditar() ? '<button class="btn-add" title="Nuevo registro" onclick="SEG.abrirForm(null)">' + ico('plus', 20, 2.4) + '</button>' : '') +
           '<div class="count-badge" id="seg-count">0</div>' +
         '</div>' +
       '</div>' +
