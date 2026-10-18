@@ -343,12 +343,12 @@ html,body{
 /* Botón de acción primaria del encabezado: círculo índigo (estilo + de recircula) */
 .btn-add{
   width:44px;height:44px;min-width:44px;border-radius:50%;flex-shrink:0;
-  background:var(--blue2);color:#fff;border:none;cursor:pointer;padding:0;
+  background:var(--white);color:var(--blue2);border:1.5px solid var(--border);cursor:pointer;padding:0;
   display:flex;align-items:center;justify-content:center;
-  transition:background .2s,transform .15s;
+  transition:background .2s,border-color .2s,transform .15s;
   -webkit-tap-highlight-color:transparent;
 }
-.btn-add:hover{background:#405ae8;}
+.btn-add:hover{background:#eef2ff;border-color:var(--blue2);}
 .btn-add:active{transform:scale(.94);}
 .btn-add svg{width:20px;height:20px;}
 /* + en el topbar, junto al avatar */
