@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#e8f4fd">
+<title>Encuesta — Redes Con Rostro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="resp-body">
+
+<!-- Página pública para responder una encuesta: sin login ni navegación.
+     Lee Encuestas/{id} y guarda la respuesta en RespuestasEncuesta. -->
+<div class="resp-wrap">
+  <div id="resp-app">
+    <div class="resp-estado">
+      <span class="spinner dark"></span>
+      <h2>Abriendo la encuesta…</h2>
+    </div>
+  </div>
+  <div class="resp-foot">Redes Con Rostro</div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<!-- Firebase (solo Firestore; responder no requiere iniciar sesión) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<script>
+/* RCR mínimo: encuestas.js solo necesita esc() de él */
+window.RCR = { modulos: {} };
+RCR.esc = function (v) {
+  var d = document.createElement('div');
+  d.textContent = (v == null) ? '' : String(v);
+  return d.innerHTML;
+};
+</script>
+<script src="icons.js"></script>
+<script src="encuestas.js"></script>
+
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  var id = params.get('id');
+  var previa = params.get('previa') === '1';
+  var app = document.getElementById('resp-app');
+  var enc = null, db = null, enviando = false;
+
+  function toast(msg) {
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { el.classList.remove('show'); }, 3200);
+  }
+
+  function estado(icono, titulo, texto, extra) {
+    app.innerHTML =
+      '<div class="resp-estado">' +
+        '<div class="resp-estado-ico">' + ico(icono, 26) + '</div>' +
+        '<h2>' + RCR.esc(titulo) + '</h2>' +
+        (texto ? '<p>' + RCR.esc(texto) + '</p>' : '') +
+        (extra || '') +
+      '</div>';
+  }
+
+  /* ── Pintar el formulario ─────────────────────────────────────────────── */
+  function preguntaHtml(q, n) {
+    var name = 'q_' + q.id, campo = '';
+    var a = ENC.attr;
+
+    if (q.tipo === 'corto') {
+      campo = '<input class="form-inp" name="' + name + '" maxlength="500" placeholder="Tu respuesta">';
+    } else if (q.tipo === 'largo') {
+      campo = '<textarea class="form-inp" name="' + name + '" rows="4" maxlength="5000" placeholder="Tu respuesta"></textarea>';
+    } else if (q.tipo === 'unica' || q.tipo === 'multiple') {
+      var tipoInput = q.tipo === 'multiple' ? 'checkbox' : 'radio';
+      campo = '<div class="resp-opciones">' + (q.opciones || []).map(function (o) {
+        return '<label class="resp-opcion"><input type="' + tipoInput + '" name="' + name + '" value="' + a(o) + '">' +
+                 '<span class="resp-marca ' + (q.tipo === 'multiple' ? 'cuadro' : '') + '"></span>' +
+                 '<span class="resp-opcion-txt">' + RCR.esc(o) + '</span></label>';
+      }).join('') + '</div>' +
+      (q.tipo === 'multiple' ? '<div class="resp-ayuda">Puedes elegir varias.</div>' : '');
+    } else if (q.tipo === 'escala') {
+      campo = '<div class="resp-escala">' + [1, 2, 3, 4, 5].map(function (v) {
+        return '<label class="resp-num"><input type="radio" name="' + name + '" value="' + v + '"><span>' + v + '</span></label>';
+      }).join('') + '</div>' +
+      '<div class="resp-escala-ext"><span>Bajo</span><span>Alto</span></div>';
+    } else if (q.tipo === 'sino') {
+      campo = '<div class="resp-sino">' + ['Sí', 'No'].map(function (v) {
+        return '<label class="resp-num"><input type="radio" name="' + name + '" value="' + v + '"><span>' + v + '</span></label>';
+      }).join('') + '</div>';
+    }
+
+    return '' +
+      '<fieldset class="card resp-q" id="rq-' + q.id + '" data-id="' + q.id + '">' +
+        '<legend class="resp-q-txt"><span class="resp-q-n">' + n + '.</span> ' + RCR.esc(q.texto) +
+          (q.requerida ? ' <span class="resp-req" aria-label="obligatoria">*</span>' : '') + '</legend>' +
+        campo +
+        '<div class="resp-err" role="alert"></div>' +
+      '</fieldset>';
+  }
+
+  function pintar() {
+    var ps = enc.preguntas || [];
+    var hayReq = ps.some(function (q) { return q.requerida; });
+    app.innerHTML =
+      (previa ? '<div class="resp-previa">' + ico('eye', 16) + '<span>Vista previa: las respuestas no se guardan.</span></div>' : '') +
+      '<header class="card resp-head">' +
+        '<div class="resp-marca-app">mi redes con rostro</div>' +
+        '<h1>' + RCR.esc(enc.titulo || 'Encuesta') + '</h1>' +
+        (enc.descripcion ? '<p class="resp-desc">' + RCR.esc(enc.descripcion) + '</p>' : '') +
+        (hayReq ? '<p class="resp-nota"><span class="resp-req">*</span> Obligatoria</p>' : '') +
+      '</header>' +
+      '<form id="resp-form" novalidate>' +
+        ps.map(function (q) { return preguntaHtml(q, 0); }).join('') +
+        '<button type="submit" class="btn btn-primary resp-enviar" id="resp-enviar">Enviar respuestas</button>' +
+      '</form>';
+
+    var form = document.getElementById('resp-form');
+    form.addEventListener('change', actualizar);
+    form.addEventListener('input', function (e) {
+      var fs = e.target.closest('.resp-q');
+      if (fs) fs.classList.remove('con-error');
+    });
+    form.addEventListener('submit', function (e) { e.preventDefault(); enviar(); });
+    actualizar();
+  }
+
+  /* ── Leer respuestas y aplicar la lógica condicional ──────────────────── */
+  function leer() {
+    var form = document.getElementById('resp-form'), r = {};
+    (enc.preguntas || []).forEach(function (q) {
+      var name = 'q_' + q.id;
+      if (q.tipo === 'corto' || q.tipo === 'largo') {
+        var el = form.elements[name];
+        r[q.id] = el ? el.value.trim() : '';
+      } else if (q.tipo === 'multiple') {
+        r[q.id] = Array.prototype.slice.call(form.querySelectorAll('input[name="' + name + '"]:checked'))
+          .map(function (x) { return x.value; });
+      } else {
+        var sel = form.querySelector('input[name="' + name + '"]:checked');
+        r[q.id] = sel ? (q.tipo === 'escala' ? Number(sel.value) : sel.value) : '';
+      }
+    });
+    return r;
+  }
+
+  function vacio(v) { return v == null || v === '' || (Array.isArray(v) && !v.length); }
+
+  function actualizar() {
+    var r = leer();
+    var vis = ENC.visibles(enc.preguntas, r);
+    var n = 0;
+    (enc.preguntas || []).forEach(function (q) {
+      var fs = document.getElementById('rq-' + q.id);
+      if (!fs) return;
+      var ver = !!vis[q.id];
+      fs.classList.toggle('hidden', !ver);
+      fs.disabled = !ver;
+      if (ver) fs.querySelector('.resp-q-n').textContent = (++n) + '.';
+    });
+    return { r: r, vis: vis };
+  }
+
+  /* ── Enviar ───────────────────────────────────────────────────────────── */
+  async function enviar() {
+    if (enviando) return;
+    var st = actualizar();
+    var primero = null;
+
+    (enc.preguntas || []).forEach(function (q) {
+      var fs = document.getElementById('rq-' + q.id);
+      var falta = st.vis[q.id] && q.requerida && vacio(st.r[q.id]);
+      fs.classList.toggle('con-error', falta);
+      fs.querySelector('.resp-err').textContent = falta ? 'Esta pregunta es obligatoria' : '';
+      if (falta && !primero) primero = fs;
+    });
+    if (primero) {
+      primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast('Faltan preguntas obligatorias');
+      return;
+    }
+
+    /* Solo se guardan las preguntas visibles y respondidas */
+    var respuestas = {};
+    (enc.preguntas || []).forEach(function (q) {
+      if (st.vis[q.id] && !vacio(st.r[q.id])) respuestas[q.id] = st.r[q.id];
+    });
+
+    if (previa) { gracias(true); return; }
+
+    enviando = true;
+    var btn = document.getElementById('resp-enviar');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      await db.collection(ENC.COL_RESP).add({
+        encuestaId: id,
+        respuestas: respuestas,
+        enviado: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      gracias(false);
+    } catch (e) {
+      console.error('responder-encuesta:', e);
+      toast('No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.');
+      btn.disabled = false; btn.textContent = 'Enviar respuestas';
+    }
+    enviando = false;
+  }
+
+  function gracias(esPrevia) {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    estado('check', esPrevia ? 'Vista previa completada' : '¡Gracias por responder!',
+      esPrevia ? 'En el enlace real, aquí se habría guardado la respuesta.' : 'Tu respuesta quedó registrada.',
+      '<button class="btn btn-glass resp-otra" onclick="location.reload()">Enviar otra respuesta</button>');
+  }
+
+  /* ── Arranque ─────────────────────────────────────────────────────────── */
+  (async function () {
+    if (!id) { estado('alert', 'Enlace incompleto', 'Pide que te reenvíen el enlace de la encuesta.'); return; }
+    try {
+      firebase.initializeApp({
+        apiKey: "AIzaSyB4-Agk4jG2HFMnvLQyB1q4vapZQ01Bh4o",
+        authDomain: "redes-con-rostro.firebaseapp.com",
+        projectId: "redes-con-rostro",
+        storageBucket: "redes-con-rostro.firebasestorage.app",
+        messagingSenderId: "138746747295",
+        appId: "1:138746747295:web:1ceb9c60d4a4073e6885aa"
+      });
+      db = firebase.firestore();
+      var snap = await db.collection(ENC.COL).doc(id).get();
+      if (!snap.exists) { estado('alert', 'Esta encuesta ya no está disponible', 'Puede que la hayan eliminado.'); return; }
+      enc = snap.data();
+      document.title = (enc.titulo || 'Encuesta') + ' — Redes Con Rostro';
+      if (enc.estado === 'cerrada' && !previa) {
+        estado('clock', enc.titulo || 'Encuesta', 'Esta encuesta ya no recibe respuestas.');
+        return;
+      }
+      if (!(enc.preguntas || []).length) { estado('inbox', enc.titulo || 'Encuesta', 'Esta encuesta todavía no tiene preguntas.'); return; }
+      pintar();
+    } catch (e) {
+      console.error('responder-encuesta:', e);
+      estado('alert', 'No se pudo abrir la encuesta', 'Revisa tu conexión o pide que te reenvíen el enlace.');
+    }
+  })();
+})();
+</script>
+</body>
+</html>

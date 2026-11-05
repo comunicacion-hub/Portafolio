@@ -31,6 +31,11 @@ window.ICONS = {
     '<path d="M12 2l7.5 3.4V11c0 4.7-3.1 8.6-7.5 10-4.4-1.4-7.5-5.3-7.5-10V5.4z"/>' +
     '<path d="M9.3 12.2l1.9 1.9 3.6-3.7"/>',
 
+  encuesta:
+    '<rect x="5" y="4" width="14" height="18" rx="2"/>' +
+    '<path d="M9 2.5h6v3H9z"/>' +
+    '<path d="M8.5 11l1.2 1.2 2.1-2.2M14 11h2M8.5 16.5l1.2 1.2 2.1-2.2M14 16.5h2"/>',
+
   /* ── Acciones ─────────────────────────────────────────────────────── */
   plus:        '<path d="M12 5v14M5 12h14"/>',
   x:           '<path d="M18 6L6 18M6 6l12 12"/>',
@@ -57,6 +62,11 @@ window.ICONS = {
   chevronRight:'<polyline points="9 18 15 12 9 6"/>',
   chevronLeft: '<polyline points="15 18 9 12 15 6"/>',
   chevronDown: '<polyline points="6 9 12 15 18 9"/>',
+  chevronUp:   '<polyline points="18 15 12 9 6 15"/>',
+  copy:        '<rect x="9" y="9" width="12" height="12" rx="2"/>' +
+               '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  branch:      '<circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="9" r="2.2"/>' +
+               '<path d="M6 7.2v9.6M18 11.2c0 3.5-4.5 3.2-10.4 6.6"/>',
 
   /* ── Datos personales / CV ────────────────────────────────────────── */
   user:        '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
