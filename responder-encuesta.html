@@ -27,12 +27,7 @@
     <span class="rg-aviso-ico" id="rg-aviso-ico"></span>
     <span><strong>Sin conexión.</strong> Puedes seguir respondiendo: las respuestas se enviarán automáticamente cuando haya conexión.</span>
   </div>
-  <div id="resp-app">
-    <div class="resp-cargando" role="status">
-      <span class="spinner dark"></span>
-      <span>Abriendo la encuesta…</span>
-    </div>
-  </div>
+  <div id="resp-app" aria-busy="true"></div>
   <div class="resp-foot">Redes Con Rostro</div>
 </div>
 
@@ -80,7 +75,11 @@ RCR.esc = function (v) {
     toast._t = setTimeout(function () { el.classList.remove('show'); }, 3200);
   }
 
+  /* Mensaje a pantalla completa (gracias, guardada, encuesta cerrada…):
+     sin tarjeta y centrado en la pantalla */
   function estado(icono, titulo, texto, extra, clase) {
+    app.removeAttribute('aria-busy');
+    app.className = 'con-estado';
     app.innerHTML =
       '<div class="resp-estado ' + (clase || '') + '">' +
         '<div class="resp-estado-ico">' + ico(icono, 28, 2.2) + '</div>' +
@@ -112,7 +111,6 @@ RCR.esc = function (v) {
     var file = input.files && input.files[0];
     input.value = '';
     if (!file) return;
-    toast('Preparando la foto…');
     ENC.comprimirImagen(file, ENC.IMG_RESP).then(function (url) {
       fotos[qid] = url;
       pintarFoto(qid);
@@ -230,6 +228,8 @@ RCR.esc = function (v) {
   }
 
   function pintar() {
+    app.removeAttribute('aria-busy');
+    app.className = '';
     var ps = enc.preguntas || [];
     pags = armarPaginas(ps);
     var varias = pags.length > 1;
@@ -458,7 +458,7 @@ RCR.esc = function (v) {
 
     enviando = true;
     var btn = document.getElementById('resp-enviar');
-    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+    btn.disabled = true; btn.innerHTML = '<span>Enviando…</span>';
 
     /* La respuesta queda en la cola de Firestore (en el teléfono) aunque no
        haya internet; se envía sola cuando vuelve la conexión. */
@@ -533,7 +533,7 @@ RCR.esc = function (v) {
     cola.hidden = !n;
     if (!n) return;
     cola.classList.toggle('enviando', !sin);
-    document.getElementById('rg-cola-ico').innerHTML = sin ? ico('upload', 20, 2.2) : '<span class="spinner"></span>';
+    document.getElementById('rg-cola-ico').innerHTML = ico('upload', 20, 2.2);
     document.getElementById('rg-cola-n').textContent = n;
     var t = n + (n === 1 ? ' respuesta guardada' : ' respuestas guardadas') +
       (sin ? ' en este teléfono. Se enviarán automáticamente cuando haya conexión.' : '. Enviando…');

@@ -1801,7 +1801,7 @@ a:focus-visible,
 #resp-app{flex:1;}
 
 /* Superficies de vidrio */
-.resp-head,.resp-sec,.resp-q,.rg-barra,.resp-estado,.resp-previa{
+.resp-head,.resp-sec,.resp-q,.rg-barra,.resp-previa{
   background:var(--g-glass);
   backdrop-filter:blur(22px) saturate(170%);-webkit-backdrop-filter:blur(22px) saturate(170%);
   border:1px solid var(--g-borde);
@@ -1842,7 +1842,6 @@ a:focus-visible,
 .rg-cola:active{transform:scale(.94);}
 .rg-cola.enviando{background:var(--g-acento);}
 .rg-cola-ico{display:flex;}
-.rg-cola-ico .spinner{width:20px;height:20px;border-width:2.5px;}
 .rg-cola-n{
   position:absolute;top:-4px;right:-4px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;
   background:#ff3b30;color:#fff;font-size:12px;font-weight:700;line-height:22px;text-align:center;
@@ -2045,14 +2044,11 @@ textarea.rg-campo{resize:vertical;min-height:92px;line-height:1.45;}
   color:#3730a3;font-size:13px;font-weight:600;
 }
 
-/* Estados: cargando, gracias, guardada sin conexión, errores */
-/* Cargando: sin tarjeta, centrado en la pantalla */
-.resp-cargando{
-  min-height:72vh;min-height:72dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
-  font-size:13.5px;color:var(--g-gris);
-}
-.resp-estado{margin-top:7vh;text-align:center;padding:30px 22px 26px;border-radius:22px;color:var(--g-gris);}
-.resp-estado .spinner{margin:0 auto 14px;}
+/* Mensajes a pantalla completa (gracias, guardada, errores): sin tarjeta,
+   centrados en el espacio disponible. Mientras carga, la pantalla queda
+   vacía (sin indicador). */
+#resp-app.con-estado{display:flex;flex-direction:column;justify-content:center;}
+.resp-estado{text-align:center;padding:24px 8px;color:var(--g-gris);}
 .resp-estado-ico{
   width:56px;height:56px;border-radius:50%;margin:0 auto 14px;
   background:rgba(80,108,255,.1);color:var(--g-acento);display:flex;align-items:center;justify-content:center;
