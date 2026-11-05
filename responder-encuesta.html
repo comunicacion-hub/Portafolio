@@ -139,7 +139,11 @@ RCR.esc = function (v) {
                  '<span class="resp-marca ' + (q.tipo === 'multiple' ? 'cuadro' : '') + '"></span>' +
                  '<span class="resp-opcion-txt">' + RCR.esc(o) + '</span></label>';
       }).join('') + '</div>' +
-      (q.tipo === 'multiple' ? '<div class="resp-ayuda">Puedes elegir varias.</div>' : '');
+      (q.tipo === 'multiple'
+        ? '<div class="resp-ayuda" id="ra-' + q.id + '">' +
+            (ENC.maxValido(q) ? 'Puedes elegir hasta ' + ENC.maxValido(q) + (ENC.maxValido(q) === 1 ? ' opción.' : ' opciones.') : 'Puedes elegir varias.') +
+          '</div>'
+        : '');
     } else if (q.tipo === 'escala') {
       campo = '<div class="resp-escala">' + [1, 2, 3, 4, 5].map(function (v) {
         return '<label class="resp-num"><input type="radio" name="' + name + '" value="' + v + '"><span>' + v + '</span></label>';
@@ -222,6 +226,19 @@ RCR.esc = function (v) {
       if (ENC.esSeccion(q)) return;
       fs.disabled = !ver;
       if (ver) fs.querySelector('.resp-q-n').textContent = (++n) + '.';
+      /* Opción múltiple con tope: al llegar al máximo se bloquean las demás */
+      var max = ENC.maxValido(q);
+      if (max) {
+        var lleno = (r[q.id] || []).length >= max;
+        fs.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+          cb.disabled = lleno && !cb.checked;
+          cb.closest('.resp-opcion').classList.toggle('bloqueada', cb.disabled);
+        });
+        var ay = document.getElementById('ra-' + q.id);
+        if (ay) ay.textContent = lleno
+          ? 'Ya elegiste ' + max + (max === 1 ? ' opción' : ' opciones') + '. Quita una para cambiarla.'
+          : 'Puedes elegir hasta ' + max + (max === 1 ? ' opción.' : ' opciones.');
+      }
     });
     return { r: r, vis: vis };
   }
@@ -236,13 +253,18 @@ RCR.esc = function (v) {
       var fs = document.getElementById('rq-' + q.id);
       var falta = st.vis[q.id] && q.requerida && vacio(st.r[q.id]);
       var malNum = st.vis[q.id] && q.tipo === 'numero' && !vacio(st.r[q.id]) && isNaN(ENC.leerNumero(st.r[q.id]));
-      fs.classList.toggle('con-error', falta || malNum);
-      fs.querySelector('.resp-err').textContent = falta ? 'Esta pregunta es obligatoria' : (malNum ? 'Escribe solo un número (por ejemplo 12 o 3,5)' : '');
-      if ((falta || malNum) && !primero) primero = fs;
+      var max = ENC.maxValido(q);
+      var demas = st.vis[q.id] && max && (st.r[q.id] || []).length > max;
+      fs.classList.toggle('con-error', !!(falta || malNum || demas));
+      fs.querySelector('.resp-err').textContent = falta ? 'Esta pregunta es obligatoria'
+        : (malNum ? 'Escribe solo un número (por ejemplo 12 o 3,5)'
+        : (demas ? 'Elige como máximo ' + max : ''));
+      if ((falta || malNum || demas) && !primero) primero = fs;
     });
     if (primero) {
       primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      toast(primero.querySelector('.resp-err').textContent.indexOf('número') >= 0 ? 'Revisa los números' : 'Faltan preguntas obligatorias');
+      var msg = primero.querySelector('.resp-err').textContent;
+      toast(msg.indexOf('número') >= 0 ? 'Revisa los números' : (msg.indexOf('máximo') >= 0 ? msg : 'Faltan preguntas obligatorias'));
       return;
     }
 

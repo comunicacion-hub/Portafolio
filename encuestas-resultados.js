@@ -320,7 +320,10 @@ var RES = {
       var k = ps.findIndex(function (p) { return p.id === c.pregunta; });
       if (k >= 0) partes.push('solo si P' + (k + 1) + (ps[k].tipo === 'multiple' ? ' incluye ' : ' = ') + '«' + c.valor + '»');
     }
-    if (s.q.tipo === 'multiple') partes.push('podían elegir varias');
+    if (s.q.tipo === 'multiple') {
+      var max = ENC.maxValido(s.q);
+      partes.push(max ? 'podían elegir hasta ' + max : 'podían elegir varias');
+    }
     return partes.join(' · ');
   },
 

@@ -702,6 +702,7 @@ var ENC = {
         return '' +
         '<section class="eb-sec" id="encq-' + q.id + '">' +
           '<div class="eb-sec-head">' +
+            ENC.asaHtml(i, 'sección ' + ks) +
             '<span class="eb-sec-tag">' + ico('seccion', 14) + 'Sección ' + ks + '</span>' +
             '<span class="eb-flex"></span>' +
             ENC.botonesApoyo(i) +
@@ -754,6 +755,7 @@ var ENC = {
       return '' +
       '<article class="eb-q" id="encq-' + q.id + '">' +
         '<div class="eb-q-head">' +
+          ENC.asaHtml(i, 'pregunta ' + kq) +
           '<span class="eb-num">' + kq + '</span>' +
           '<label class="eb-select">' +
             '<select aria-label="Tipo de pregunta" onchange="ENC.setTipo(' + i + ',this.value)">' +
@@ -775,12 +777,112 @@ var ENC = {
           '<label class="eb-fila"><span class="eb-fila-txt">Obligatoria</span>' +
             '<span class="eb-switch"><input type="checkbox" role="switch"' + (q.requerida ? ' checked' : '') +
               ' onchange="ENC.b.preguntas[' + i + '].requerida=this.checked"><i></i></span></label>' +
+          (q.tipo === 'multiple' ? ENC.maxHtml(q, i, chev) : '') +
           '<div class="eb-cond" id="encc-' + q.id + '">' + ENC.condHtml(i) + '</div>' +
         '</div>' +
       '</article>';
     }).join('');
 
     box.querySelectorAll('.eb-autoalto').forEach(ENC.autoAlto);
+  },
+
+  /* ── Opción múltiple: cuántas se pueden elegir ─────────────────────────── */
+  maxValido: function (q) {
+    var n = parseInt(q && q.maxElegir, 10);
+    return (q && q.tipo === 'multiple' && n >= 1 && n < (q.opciones || []).length) ? n : 0;
+  },
+
+  maxHtml: function (q, i, chev) {
+    var n = ENC.maxValido(q), tope = q.opciones.length - 1, ops = '<option value="">Sin límite</option>';
+    for (var k = 1; k <= tope; k++) {
+      ops += '<option value="' + k + '"' + (k === n ? ' selected' : '') + '>Hasta ' + k + '</option>';
+    }
+    return '<div class="eb-fila"><span class="eb-fila-txt">Máximo de respuestas</span>' +
+      '<label class="eb-select"><select aria-label="Cuántas opciones se pueden elegir" ' +
+        'onchange="ENC.b.preguntas[' + i + '].maxElegir=this.value?Number(this.value):null">' + ops + '</select>' + chev + '</label>' +
+    '</div>';
+  },
+
+  /* ── Arrastrar una tarjeta desde su esquina (mouse y dedo) ─────────────── */
+  asaHtml: function (i, nombre) {
+    return '<button class="eb-asa" type="button" title="Arrastra para mover" aria-label="Mover ' + nombre + ' (o usa las flechas del teclado)" ' +
+      'onpointerdown="ENC.asaInicio(event,' + i + ')" onkeydown="ENC.asaTecla(event,' + i + ')">' + ico('grip', 16) + '</button>';
+  },
+
+  /* Con el teclado: flecha arriba / abajo mueve la tarjeta */
+  asaTecla: function (ev, i) {
+    var d = ev.key === 'ArrowUp' ? -1 : (ev.key === 'ArrowDown' ? 1 : 0);
+    if (!d) return;
+    ev.preventDefault();
+    var id = ENC.b.preguntas[i].id;
+    ENC.moverA(i, i + d);
+    var asa = document.querySelector('#encq-' + id + ' .eb-asa');
+    if (asa) { asa.focus(); asa.closest('.eb-q, .eb-sec').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  },
+
+  asaInicio: function (ev, i) {
+    if (ev.button > 0) return;
+    ev.preventDefault();
+    var asa = ev.currentTarget;
+    var card = asa.closest('.eb-q, .eb-sec');
+    var box = document.getElementById('enc-preguntas');
+    var scroller = document.getElementById('subvista-body');
+    if (!card || !box) return;
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    try { asa.setPointerCapture(ev.pointerId); } catch (e) { /* sin captura */ }
+
+    var d = { card: card, box: box, sc: scroller, y0: ev.clientY, top0: card.offsetTop, scroll0: scroller ? scroller.scrollTop : 0, y: ev.clientY };
+    ENC._arr = d;
+    card.classList.add('levantada');
+    box.classList.add('ordenando');
+
+    var pintar = function () {
+      var dy = d.y - d.y0 + (d.sc ? d.sc.scrollTop - d.scroll0 : 0) - (card.offsetTop - d.top0);
+      card.style.transform = 'translateY(' + dy + 'px) scale(1.015)';
+    };
+    var mover = function (e) {
+      d.y = e.clientY;
+      /* Intercambia con la vecina cuando el puntero pasa su mitad */
+      var prev = card.previousElementSibling, next = card.nextElementSibling;
+      if (prev && d.y < prev.getBoundingClientRect().top + prev.offsetHeight / 2) box.insertBefore(card, prev);
+      else if (next && d.y > next.getBoundingClientRect().top + next.offsetHeight / 2) box.insertBefore(next, card);
+      pintar();
+    };
+    /* Desplaza la pantalla si se arrastra cerca del borde */
+    var auto = function () {
+      if (ENC._arr !== d) return;
+      if (d.sc) {
+        var alto = window.innerHeight, v = 0;
+        if (d.y < 110) v = -Math.ceil((110 - d.y) / 8);
+        else if (d.y > alto - 110) v = Math.ceil((d.y - (alto - 110)) / 8);
+        if (v) { d.sc.scrollTop += v; mover({ clientY: d.y }); }
+      }
+      d.raf = requestAnimationFrame(auto);
+    };
+    var soltar = function () {
+      asa.removeEventListener('pointermove', mover);
+      asa.removeEventListener('pointerup', soltar);
+      asa.removeEventListener('pointercancel', soltar);
+      cancelAnimationFrame(d.raf);
+      ENC._arr = null;
+      card.style.transform = '';
+      card.classList.remove('levantada');
+      box.classList.remove('ordenando');
+      /* Nuevo orden según el DOM */
+      var orden = Array.prototype.map.call(box.children, function (el) { return el.id.replace(/^encq-/, ''); });
+      var porId = {};
+      ENC.b.preguntas.forEach(function (q) { porId[q.id] = q; });
+      var nuevo = orden.map(function (id) { return porId[id]; }).filter(Boolean);
+      if (nuevo.length !== ENC.b.preguntas.length) { ENC.renderPreguntas(); return; }
+      var cambio = nuevo.some(function (q, k) { return q !== ENC.b.preguntas[k]; });
+      ENC.b.preguntas = nuevo;
+      if (cambio) ENC.trasMover();
+      else ENC.renderPreguntas();
+    };
+    asa.addEventListener('pointermove', mover);
+    asa.addEventListener('pointerup', soltar);
+    asa.addEventListener('pointercancel', soltar);
+    d.raf = requestAnimationFrame(auto);
   },
 
   /* ── Imagen y enlace de apoyo (los ve quien responde) ──────────────────── */
@@ -1013,6 +1115,12 @@ var ENC = {
     var ps = ENC.b.preguntas;
     if (a < 0 || a >= ps.length || a === de) return;
     ps.splice(a, 0, ps.splice(de, 1)[0]);
+    ENC.trasMover();
+  },
+
+  /* Después de cambiar el orden: quita condiciones que quedaron inválidas */
+  trasMover: function () {
+    var ps = ENC.b.preguntas;
     var antes = JSON.stringify(ps.map(function (p) { return p.condicion; }));
     ENC.limpiarCondiciones();
     if (JSON.stringify(ps.map(function (p) { return p.condicion; })) !== antes) {
@@ -1095,6 +1203,7 @@ var ENC = {
         var x = ENC.esSeccion(q)
           ? { id: q.id, tipo: 'seccion', texto: q.texto, descripcion: q.descripcion, condicion: cond }
           : { id: q.id, tipo: q.tipo, texto: q.texto, requerida: !!q.requerida, opciones: q.opciones, condicion: cond };
+        if (ENC.maxValido(q)) x.maxElegir = ENC.maxValido(q);
         if (q.apoyoImg && ENC.esImagen(q.apoyoImg)) x.apoyoImg = q.apoyoImg;
         if (q.enlace) x.enlace = { url: q.enlace.url, texto: q.enlace.texto };
         return x;

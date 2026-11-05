@@ -1498,6 +1498,24 @@ a:focus-visible,
 }
 .eb-q-head,.eb-sec-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
 .eb-flex{flex:1;}
+/* Asa para arrastrar la tarjeta (esquina superior izquierda) */
+.eb-asa{
+  width:26px;height:34px;margin-left:-6px;border-radius:9px;flex-shrink:0;
+  border:none;background:transparent;color:#b0b4bc;cursor:grab;
+  display:flex;align-items:center;justify-content:center;
+  touch-action:none;-webkit-tap-highlight-color:transparent;
+  transition:background .15s,color .15s;
+}
+.eb-asa:hover{background:var(--eb-relleno);color:var(--blue2);}
+.eb-asa:active{cursor:grabbing;}
+.eb-asa:focus-visible{outline:2px solid var(--blue2);outline-offset:1px;}
+.eb-q.levantada,.eb-sec.levantada{
+  position:relative;z-index:20;transition:none;
+  box-shadow:0 22px 50px rgba(28,39,76,.22),0 4px 12px rgba(28,39,76,.08),inset 0 1px 0 rgba(255,255,255,.9);
+  border-color:rgba(80,108,255,.4);cursor:grabbing;
+}
+#enc-preguntas.ordenando{user-select:none;-webkit-user-select:none;}
+#enc-preguntas.ordenando .eb-q:not(.levantada),#enc-preguntas.ordenando .eb-sec:not(.levantada){transition:transform .2s;}
 .eb-num{
   width:28px;height:28px;border-radius:50%;flex-shrink:0;
   background:var(--grad-b);color:#fff;font-size:13px;font-weight:700;
@@ -1784,6 +1802,8 @@ a:focus-visible,
 .resp-opcion input:focus-visible ~ .resp-marca,
 .resp-num input:focus-visible + span{outline:2px solid var(--blue2);outline-offset:2px;}
 .resp-opcion-txt{font-size:14.5px;line-height:1.35;}
+.resp-opcion.bloqueada{opacity:.45;cursor:not-allowed;}
+.resp-opcion.bloqueada:hover{border-color:var(--border);}
 
 .resp-escala{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
 .resp-sino{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:320px;}
