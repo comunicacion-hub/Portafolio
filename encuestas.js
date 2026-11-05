@@ -267,14 +267,13 @@ var ENC = {
   },
 
   /* Lee las encuestas una sola vez (la usan Encuestas, Resultados y Datos).
-     Cada persona ve las que creó y las que le compartieron; el Admin, todas. */
+     Cada persona ve SOLO las que creó y las que le compartieron por correo.
+     Tener acceso al perfil "encuestas" (o ser Admin) no muestra las ajenas. */
   asegurarDatos: function () {
     if (ENC.cargado) return Promise.resolve();
     if (!ENC._leyendo) {
       var col = RCR.db.collection(ENC.COL), yo = RCR.user.correo;
-      var consultas = RCR.esAdmin()
-        ? [col.get()]
-        : [col.where('creadoPor', '==', yo).get(), col.where('compartidoCon', 'array-contains', yo).get()];
+      var consultas = [col.where('creadoPor', '==', yo).get(), col.where('compartidoCon', 'array-contains', String(yo).toLowerCase()).get()];
       ENC._leyendo = Promise.all(consultas).then(function (snaps) {
         var porId = {};
         snaps.forEach(function (snap) {
@@ -298,15 +297,15 @@ var ENC = {
   },
 
   /* ── Permisos por encuesta ─────────────────────────────────────────────
-     propietario: quien la creó · editor / lector: a quien se la compartieron
-     admin: el rol Admin de Mi RCR (ve y edita todas)                       */
+     propietario: quien la creó · editor / lector: a quien se la compartieron.
+     Nadie más la ve, tampoco el rol Admin de Mi RCR.                       */
   rol: function (e) {
     if (!e || !RCR.user) return null;
-    var yo = RCR.user.correo;
-    if (e.creadoPor === yo) return 'propietario';
-    var c = (e.compartido || []).find(function (x) { return x.correo === yo; });
+    var yo = String(RCR.user.correo || '').toLowerCase();
+    if (String(e.creadoPor || '').toLowerCase() === yo) return 'propietario';
+    var c = (e.compartido || []).find(function (x) { return String(x.correo || '').toLowerCase() === yo; });
     if (c) return c.rol === 'editor' ? 'editor' : 'lector';
-    return RCR.esAdmin() ? 'admin' : null;
+    return null;
   },
   puedeEditarEnc: function (e) {
     var r = ENC.rol(e);
@@ -412,7 +411,7 @@ var ENC = {
         ? ' · De ' + RCR.esc(e.creadoPorNombre || e.creadoPor) : '';
       var nCompartido = (e.compartido || []).length;
       return '' +
-      '<div class="card enc-card"' + (editable ? ' onclick="ENC.abrirPreguntas(\'' + id + '\')"' : '') + '>' +
+      '<div class="card enc-card" onclick="' + (editable ? 'ENC.abrirPreguntas' : 'ENC.previa') + '(\'' + id + '\')">' +
         '<div class="card-top">' +
           '<div class="card-badge-soft">' + ico('encuesta', 22) + '</div>' +
           '<div class="card-info">' +
@@ -428,13 +427,18 @@ var ENC = {
             (nResp == null ? '…' : nResp + (nResp === 1 ? ' respuesta' : ' respuestas')) + '</span>' +
           (rol === 'editor' || rol === 'lector'
             ? '<span class="chip enc-chip-rol">' + ico('users', 13) + ENC.ROL_LABEL[rol] + '</span>' : '') +
-          (nCompartido && (rol === 'propietario' || rol === 'admin')
+          (nCompartido && rol === 'propietario'
             ? '<span class="chip neutro">' + ico('users', 13) + 'Compartida con ' + nCompartido + '</span>' : '') +
         '</div>' +
         '<div class="card-icobar" onclick="event.stopPropagation();">' +
           '<button class="btn-ico" title="Compartir enlace" aria-label="Compartir enlace" onclick="ENC.compartir(\'' + id + '\')">' + ico('link', 17) + '</button>' +
           (editable
-            ? '<button class="btn-ico" title="Preguntas" aria-label="Preguntas" onclick="ENC.abrirPreguntas(\'' + id + '\')">' + ico('help', 17) + '</button>' : '') +
+            ? '<button class="btn-ico" title="Preguntas" aria-label="Editar preguntas" onclick="ENC.abrirPreguntas(\'' + id + '\')">' + ico('help', 17) + '</button>'
+            : '<button class="btn-ico" title="Ver preguntas" aria-label="Ver preguntas" onclick="ENC.previa(\'' + id + '\')">' + ico('eye', 17) + '</button>') +
+          (editable && ENC.compartirPersonas
+            ? '<button class="btn-ico" title="Compartir con personas" aria-label="Compartir con personas" onclick="ENC.compartirPersonas(\'' + id + '\')">' + ico('users', 17) + '</button>' : '') +
+          (window.RES && RCR.puedeVerSeccion('encuestas', 'resultados-encuesta')
+            ? '<button class="btn-ico" title="Resultados" aria-label="Ver resultados" onclick="RES.abrir(\'' + id + '\')">' + ico('barChart', 17) + '</button>' : '') +
           (ENC.puedeBorrarEnc(e)
             ? '<button class="btn-ico danger" title="Eliminar" aria-label="Eliminar" onclick="ENC.pedirBorrar(\'' + id + '\')">' + ico('trash', 16) + '</button>' : '') +
         '</div>' +

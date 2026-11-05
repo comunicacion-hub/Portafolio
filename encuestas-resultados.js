@@ -2,7 +2,7 @@
    Mi RCR — Perfil "encuestas" · Resultados (dashboard consolidado)
    ──────────────────────────────────────────────────────────────────────────
    · Un recuadro con un menú desplegable para elegir la encuesta (las mismas
-     que la persona ve en Encuestas: las suyas; el Admin, todas).
+     que la persona ve en Encuestas: las suyas y las compartidas con ella).
    · Indicadores (respuestas, preguntas, última respuesta), respuestas por día
      y un gráfico por pregunta. Las preguntas abiertas muestran sus textos.
    · Cada gráfico se descarga por separado como imagen PNG (se dibuja en un
