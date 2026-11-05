@@ -22,6 +22,11 @@
        el teléfono hasta que vuelve la conexión (persistencia de Firestore). -->
 <div class="rg-fondo" aria-hidden="true"></div>
 <div class="resp-wrap">
+  <!-- Aviso cuando no hay internet -->
+  <div class="rg-aviso" id="rg-aviso" role="status" hidden>
+    <span class="rg-aviso-ico" id="rg-aviso-ico"></span>
+    <span><strong>Sin conexión.</strong> Puedes seguir respondiendo: las respuestas se enviarán automáticamente cuando haya conexión.</span>
+  </div>
   <div id="resp-app">
     <div class="resp-estado">
       <span class="spinner dark"></span>
@@ -30,6 +35,12 @@
   </div>
   <div class="resp-foot">Redes Con Rostro</div>
 </div>
+
+<!-- Ícono flotante: respuestas guardadas en este teléfono que faltan enviar -->
+<button type="button" class="rg-cola" id="rg-cola" hidden aria-live="polite">
+  <span class="rg-cola-ico" id="rg-cola-ico"></span>
+  <span class="rg-cola-n" id="rg-cola-n">0</span>
+</button>
 
 <div id="toast" role="status" aria-live="polite"></div>
 
@@ -123,7 +134,6 @@ RCR.esc = function (v) {
 
     if (ENC.esSeccion(q)) {
       return '<div class="resp-sec" id="rq-' + q.id + '">' +
-        '<div class="resp-sec-tag">' + ico('seccion', 14) + 'Sección</div>' +
         '<h2>' + RCR.esc(q.texto) + '</h2>' +
         (q.descripcion ? '<p>' + RCR.esc(q.descripcion) + '</p>' : '') +
         ENC.apoyoPublico(q) +
@@ -223,25 +233,20 @@ RCR.esc = function (v) {
     var ps = enc.preguntas || [];
     pags = armarPaginas(ps);
     var hayReq = ps.some(function (q) { return q.requerida; });
-    var nPreg = ENC.soloPreguntas(ps).length;
     var varias = pags.length > 1;
 
     var hero =
       '<header class="resp-head">' +
-        '<div class="resp-marca-app">mi redes con rostro</div>' +
+        '<div class="resp-marca-app">Redes Con Rostro</div>' +
         '<h1>' + RCR.esc(enc.titulo || 'Encuesta') + '</h1>' +
         (enc.descripcion ? '<p class="resp-desc">' + RCR.esc(enc.descripcion) + '</p>' : '') +
-        '<div class="resp-head-meta">' +
-          '<span>' + ico('encuesta', 14) + nPreg + (nPreg === 1 ? ' pregunta' : ' preguntas') + '</span>' +
-          (hayReq ? '<span><b class="resp-req">*</b> Obligatoria</span>' : '') +
-        '</div>' +
+        (hayReq ? '<p class="resp-nota"><b class="resp-req">*</b> Pregunta obligatoria</p>' : '') +
       '</header>';
 
     app.innerHTML =
       (previa ? '<div class="resp-previa">' + ico('eye', 16) + '<span>Vista previa: las respuestas no se guardan.</span></div>' : '') +
       '<div class="rg-barra" id="rg-barra">' +
         '<span class="rg-barra-tit">' + RCR.esc(enc.titulo || 'Encuesta') + '</span>' +
-        '<span class="rg-red hidden" id="rg-red"></span>' +
         (varias ? '<span class="rg-paso" id="rg-paso"></span>' : '') +
         (varias ? '<div class="rg-prog" aria-hidden="true"><i id="rg-prog-fill"></i></div>' : '') +
       '</div>' +
@@ -423,6 +428,7 @@ RCR.esc = function (v) {
 
   /* ── Enviar (también sin conexión) ────────────────────────────────────── */
   var CLAVE_PEND = 'rcr-enc-pend-';
+  var enCola = {};   // respuestas de esta visita que quedaron esperando conexión
   function pendientes() {
     try { return JSON.parse(localStorage.getItem(CLAVE_PEND + id) || '[]'); } catch (e) { return []; }
   }
@@ -470,6 +476,11 @@ RCR.esc = function (v) {
     guardarPend(pendientes().concat([ref.id]));
     escritura.then(function () {
       guardarPend(pendientes().filter(function (x) { return x !== ref.id; }));
+      /* Si había quedado en cola y ya no falta ninguna, se avisa */
+      if (enCola[ref.id]) {
+        delete enCola[ref.id];
+        if (!Object.keys(enCola).length && !pendientes().length) toast('Listo: se enviaron las respuestas guardadas');
+      }
     }, function (e) {
       console.error('responder-encuesta:', e);
       guardarPend(pendientes().filter(function (x) { return x !== ref.id; }));
@@ -481,6 +492,7 @@ RCR.esc = function (v) {
         escritura.then(function () { return 'ok'; }),
         new Promise(function (ok) { setTimeout(function () { ok('cola'); }, espera); })
       ]);
+      if (res === 'cola') enCola[ref.id] = true;
       gracias(res);
     } catch (e) {
       toast('No se pudo enviar: la encuesta puede estar cerrada. Inténtalo de nuevo.');
@@ -492,52 +504,67 @@ RCR.esc = function (v) {
 
   function gracias(modo) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    var otra = '<button class="rg-btn rg-btn-sec resp-otra" onclick="location.reload()">' + ico('plus', 16, 2.4) + '<span>Enviar otra respuesta</span></button>';
+    /* "Llenar otra" no recarga la página: así funciona igual sin conexión */
+    var otra = '<button class="rg-btn rg-btn-pri resp-otra" onclick="window.__nuevaRespuesta()">' + ico('plus', 16, 2.4) + '<span>Llenar otra respuesta</span></button>';
     if (modo === 'previa') {
       estado('check', 'Vista previa completada', 'En el enlace real, aquí se habría guardado la respuesta.', otra, 'listo');
     } else if (modo === 'cola') {
-      estado('clock', 'Respuesta guardada en este teléfono',
+      estado('clock', 'Respuesta guardada',
         persistente
-          ? 'No hay internet en este momento. Se enviará sola cuando vuelva la conexión y abras esta página.'
-          : 'No hay internet en este momento. Deja esta página abierta: se enviará sola cuando vuelva la conexión.',
+          ? 'Se enviará automáticamente cuando haya conexión. Puedes llenar otra respuesta.'
+          : 'Se enviará automáticamente cuando haya conexión. Deja esta página abierta hasta entonces.',
         otra, 'cola');
     } else {
       estado('check', '¡Gracias por responder!', 'Tu respuesta quedó registrada.', otra, 'listo');
     }
   }
 
+  window.__nuevaRespuesta = function () {
+    fotos = {};
+    enviando = false;
+    pintar();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   /* ── Estado de la conexión y de lo que falta enviar ───────────────────── */
+  /* Aviso de "sin conexión" arriba y, en la esquina, cuántas respuestas
+     guardadas en este teléfono faltan por enviar */
   function pintarRed() {
-    var el = document.getElementById('rg-red');
-    var n = pendientes().length;
     var sin = !navigator.onLine;
-    var txt = sin
-      ? 'Sin conexión' + (n ? ' · ' + n + ' por enviar' : '')
-      : (n ? 'Enviando ' + n + (n === 1 ? ' respuesta' : ' respuestas') + '…' : '');
-    if (el) {
-      el.textContent = txt;
-      el.classList.toggle('hidden', !txt);
-      el.classList.toggle('sin', sin);
+    var aviso = document.getElementById('rg-aviso');
+    if (aviso) {
+      document.getElementById('rg-aviso-ico').innerHTML = ico('alert', 16, 2.2);
+      aviso.hidden = !sin || previa;
     }
-    var chip = document.getElementById('rg-red-est');
-    if (!el && txt) {
-      if (!chip) {
-        chip = document.createElement('div');
-        chip.id = 'rg-red-est';
-        chip.className = 'rg-red flotante';
-        document.body.appendChild(chip);
-      }
-      chip.textContent = txt;
-      chip.classList.toggle('sin', sin);
-    } else if (chip && (el || !txt)) chip.remove();
+    var n = pendientes().length;
+    var cola = document.getElementById('rg-cola');
+    if (!cola) return;
+    cola.hidden = !n;
+    if (!n) return;
+    cola.classList.toggle('enviando', !sin);
+    document.getElementById('rg-cola-ico').innerHTML = sin ? ico('upload', 20, 2.2) : '<span class="spinner"></span>';
+    document.getElementById('rg-cola-n').textContent = n;
+    var t = n + (n === 1 ? ' respuesta guardada' : ' respuestas guardadas') +
+      (sin ? ' en este teléfono. Se enviarán automáticamente cuando haya conexión.' : '. Enviando…');
+    cola.title = t;
+    cola.setAttribute('aria-label', t);
   }
-  window.addEventListener('online', function () { pintarRed(); toast('Volvió la conexión'); });
-  window.addEventListener('offline', function () { pintarRed(); toast('Sin conexión: puedes seguir respondiendo'); });
+  document.getElementById('rg-cola').addEventListener('click', function () {
+    var n = pendientes().length;
+    toast(n + (n === 1 ? ' respuesta guardada' : ' respuestas guardadas') +
+      (navigator.onLine ? ': se están enviando.' : ': se enviarán automáticamente cuando haya conexión.'));
+  });
+  window.addEventListener('online', function () {
+    pintarRed();
+    toast(pendientes().length ? 'Volvió la conexión: enviando las respuestas guardadas…' : 'Volvió la conexión');
+    vigilarPendientes();
+  });
+  window.addEventListener('offline', function () { pintarRed(); });
 
   /* Respuestas guardadas sin conexión en visitas anteriores: Firestore las
      reenvía al abrir la página; cuando terminan se limpia el contador. */
   function vigilarPendientes() {
-    if (!pendientes().length || !db.waitForPendingWrites) return;
+    if (!db || !pendientes().length || !db.waitForPendingWrites) return;
     db.waitForPendingWrites().then(function () {
       var n = pendientes().length;
       guardarPend([]);
@@ -583,6 +610,10 @@ RCR.esc = function (v) {
       if (!snap.exists) { estado('alert', 'Esta encuesta ya no está disponible', 'Puede que la hayan eliminado.'); return; }
       enc = snap.data();
       document.title = (enc.titulo || 'Encuesta') + ' — Redes Con Rostro';
+      /* Sin almacenamiento persistente, lo pendiente de visitas anteriores
+         ya no existe: no se cuenta. */
+      if (!persistente) guardarPend([]);
+      pintarRed();
       vigilarPendientes();
       if (enc.estado === 'cerrada' && !previa) {
         estado('clock', enc.titulo || 'Encuesta', 'Esta encuesta ya no recibe respuestas.');
