@@ -128,6 +128,21 @@ RCR.esc = function (v) {
           ico('image', 22) + '<span><strong>Subir una foto</strong><small>JPG o PNG · también puedes tomarla con el celular</small></span>' +
         '</label>' +
       '</div>';
+    } else if (q.tipo === 'cuadricula') {
+      var cols = q.columnas || [];
+      campo = '<div class="resp-grid" style="--cols:' + cols.length + '">' +
+        '<div class="resp-grid-cab" aria-hidden="true"><span></span>' +
+          cols.map(function (c) { return '<span>' + RCR.esc(c) + '</span>'; }).join('') + '</div>' +
+        (q.filas || []).map(function (f) {
+          return '<div class="resp-grid-fila" role="radiogroup" aria-label="' + a(f.t) + '">' +
+            '<div class="resp-grid-lbl">' + RCR.esc(f.t) + '</div>' +
+            cols.map(function (c) {
+              return '<label class="resp-grid-celda"><input type="radio" name="' + name + '_' + a(f.id) + '" value="' + a(c) + '" aria-label="' + a(f.t + ': ' + c) + '">' +
+                '<span class="resp-marca"></span><span class="resp-grid-col">' + RCR.esc(c) + '</span></label>';
+            }).join('') +
+          '</div>';
+        }).join('') +
+      '</div>';
     } else if (q.tipo === 'corto') {
       campo = '<input class="form-inp" name="' + name + '" maxlength="500" placeholder="Tu respuesta">';
     } else if (q.tipo === 'largo') {
@@ -201,6 +216,13 @@ RCR.esc = function (v) {
         r[q.id] = el ? el.value.trim() : '';
       } else if (q.tipo === 'imagen') {
         r[q.id] = fotos[q.id] || '';
+      } else if (q.tipo === 'cuadricula') {
+        var g = {};
+        (q.filas || []).forEach(function (f) {
+          var m = form.querySelector('input[name="' + name + '_' + f.id + '"]:checked');
+          if (m) g[f.id] = m.value;
+        });
+        r[q.id] = g;
       } else if (q.tipo === 'multiple') {
         r[q.id] = Array.prototype.slice.call(form.querySelectorAll('input[name="' + name + '"]:checked'))
           .map(function (x) { return x.value; });
@@ -212,7 +234,10 @@ RCR.esc = function (v) {
     return r;
   }
 
-  function vacio(v) { return v == null || v === '' || (Array.isArray(v) && !v.length); }
+  function vacio(v) {
+    return v == null || v === '' || (Array.isArray(v) && !v.length) ||
+      (typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length);
+  }
 
   function actualizar() {
     var r = leer();
@@ -255,16 +280,22 @@ RCR.esc = function (v) {
       var malNum = st.vis[q.id] && q.tipo === 'numero' && !vacio(st.r[q.id]) && isNaN(ENC.leerNumero(st.r[q.id]));
       var max = ENC.maxValido(q);
       var demas = st.vis[q.id] && max && (st.r[q.id] || []).length > max;
-      fs.classList.toggle('con-error', !!(falta || malNum || demas));
+      /* Cuadrícula obligatoria: hay que responder todas las filas */
+      var faltaFila = st.vis[q.id] && q.requerida && q.tipo === 'cuadricula' && !falta &&
+        Object.keys(st.r[q.id] || {}).length < (q.filas || []).length;
+      var mal = !!(falta || malNum || demas || faltaFila);
+      fs.classList.toggle('con-error', mal);
       fs.querySelector('.resp-err').textContent = falta ? 'Esta pregunta es obligatoria'
+        : (faltaFila ? 'Responde todas las filas'
         : (malNum ? 'Escribe solo un número (por ejemplo 12 o 3,5)'
-        : (demas ? 'Elige como máximo ' + max : ''));
-      if ((falta || malNum || demas) && !primero) primero = fs;
+        : (demas ? 'Elige como máximo ' + max : '')));
+      if (mal && !primero) primero = fs;
     });
     if (primero) {
       primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
       var msg = primero.querySelector('.resp-err').textContent;
-      toast(msg.indexOf('número') >= 0 ? 'Revisa los números' : (msg.indexOf('máximo') >= 0 ? msg : 'Faltan preguntas obligatorias'));
+      toast(msg.indexOf('número') >= 0 ? 'Revisa los números'
+        : ((msg.indexOf('máximo') >= 0 || msg.indexOf('filas') >= 0) ? msg : 'Faltan preguntas obligatorias'));
       return;
     }
 

@@ -150,7 +150,10 @@ var RES = {
     return new Date(ms).toLocaleDateString('es-EC', o);
   },
 
-  vacio: function (v) { return v == null || v === '' || (Array.isArray(v) && !v.length); },
+  vacio: function (v) {
+    return v == null || v === '' || (Array.isArray(v) && !v.length) ||
+      (typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length);
+  },
 
   pct: function (n, base) { return base ? Math.round(n / base * 100) : 0; },
 
@@ -183,6 +186,28 @@ var RES = {
           };
         }
         s.respondieron = nums.length;
+        return s;
+      }
+
+      /* Cuadrícula: por cada fila, cuántos eligieron cada columna */
+      if (q.tipo === 'cuadricula') {
+        var cols = (q.columnas || []).slice();
+        var resGrid = vals.filter(function (v) { return v && typeof v === 'object' && !Array.isArray(v); });
+        resGrid.forEach(function (v) {   // columnas que ya no existen (encuesta editada)
+          Object.keys(v).forEach(function (k) { if (cols.indexOf(String(v[k])) < 0) cols.push(String(v[k])); });
+        });
+        s.grid = {
+          cols: cols,
+          filas: (q.filas || []).map(function (f) {
+            var cuenta = cols.map(function () { return 0; }), tot = 0;
+            resGrid.forEach(function (v) {
+              var k = cols.indexOf(String(v[f.id]));
+              if (v[f.id] != null && k >= 0) { cuenta[k]++; tot++; }
+            });
+            return { label: f.t, n: tot, segs: cuenta.map(function (c) { return { n: c, pct: RES.pct(c, tot) }; }) };
+          })
+        };
+        s.respondieron = resGrid.length;
         return s;
       }
 
@@ -355,6 +380,34 @@ var RES = {
       '</div>';
     }
 
+    /* Cuadrícula: una barra 100% apilada por fila, con leyenda arriba */
+    if (s.grid) {
+      var g = s.grid, nc = g.cols.length;
+      RES.graficos[clave] = {
+        tipo: 'apiladas', titulo: 'P' + s.n + '. ' + q.texto, sub: RES.notaPregunta(enc, s),
+        grid: g, encuesta: enc.titulo
+      };
+      var leyenda = '<div class="res-leyenda">' + g.cols.map(function (c, k) {
+        return '<span><i style="background:' + ENC.colorColumna(k, nc).fondo + '"></i>' + RCR.esc(c) + '</span>';
+      }).join('') + '</div>';
+      var filas = g.filas.map(function (f) {
+        var segs = f.segs.map(function (sg, k) {
+          if (!sg.n) return '';
+          var col = ENC.colorColumna(k, nc);
+          var tip = f.label + ' · ' + g.cols[k] + ': ' + sg.n + (sg.n === 1 ? ' respuesta' : ' respuestas') + ' (' + sg.pct + '%)';
+          return '<div class="res-seg" style="flex:' + sg.n + ' 1 0;background:' + col.fondo + ';color:' + col.texto + '" ' +
+            'data-tip="' + ENC.attr(tip) + '">' + (sg.pct >= 12 ? '<span>' + sg.pct + '%</span>' : '') + '</div>';
+        }).join('');
+        return '<div class="res-apil-fila">' +
+          '<div class="res-apil-lbl">' + RCR.esc(f.label) + '</div>' +
+          '<div class="res-apil-barra">' + (f.n ? segs : '<div class="res-apil-vacia">Sin respuestas</div>') + '</div>' +
+          '<div class="res-apil-n">' + f.n + '</div>' +
+        '</div>';
+      }).join('');
+      return '<div class="card res-card">' + cabeza(true) + leyenda +
+        '<div class="res-apil">' + filas + '</div></div>';
+    }
+
     /* Fotos: galería; al tocar una se ve en grande */
     if (s.fotos) {
       var todasF = !!RES.expandir[q.id], LIM = 12;
@@ -474,7 +527,8 @@ var RES = {
       }
     } catch (e) { /* sin la fuente se usa la del sistema */ }
 
-    var canvas = g.tipo === 'columnas' ? RES.dibujarColumnas(g) : RES.dibujarBarras(g);
+    var canvas = g.tipo === 'columnas' ? RES.dibujarColumnas(g)
+      : (g.tipo === 'apiladas' ? RES.dibujarApiladas(g) : RES.dibujarBarras(g));
     canvas.toBlob(function (blob) {
       if (!blob) { RCR.toast('No se pudo crear la imagen'); return; }
       var a = document.createElement('a');
@@ -603,6 +657,97 @@ var RES = {
       y += FILA;
     });
     return L.c;
+  },
+
+  /* Cuadrícula: leyenda arriba y una barra 100% apilada por fila.
+     Segmentos separados por 2px del color del fondo; % dentro si cabe. */
+  dibujarApiladas: function (g) {
+    var FILA = 50, G = g.grid, nc = G.cols.length;
+    var tmp = document.createElement('canvas').getContext('2d');
+    tmp.font = RES.F(500, 15);
+    /* Leyenda en líneas que caben en el ancho */
+    var W = 1000, M = 48, lineasLey = [[]], anchoAct = 0;
+    G.cols.forEach(function (c, k) {
+      var w = 16 + 8 + tmp.measureText(c).width + 24;
+      if (anchoAct + w > W - M * 2 && lineasLey[lineasLey.length - 1].length) { lineasLey.push([]); anchoAct = 0; }
+      lineasLey[lineasLey.length - 1].push({ c: c, k: k, w: w });
+      anchoAct += w;
+    });
+    var altoLey = lineasLey.length * 28 + 12;
+    var L = RES.lienzo(g, altoLey + G.filas.length * FILA, 0);
+    var ctx = L.ctx, y = L.y;
+
+    ctx.textBaseline = 'middle';
+    lineasLey.forEach(function (ln) {
+      var x = M;
+      ln.forEach(function (it) {
+        ctx.fillStyle = ENC.colorColumna(it.k, nc).fondo;
+        RES.redondo(ctx, x, y + 6, 16, 16, 4);
+        ctx.fillStyle = '#333333'; ctx.font = RES.F(500, 15);
+        ctx.fillText(it.c, x + 24, y + 14);
+        x += it.w;
+      });
+      y += 28;
+    });
+    y += 12;
+
+    ctx.font = RES.F(500, 16);
+    var LBL = Math.min(300, Math.max(60, Math.max.apply(null, G.filas.map(function (f) { return ctx.measureText(f.label).width; }))));
+    var NW = 50, x0 = M + LBL + 20, ancho = W - M - NW - x0, H = 22;
+    G.filas.forEach(function (f) {
+      var cy = y + FILA / 2;
+      ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      ctx.fillStyle = '#333333'; ctx.font = RES.F(500, 16);
+      var ll = RES.lineas(ctx, f.label, LBL, 2);
+      ll.forEach(function (l, k) { ctx.fillText(l, M, cy + (k - (ll.length - 1) / 2) * 20); });
+      if (!f.n) {
+        ctx.fillStyle = '#eef1f6'; RES.redondo(ctx, x0, cy - H / 2, ancho, H, 4);
+      } else {
+        var con = f.segs.filter(function (sg) { return sg.n; }).length;
+        var util = ancho - (con - 1) * 2, x = x0, hechos = 0;
+        f.segs.forEach(function (sg, k) {
+          if (!sg.n) return;
+          hechos++;
+          var w = sg.n / f.n * util;
+          var col = ENC.colorColumna(k, nc);
+          ctx.fillStyle = col.fondo;
+          /* Extremos redondeados solo en los bordes de la barra */
+          RES.redondo(ctx, x, cy - H / 2, w, H, 4, hechos === 1, hechos === con);
+          var txt = sg.pct + '%';
+          ctx.font = RES.F(700, 13);
+          if (ctx.measureText(txt).width + 12 <= w) {
+            ctx.fillStyle = col.texto; ctx.textAlign = 'center';
+            ctx.fillText(txt, x + w / 2, cy + 1);
+            ctx.textAlign = 'left';
+          }
+          x += w + 2;
+        });
+      }
+      ctx.textAlign = 'right'; ctx.fillStyle = '#777777'; ctx.font = RES.F(500, 15);
+      ctx.fillText(String(f.n), W - M, cy);
+      ctx.textAlign = 'left';
+      y += FILA;
+    });
+    return L.c;
+  },
+
+  /* Rectángulo con esquinas redondeadas (izquierda y/o derecha) */
+  redondo: function (ctx, x, y, w, h, r, izq, der) {
+    if (w <= 0) return;
+    if (izq === undefined) { izq = true; der = true; }
+    var ri = izq ? Math.min(r, w / 2, h / 2) : 0, rd = der ? Math.min(r, w / 2, h / 2) : 0;
+    ctx.beginPath();
+    ctx.moveTo(x + ri, y);
+    ctx.lineTo(x + w - rd, y);
+    if (rd) ctx.arcTo(x + w, y, x + w, y + rd, rd); else ctx.lineTo(x + w, y);
+    ctx.lineTo(x + w, y + h - rd);
+    if (rd) ctx.arcTo(x + w, y + h, x + w - rd, y + h, rd); else ctx.lineTo(x + w, y + h);
+    ctx.lineTo(x + ri, y + h);
+    if (ri) ctx.arcTo(x, y + h, x, y + h - ri, ri); else ctx.lineTo(x, y + h);
+    ctx.lineTo(x, y + ri);
+    if (ri) ctx.arcTo(x, y, x + ri, y, ri); else ctx.lineTo(x, y);
+    ctx.closePath();
+    ctx.fill();
   },
 
   dibujarColumnas: function (g) {

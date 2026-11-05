@@ -149,18 +149,35 @@ var DAT = {
       String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
   },
 
+  /* Columnas de la tabla y del Excel: una por pregunta; la cuadrícula
+     aporta una columna por cada fila ("P7. Pregunta — Frutas"). */
+  columnas: function (enc) {
+    var out = [];
+    ENC.soloPreguntas(enc && enc.preguntas).forEach(function (q, i) {
+      var base = 'P' + (i + 1) + '. ' + q.texto;
+      if (q.tipo === 'cuadricula') {
+        (q.filas || []).forEach(function (f) {
+          out.push({ q: q, titulo: base + ' — ' + f.t, val: function (resp) { return ((resp || {})[q.id] || {})[f.id]; } });
+        });
+      } else {
+        out.push({ q: q, titulo: base, val: function (resp) { return (resp || {})[q.id]; } });
+      }
+    });
+    return out;
+  },
+
   /* Respuestas con su número (1 = la más antigua) y el texto para buscar */
   filas: function () {
     var enc = RES.encuesta(), resps = RES.cache[RES.sel] || [], total = resps.length;
-    var ps = ENC.soloPreguntas(enc && enc.preguntas);
+    var cols = DAT.columnas(enc);
     var todas = resps.map(function (r, i) {
       var ms = RES.ms(r.enviado);
       return { r: r, n: total - i, ms: ms };
     });
     if (!DAT.filtro) return todas;
     return todas.filter(function (f) {
-      var txt = [String(f.n), DAT.fmtFechaHora(f.ms)].concat(ps.map(function (q) {
-        return ENC.fmtValor((f.r.respuestas || {})[q.id]);
+      var txt = [String(f.n), DAT.fmtFechaHora(f.ms)].concat(cols.map(function (c) {
+        return ENC.fmtValor(c.val(f.r.respuestas));
       })).join(' ').toLowerCase();
       return txt.indexOf(DAT.filtro) >= 0;
     });
@@ -171,7 +188,6 @@ var DAT = {
     var resps = RES.cache[RES.sel];
     if (ENC.toggleCompartir) ENC.toggleCompartir('dat-compartir', enc);
     if (!enc || !resps) return;
-    var ps = ENC.soloPreguntas(enc.preguntas);
     DAT.botonExcel(resps.length > 0);
 
     if (!resps.length) {
@@ -192,10 +208,10 @@ var DAT = {
       return;
     }
 
+    var cols = DAT.columnas(enc);
     var thead = '<tr><th class="dat-n" scope="col">#</th><th class="dat-fecha" scope="col">Fecha</th>' +
-      ps.map(function (q, i) {
-        var t = 'P' + (i + 1) + '. ' + q.texto;
-        return '<th scope="col" title="' + ENC.attr(t) + '">' + RCR.esc(t) + '</th>';
+      cols.map(function (c) {
+        return '<th scope="col" title="' + ENC.attr(c.titulo) + '">' + RCR.esc(c.titulo) + '</th>';
       }).join('') + '</tr>';
 
     var tbody = vis.map(function (f) {
@@ -204,8 +220,8 @@ var DAT = {
           'onkeydown="if(event.key===\'Enter\')DAT.abrirFicha(\'' + f.r._docId + '\')">' +
         '<td class="dat-n">' + f.n + '</td>' +
         '<td class="dat-fecha">' + RCR.esc(DAT.fmtFechaHora(f.ms) || '—') + '</td>' +
-        ps.map(function (q) {
-          var v = resp[q.id];
+        cols.map(function (c) {
+          var q = c.q, v = c.val(resp);
           if (RES.vacio(v)) return '<td class="dat-vacio">—</td>';
           if (ENC.esImagen(v)) return '<td class="dat-img"><img src="' + v + '" alt="Imagen adjunta" loading="lazy"></td>';
           var t = ENC.fmtValor(v);
@@ -252,7 +268,11 @@ var DAT = {
           : ENC.esImagen(v)
             ? '<button type="button" class="dat-ficha-img" title="Ver en grande" ' +
                 'onclick="DAT.verFoto(\'' + rid + '\',\'' + q.id + '\',' + n + ',' + (k + 1) + ')"><img src="' + v + '" alt="Imagen adjunta"></button>'
-            : '<div class="dat-ficha-v">' + RCR.esc(ENC.fmtValor(v)) + '</div>') +
+            : q.tipo === 'cuadricula'
+              ? '<ul class="dat-ficha-grid">' + (q.filas || []).map(function (f) {
+                  return '<li><span>' + RCR.esc(f.t) + '</span><strong>' + RCR.esc(v[f.id] != null ? v[f.id] : '—') + '</strong></li>';
+                }).join('') + '</ul>'
+              : '<div class="dat-ficha-v">' + RCR.esc(ENC.fmtValor(v)) + '</div>') +
       '</div>';
     }).join('');
 
@@ -339,11 +359,12 @@ var DAT = {
     var asc = resps.slice().sort(function (a, b) { return RES.ms(a.enviado) - RES.ms(b.enviado); });
 
     /* Hoja 1: Respuestas */
-    var cab = ['N°', 'Fecha'].concat(ps.map(function (q, i) { return 'P' + (i + 1) + '. ' + q.texto; }));
+    var colsX = DAT.columnas(enc);
+    var cab = ['N°', 'Fecha'].concat(colsX.map(function (c) { return c.titulo; }));
     var aoa = [cab].concat(asc.map(function (r, i) {
       var resp = r.respuestas || {}, ms = RES.ms(r.enviado);
-      return [i + 1, ms ? new Date(ms) : ''].concat(ps.map(function (q) {
-        var v = resp[q.id];
+      return [i + 1, ms ? new Date(ms) : ''].concat(colsX.map(function (col) {
+        var q = col.q, v = col.val(resp);
         if (RES.vacio(v)) return '';
         if (q.tipo === 'escala' || q.tipo === 'numero') { var x = Number(v); return isFinite(x) ? x : String(v); }
         if (ENC.esImagen(v)) return 'Imagen adjunta (ver en Mi RCR)';
@@ -371,7 +392,10 @@ var DAT = {
         var k = ps.findIndex(function (p) { return p.id === q.condicion.pregunta; });
         if (k >= 0) cond = 'P' + (k + 1) + (ps[k].tipo === 'multiple' ? ' incluye ' : ' = ') + q.condicion.valor;
       }
-      return [i + 1, q.texto, ENC.tipoLabel(q.tipo), q.requerida ? 'Sí' : 'No', (q.opciones || []).join('; '), cond,
+      var ops = q.tipo === 'cuadricula'
+        ? 'Filas: ' + (q.filas || []).map(function (f) { return f.t; }).join('; ') + ' | Columnas: ' + (q.columnas || []).join('; ')
+        : (q.opciones || []).join('; ') + (ENC.maxValido(q) ? ' (máx. ' + ENC.maxValido(q) + ')' : '');
+      return [i + 1, q.texto, ENC.tipoLabel(q.tipo), q.requerida ? 'Sí' : 'No', ops, cond,
         (q.enlace && ENC.urlSegura(q.enlace.url)) || ''];
     }));
     var ws2 = XLSX.utils.aoa_to_sheet(aoa2);

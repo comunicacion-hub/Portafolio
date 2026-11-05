@@ -75,8 +75,22 @@ var ENC = {
     { id: 'escala',   label: 'Escala 1 a 5' },
     { id: 'sino',     label: 'Sí / No' },
     { id: 'numero',   label: 'Número' },
-    { id: 'imagen',   label: 'Subir imagen' }
+    { id: 'imagen',   label: 'Subir imagen' },
+    { id: 'cuadricula', label: 'Cuadrícula (tabla)' }
   ],
+
+  /* Cuadrícula: filas (lo que se evalúa) × columnas (las respuestas).
+     Se marca una columna por fila. La respuesta es { idFila: 'columna' }. */
+  MAX_COLUMNAS: 6,
+  /* Rampa ordinal de un solo tono (validada: claro → oscuro, pasos visibles,
+     el más claro supera 2:1 sobre blanco). Texto dentro: oscuro en los dos
+     primeros pasos, blanco en los demás. */
+  RAMPA: ['#9aabff', '#7b90ff', '#506cff', '#3a52d9', '#2a3da8', '#1d2c7a'],
+  colorColumna: function (k, n) {
+    var idx = n <= 1 ? 2 : Math.round(k * (ENC.RAMPA.length - 1) / (n - 1));
+    return { fondo: ENC.RAMPA[idx], texto: idx <= 1 ? '#1d1d1f' : '#ffffff' };
+  },
+  nuevaFila: function (t) { return { id: 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: t }; },
 
   /* Imágenes: se guardan como JPEG en base64 dentro del documento (como la
      foto del currículo). Firestore admite hasta 1 MB por documento. */
@@ -143,8 +157,18 @@ var ENC = {
   soloPreguntas: function (ps) { return (ps || []).filter(function (q) { return q.tipo !== 'seccion'; }); },
 
   /* Formatea un valor guardado para mostrarlo */
+  /* Texto de una respuesta conociendo su pregunta (la cuadrícula usa ids de fila) */
+  fmtRespuesta: function (q, v) {
+    if (q && q.tipo === 'cuadricula' && v && typeof v === 'object' && !Array.isArray(v)) {
+      return (q.filas || []).filter(function (f) { return v[f.id] != null; })
+        .map(function (f) { return f.t + ': ' + v[f.id]; }).join('; ');
+    }
+    return ENC.fmtValor(v);
+  },
+
   fmtValor: function (v) {
     if (Array.isArray(v)) return v.join(', ');
+    if (v && typeof v === 'object') return Object.keys(v).map(function (k) { return v[k]; }).join('; ');
     if (ENC.esImagen(v)) return 'Imagen adjunta';
     if (typeof v === 'number') return String(v).replace('.', ',');
     return v == null ? '' : String(v);
@@ -434,6 +458,12 @@ var ENC = {
       opciones: (tipo === 'unica' || tipo === 'multiple') ? ['Opción 1', 'Opción 2'] : [],
       condicion: null
     };
+  },
+
+  /* Filas y columnas por defecto de una cuadrícula */
+  prepararCuadricula: function (q) {
+    if (!Array.isArray(q.filas) || !q.filas.length) q.filas = [ENC.nuevaFila('Fila 1'), ENC.nuevaFila('Fila 2')];
+    if (!Array.isArray(q.columnas) || q.columnas.length < 2) q.columnas = ['Columna 1', 'Columna 2', 'Columna 3'];
   },
 
   nuevaSeccion: function () {
@@ -742,6 +772,14 @@ var ENC = {
           '</div><div class="eb-escala-ext"><span>Bajo</span><span>Alto</span></div></div>';
       } else if (q.tipo === 'sino') {
         cuerpo = '<div class="eb-muestra"><div class="eb-sino"><span>Sí</span><span>No</span></div></div>';
+      } else if (q.tipo === 'cuadricula') {
+        ENC.prepararCuadricula(q);
+        cuerpo =
+          '<div class="eb-sub">Filas <small>lo que se evalúa (por ejemplo, cada alimento)</small></div>' +
+          ENC.listaGrid(i, q.filas, 'fila') +
+          '<div class="eb-sub">Columnas <small>las respuestas posibles, en orden (máx. ' + ENC.MAX_COLUMNAS + ')</small></div>' +
+          ENC.listaGrid(i, q.columnas, 'col') +
+          '<div class="eb-nota-grid">' + ico('table', 14) + 'Quien responde marca una columna en cada fila.</div>';
       } else if (q.tipo === 'numero') {
         cuerpo = '<div class="eb-muestra"><div class="eb-linea eb-linea-num"><b>123</b>Respuesta con un número</div></div>';
       } else if (q.tipo === 'imagen') {
@@ -1041,8 +1079,70 @@ var ENC = {
     if ((tipo === 'unica' || tipo === 'multiple') && (!q.opciones || q.opciones.length < 2)) {
       q.opciones = ['Opción 1', 'Opción 2'];
     }
+    if (tipo === 'cuadricula') ENC.prepararCuadricula(q);
     ENC.limpiarCondiciones();
     ENC.renderPreguntas();
+  },
+
+  /* ── Cuadrícula: editar filas y columnas ──────────────────────────────── */
+  setFila: function (i, j, v) { ENC.b.preguntas[i].filas[j].t = v; },
+  agregarFila: function (i) {
+    var q = ENC.b.preguntas[i];
+    q.filas.push(ENC.nuevaFila('Fila ' + (q.filas.length + 1)));
+    ENC.renderPreguntas();
+    ENC.enfocarUltimo(q.id, '.eb-grid-filas .eb-opt-inp');
+  },
+  quitarFila: function (i, j) {
+    var q = ENC.b.preguntas[i];
+    if (q.filas.length <= 1) return;
+    q.filas.splice(j, 1);
+    ENC.renderPreguntas();
+  },
+  setColumna: function (i, j, v) { ENC.b.preguntas[i].columnas[j] = v; },
+  agregarColumna: function (i) {
+    var q = ENC.b.preguntas[i];
+    if (q.columnas.length >= ENC.MAX_COLUMNAS) { RCR.toast('Máximo ' + ENC.MAX_COLUMNAS + ' columnas'); return; }
+    q.columnas.push('Columna ' + (q.columnas.length + 1));
+    ENC.renderPreguntas();
+    ENC.enfocarUltimo(q.id, '.eb-grid-cols .eb-opt-inp');
+  },
+  quitarColumna: function (i, j) {
+    var q = ENC.b.preguntas[i];
+    if (q.columnas.length <= 2) return;
+    q.columnas.splice(j, 1);
+    ENC.renderPreguntas();
+  },
+  enfocarUltimo: function (id, sel) {
+    var ins = document.querySelectorAll('#encq-' + id + ' ' + sel);
+    var u = ins[ins.length - 1];
+    if (u) { u.focus(); u.select(); }
+  },
+
+  /* Lista editable (filas o columnas de la cuadrícula) */
+  listaGrid: function (i, items, tipo) {
+    var esFila = tipo === 'fila';
+    var min = esFila ? 1 : 2;
+    return '<div class="eb-opts ' + (esFila ? 'eb-grid-filas' : 'eb-grid-cols') + '">' +
+      items.map(function (it, j) {
+        var t = esFila ? it.t : it;
+        var marca = esFila
+          ? '<span class="eb-grid-n" aria-hidden="true">' + (j + 1) + '</span>'
+          : '<span class="eb-grid-color" aria-hidden="true" style="background:' + ENC.colorColumna(j, items.length).fondo + '"></span>';
+        return '<div class="eb-opt">' + marca +
+          '<input class="eb-opt-inp" value="' + ENC.attr(t) + '" placeholder="' + (esFila ? 'Fila ' : 'Columna ') + (j + 1) + '" ' +
+            'aria-label="' + (esFila ? 'Fila ' : 'Columna ') + (j + 1) + '" ' +
+            'oninput="ENC.' + (esFila ? 'setFila' : 'setColumna') + '(' + i + ',' + j + ',this.value)">' +
+          (items.length > min
+            ? '<button class="eb-quitar" type="button" title="Quitar" aria-label="Quitar ' + (esFila ? 'fila ' : 'columna ') + (j + 1) + '" ' +
+                'onclick="ENC.' + (esFila ? 'quitarFila' : 'quitarColumna') + '(' + i + ',' + j + ')">' + ico('x', 13, 2.6) + '</button>'
+            : '') +
+        '</div>';
+      }).join('') +
+      ((esFila || items.length < ENC.MAX_COLUMNAS)
+        ? '<button class="eb-opt-add" type="button" onclick="ENC.' + (esFila ? 'agregarFila' : 'agregarColumna') + '(' + i + ')">' +
+            '<span class="eb-mas" aria-hidden="true">' + ico('plus', 13, 2.6) + '</span>' + (esFila ? 'Agregar fila' : 'Agregar columna') + '</button>'
+        : '') +
+    '</div>';
   },
 
   setOpcion: function (i, j, v) {
@@ -1191,6 +1291,16 @@ var ENC = {
         q.opciones = q.opciones.map(function (o) { return String(o).trim(); })
           .filter(function (o) { if (!o || vistas[o.toLowerCase()]) return false; vistas[o.toLowerCase()] = 1; return true; });
         if (q.opciones.length < 2) { ENC.marcarError(q.id, 'La pregunta ' + nq + ' necesita al menos 2 opciones distintas'); return; }
+      } else if (q.tipo === 'cuadricula') {
+        q.opciones = [];
+        var vf = {}, vc = {};
+        q.filas = (q.filas || []).map(function (f) { return { id: f.id, t: String(f.t || '').trim() }; })
+          .filter(function (f) { var k = f.t.toLowerCase(); if (!f.t || vf[k]) return false; vf[k] = 1; return true; });
+        q.columnas = (q.columnas || []).map(function (c) { return String(c).trim(); })
+          .filter(function (c) { var k = c.toLowerCase(); if (!c || vc[k]) return false; vc[k] = 1; return true; });
+        if (!q.filas.length) { ENC.marcarError(q.id, 'La pregunta ' + nq + ' necesita al menos una fila'); return; }
+        if (q.columnas.length < 2) { ENC.marcarError(q.id, 'La pregunta ' + nq + ' necesita al menos 2 columnas distintas'); return; }
+        if (q.columnas.length > ENC.MAX_COLUMNAS) q.columnas = q.columnas.slice(0, ENC.MAX_COLUMNAS);
       } else {
         q.opciones = [];
       }
@@ -1204,6 +1314,7 @@ var ENC = {
           ? { id: q.id, tipo: 'seccion', texto: q.texto, descripcion: q.descripcion, condicion: cond }
           : { id: q.id, tipo: q.tipo, texto: q.texto, requerida: !!q.requerida, opciones: q.opciones, condicion: cond };
         if (ENC.maxValido(q)) x.maxElegir = ENC.maxValido(q);
+        if (q.tipo === 'cuadricula') { x.filas = q.filas; x.columnas = q.columnas; }
         if (q.apoyoImg && ENC.esImagen(q.apoyoImg)) x.apoyoImg = q.apoyoImg;
         if (q.enlace) x.enlace = { url: q.enlace.url, texto: q.enlace.texto };
         return x;
