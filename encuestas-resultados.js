@@ -41,9 +41,13 @@ var RES = {
       '<div class="res-wrap">' +
         '<div class="card res-picker">' +
           '<label class="form-lbl" for="res-sel">Encuesta</label>' +
-          '<select class="form-inp" id="res-sel" onchange="RES.onSel(this.value)" disabled>' +
-            '<option>Cargando…</option>' +
-          '</select>' +
+          '<div class="res-picker-fila">' +
+            '<select class="form-inp" id="res-sel" onchange="RES.onSel(this.value)" disabled>' +
+              '<option>Cargando…</option>' +
+            '</select>' +
+            '<button class="btn-ico hidden" id="res-compartir" title="Compartir con personas" aria-label="Compartir con personas" ' +
+              'onclick="ENC.compartirPersonas(RES.sel)">' + ico('users', 17) + '</button>' +
+          '</div>' +
         '</div>' +
         '<div id="res-body">' + RCR.cargando('Cargando resultados') + '</div>' +
       '</div>';
@@ -83,10 +87,7 @@ var RES = {
       return;
     }
     sel.disabled = false;
-    sel.innerHTML = lista.map(function (e) {
-      return '<option value="' + ENC.attr(e._docId) + '"' + (e._docId === RES.sel ? ' selected' : '') + '>' +
-        RCR.esc(e.titulo || 'Sin título') + (e.estado === 'cerrada' ? ' (cerrada)' : '') + '</option>';
-    }).join('');
+    sel.innerHTML = ENC.opcionesSelect(RES.sel);
   },
 
   onSel: function (id) {
@@ -217,6 +218,7 @@ var RES = {
   render: function () {
     var enc = RES.encuesta();
     var resps = RES.cache[RES.sel];
+    if (ENC.toggleCompartir) ENC.toggleCompartir('res-compartir', enc);
     if (!enc || !resps) return;
     RES.graficos = {};
 

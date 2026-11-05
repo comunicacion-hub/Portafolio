@@ -45,9 +45,13 @@ var DAT = {
       '<div class="res-wrap dat-wrap">' +
         '<div class="card res-picker">' +
           '<label class="form-lbl" for="dat-sel">Encuesta</label>' +
-          '<select class="form-inp" id="dat-sel" onchange="DAT.onSel(this.value)" disabled>' +
-            '<option>Cargando…</option>' +
-          '</select>' +
+          '<div class="res-picker-fila">' +
+            '<select class="form-inp" id="dat-sel" onchange="DAT.onSel(this.value)" disabled>' +
+              '<option>Cargando…</option>' +
+            '</select>' +
+            '<button class="btn-ico hidden" id="dat-compartir" title="Compartir con personas" aria-label="Compartir con personas" ' +
+              'onclick="ENC.compartirPersonas(RES.sel)">' + ico('users', 17) + '</button>' +
+          '</div>' +
         '</div>' +
         '<input class="form-inp dat-buscar" id="dat-buscar" type="search" placeholder="Buscar en las respuestas…" ' +
           'aria-label="Buscar en las respuestas" oninput="DAT.onBuscar(this.value)">' +
@@ -82,10 +86,7 @@ var DAT = {
       return;
     }
     sel.disabled = false;
-    sel.innerHTML = lista.map(function (e) {
-      return '<option value="' + ENC.attr(e._docId) + '"' + (e._docId === RES.sel ? ' selected' : '') + '>' +
-        RCR.esc(e.titulo || 'Sin título') + (e.estado === 'cerrada' ? ' (cerrada)' : '') + '</option>';
-    }).join('');
+    sel.innerHTML = ENC.opcionesSelect(RES.sel);
   },
 
   onSel: function (id) {
@@ -168,6 +169,7 @@ var DAT = {
   render: function () {
     var enc = RES.encuesta();
     var resps = RES.cache[RES.sel];
+    if (ENC.toggleCompartir) ENC.toggleCompartir('dat-compartir', enc);
     if (!enc || !resps) return;
     var ps = enc.preguntas || [];
     DAT.botonExcel(resps.length > 0);
@@ -247,7 +249,7 @@ var DAT = {
       sub: RCR.esc(DAT.fmtFechaHora(RES.ms(r.enviado)) || 'Sin fecha'),
       cuerpo: cuerpo,
       acciones:
-        (RCR.puedeEditar()
+        (ENC.puedeEditarEnc(enc)
           ? '<button class="btn btn-glass dat-borrar" onclick="DAT.pedirBorrar(\'' + rid + '\')">' + ico('trash', 15) + 'Eliminar</button>'
           : '') +
         '<button class="btn btn-primary" onclick="RCR.cerrarModal(\'m-dat-ficha\')">Cerrar</button>'
@@ -255,7 +257,7 @@ var DAT = {
   },
 
   pedirBorrar: function (rid) {
-    if (!RCR.puedeEditar()) { RCR.toast('No tienes permiso para eliminar'); return; }
+    if (!ENC.puedeEditarEnc(RES.encuesta())) { RCR.toast('No tienes permiso para eliminar'); return; }
     var resps = RES.cache[RES.sel] || [];
     var i = resps.findIndex(function (r) { return r._docId === rid; });
     DAT.pendienteBorrar = rid;

@@ -1630,3 +1630,79 @@ a:focus-visible,
   .dat-excel{padding:10px 12px;}
   .dat-tabla th,.dat-tabla td{padding:10px 12px;max-width:200px;}
 }
+
+/* ==========================================================================
+   ENCUESTAS — Compartir con personas y notificaciones
+   ========================================================================== */
+.enc-grupo{
+  max-width:720px;margin:6px auto 10px;padding:0 4px;
+  font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;
+}
+.enc-grupo span{
+  display:inline-block;margin-left:4px;padding:1px 8px;border-radius:20px;
+  background:var(--white);border:1px solid var(--border);font-size:11px;letter-spacing:0;
+}
+.enc-grupo:not(:first-child){margin-top:22px;}
+.chip svg{width:13px;height:13px;flex-shrink:0;}
+.enc-chip-rol{background:#eef2ff;color:var(--blue2);border:1px solid #c7d2fe;}
+
+.res-picker-fila{display:flex;align-items:center;gap:8px;}
+.res-picker-fila select{flex:1;min-width:0;}
+
+.enc-sh-add{display:grid;grid-template-columns:1fr 120px auto;gap:8px;}
+.enc-sh-add .btn{padding:0 16px;min-height:46px;}
+.enc-sh-fila{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
+.enc-sh-fila:last-child{border-bottom:none;}
+.enc-sh-ava{
+  width:38px;height:38px;border-radius:50%;flex-shrink:0;
+  background:var(--grad-b);color:#fff;font-size:13px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+}
+.enc-sh-info{flex:1;min-width:0;}
+.enc-sh-info strong{display:flex;align-items:center;gap:5px;font-size:14px;font-weight:600;min-width:0;}
+.enc-sh-nom{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.enc-sh-tu,.enc-sh-nuevo{flex-shrink:0;}
+.enc-sh-info small{display:block;font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.enc-sh-tu{font-weight:500;color:var(--text-muted);}
+.enc-sh-nuevo{
+  display:inline-block;padding:1px 7px;border-radius:20px;
+  background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;font-size:10.5px;font-weight:700;
+}
+.enc-sh-fijo{font-size:12.5px;font-weight:600;color:var(--text-muted);padding-right:4px;}
+.enc-sh-sel{width:112px;flex-shrink:0;padding:8px 30px 8px 10px;font-size:13px;}
+.enc-sh-fila .btn-ico{width:38px;height:38px;min-width:38px;min-height:38px;}
+.enc-sh-vacio{font-size:13px;color:var(--text-muted);font-style:italic;padding:10px 0;}
+.enc-sh-listo{text-align:center;padding:8px 4px 4px;}
+.enc-sh-listo h3{font-size:18px;margin-bottom:8px;}
+.enc-sh-listo p{font-size:14px;line-height:1.5;color:var(--text);}
+.enc-sh-gm{margin-top:12px;color:var(--text-muted)!important;font-size:13.5px!important;}
+
+/* Campana de notificaciones en el topbar */
+.topbar-notif{position:relative;}
+.notif-badge{
+  position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;padding:0 5px;
+  border-radius:9px;background:var(--pink);color:#fff;border:2px solid var(--white);
+  font-size:10.5px;font-weight:700;line-height:14px;text-align:center;
+}
+.enc-notif{
+  display:flex;align-items:flex-start;gap:12px;width:100%;text-align:left;
+  padding:12px;margin-bottom:6px;border-radius:var(--r-md);border:1px solid var(--border);
+  background:var(--white);font-family:'Outfit',sans-serif;cursor:pointer;color:var(--text);
+  transition:background .15s,border-color .15s;
+}
+.enc-notif:hover{border-color:#c7d2fe;background:#f8faff;}
+.enc-notif.sin-leer{background:#f5f7ff;border-color:#c7d2fe;}
+.enc-notif-ico{
+  width:36px;height:36px;border-radius:10px;flex-shrink:0;
+  background:#eaf3fd;color:var(--blue2);display:flex;align-items:center;justify-content:center;
+}
+.enc-notif-txt{flex:1;min-width:0;font-size:13.5px;line-height:1.4;}
+.enc-notif-txt small{display:block;font-size:12px;color:var(--text-muted);margin-top:3px;}
+.enc-notif-punto{width:9px;height:9px;border-radius:50%;background:var(--blue2);flex-shrink:0;margin-top:6px;}
+#enc-notif-todas:disabled{opacity:.45;pointer-events:none;}
+
+@media (max-width:560px){
+  .enc-sh-add{grid-template-columns:1fr 104px;}
+  .enc-sh-add .btn{grid-column:1 / -1;}
+  .enc-sh-sel{width:100px;}
+}

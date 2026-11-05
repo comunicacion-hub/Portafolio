@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="styles.css">
 
 <!-- Espacio de nombres: debe existir antes de que los módulos se registren -->
-<script>window.RCR = { modulos: {} };</script>
+<script>window.RCR = { modulos: {}, alEntrar: [], accesoExtra: {} };</script>
 
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -43,6 +43,7 @@
 <script src="encuestas.js"></script>
 <script src="encuestas-resultados.js"></script>
 <script src="encuestas-datos.js"></script>
+<script src="encuestas-compartir.js"></script>
 </head>
 
 <body>
@@ -338,12 +339,16 @@ RCR.secciones = function () { return (RCR.user && RCR.user.secciones) || {}; };
 
 RCR.puedeVerSeccion = function (wsId, modId) {
   if (RCR.esAdmin()) return true;
+  var x = (RCR.accesoExtra || {})[wsId];
+  if (Array.isArray(x) && x.indexOf(modId) >= 0) return true;
   var s = RCR.secciones()[wsId];
   return Array.isArray(s) && s.indexOf(modId) >= 0;
 };
 
 RCR.puedeVerWorkspace = function (wsId) {
   if (RCR.esAdmin()) return true;
+  var x = (RCR.accesoExtra || {})[wsId];
+  if (Array.isArray(x) && x.length) return true;
   var s = RCR.secciones()[wsId];
   return Array.isArray(s) && s.length > 0;
 };
@@ -531,6 +536,28 @@ RCR.entrar = function () {
     document.getElementById('view').innerHTML =
       RCR.vacio('alert', 'No tienes secciones asignadas',
         'Pídele a un administrador que te habilite el acceso en comunicacion@redesconrostro.org.');
+  }
+
+  /* Ganchos de los módulos (p. ej. encuestas compartidas y notificaciones) */
+  (RCR.alEntrar || []).forEach(function (fn) {
+    try { fn(); } catch (e) { console.error('alEntrar:', e); }
+  });
+};
+
+/* Se llama cuando un gancho suma accesos después de entrar: rehace el menú
+   de perfiles y, si la persona no tenía ninguno, abre el primero disponible. */
+RCR.refrescarAccesos = function () {
+  RCR.construirWorkspaceMenu();
+  var sw = document.getElementById('ws-switch');
+  if (sw && sw.style.visibility === 'hidden' && RCR.workspacesVisibles().length) {
+    sw.style.visibility = '';
+    /* Quitar el aviso "No tienes secciones asignadas" */
+    document.querySelectorAll('#view > :not(.vista)').forEach(function (n) { n.remove(); });
+    RCR.cambiarWorkspace(RCR.workspacesVisibles()[0].id);
+  } else if (RCR.workspaceActivo) {
+    RCR.construirNav();
+    var b = document.getElementById('nav-' + RCR.activo);
+    if (b) b.classList.add('active');
   }
 };
 

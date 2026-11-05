@@ -32,6 +32,11 @@
        allow read, delete: if request.auth != null;
        allow update: if false;
      }
+     match /Notificaciones/{id} {                            // avisos de encuestas compartidas
+       allow create: if request.auth != null;
+       allow read, update, delete: if request.auth != null
+         && resource.data.para == request.auth.token.email;
+     }
 
    Este archivo también lo carga responder-encuesta.html (con un RCR mínimo):
    no debe ejecutar nada al cargarse, solo definir objetos.
@@ -157,20 +162,81 @@ var ENC = {
     ENC.cargar();
   },
 
-  /* Lee las encuestas una sola vez (la usan Encuestas y Resultados).
-     Cada persona ve las encuestas que creó; el Admin ve todas. */
+  /* Lee las encuestas una sola vez (la usan Encuestas, Resultados y Datos).
+     Cada persona ve las que creó y las que le compartieron; el Admin, todas. */
   asegurarDatos: function () {
     if (ENC.cargado) return Promise.resolve();
     if (!ENC._leyendo) {
-      var q = RCR.db.collection(ENC.COL);
-      if (!RCR.esAdmin()) q = q.where('creadoPor', '==', RCR.user.correo);
-      ENC._leyendo = q.get().then(function (snap) {
-        ENC.datos = snap.docs.map(function (d) { return Object.assign({ _docId: d.id }, d.data()); });
+      var col = RCR.db.collection(ENC.COL), yo = RCR.user.correo;
+      var consultas = RCR.esAdmin()
+        ? [col.get()]
+        : [col.where('creadoPor', '==', yo).get(), col.where('compartidoCon', 'array-contains', yo).get()];
+      ENC._leyendo = Promise.all(consultas).then(function (snaps) {
+        var porId = {};
+        snaps.forEach(function (snap) {
+          snap.docs.forEach(function (d) { porId[d.id] = Object.assign({ _docId: d.id }, d.data()); });
+        });
+        ENC.datos = Object.keys(porId).map(function (k) { return porId[k]; });
         ENC.ordenar();
         ENC.cargado = true;
       }).finally(function () { ENC._leyendo = null; });
     }
     return ENC._leyendo;
+  },
+
+  /* Vuelve a leer las encuestas (p. ej. al llegar una encuesta compartida) */
+  recargar: async function () {
+    ENC.cargado = false;
+    await ENC.asegurarDatos();
+    if (document.getElementById('enc-list')) { ENC.render(); ENC.contarRespuestas(); }
+    if (window.RES) RES.poblarSel();
+    if (window.DAT) DAT.poblarSel();
+  },
+
+  /* ── Permisos por encuesta ─────────────────────────────────────────────
+     propietario: quien la creó · editor / lector: a quien se la compartieron
+     admin: el rol Admin de Mi RCR (ve y edita todas)                       */
+  rol: function (e) {
+    if (!e || !RCR.user) return null;
+    var yo = RCR.user.correo;
+    if (e.creadoPor === yo) return 'propietario';
+    var c = (e.compartido || []).find(function (x) { return x.correo === yo; });
+    if (c) return c.rol === 'editor' ? 'editor' : 'lector';
+    return RCR.esAdmin() ? 'admin' : null;
+  },
+  puedeEditarEnc: function (e) {
+    var r = ENC.rol(e);
+    return r === 'propietario' || r === 'editor' || r === 'admin';
+  },
+  puedeBorrarEnc: function (e) {
+    var r = ENC.rol(e);
+    return r === 'propietario' || r === 'admin';
+  },
+  /* Grupo del listado: mías, compartidas conmigo, o de otras personas (Admin) */
+  grupo: function (e) {
+    var r = ENC.rol(e);
+    return r === 'propietario' ? 'mias' : (r === 'admin' ? 'otras' : 'compartidas');
+  },
+  GRUPOS: [
+    { id: 'mias', titulo: 'Mis encuestas' },
+    { id: 'compartidas', titulo: 'Compartidas conmigo' },
+    { id: 'otras', titulo: 'De otras personas' }
+  ],
+  ROL_LABEL: { propietario: 'Propietario', editor: 'Editor', lector: 'Lector', admin: 'Admin' },
+
+  /* <option> agrupadas para los menús de Resultados y Datos */
+  opcionesSelect: function (selId) {
+    var opt = function (e) {
+      return '<option value="' + ENC.attr(e._docId) + '"' + (e._docId === selId ? ' selected' : '') + '>' +
+        RCR.esc(e.titulo || 'Sin título') + (e.estado === 'cerrada' ? ' (cerrada)' : '') + '</option>';
+    };
+    var grupos = ENC.GRUPOS.map(function (g) {
+      return { g: g, items: ENC.datos.filter(function (e) { return ENC.grupo(e) === g.id; }) };
+    }).filter(function (x) { return x.items.length; });
+    if (grupos.length === 1) return grupos[0].items.map(opt).join('');
+    return grupos.map(function (x) {
+      return '<optgroup label="' + ENC.attr(x.g.titulo) + '">' + x.items.map(opt).join('') + '</optgroup>';
+    }).join('');
   },
 
   cargar: async function () {
@@ -218,18 +284,31 @@ var ENC = {
 
     if (!ENC.datos.length) {
       list.innerHTML = RCR.vacio('encuesta', 'Aún no hay encuestas',
-        RCR.puedeEditar() ? 'Toca + para crear la primera.' : 'Cuando crees una encuesta aparecerá aquí.');
+        RCR.puedeEditar() ? 'Toca + para crear la primera.' : 'Cuando crees o te compartan una encuesta aparecerá aquí.');
       return;
     }
 
-    var editable = RCR.puedeEditar();
-    list.innerHTML = ENC.datos.map(function (e) {
+    var grupos = ENC.GRUPOS.map(function (g) {
+      return { g: g, items: ENC.datos.filter(function (e) { return ENC.grupo(e) === g.id; }) };
+    }).filter(function (x) { return x.items.length; });
+    var conTitulos = grupos.length > 1 || (grupos.length === 1 && grupos[0].g.id !== 'mias');
+
+    list.innerHTML = grupos.map(function (x) {
+      return (conTitulos ? '<div class="enc-grupo">' + RCR.esc(x.g.titulo) + ' <span>' + x.items.length + '</span></div>' : '') +
+        x.items.map(ENC.tarjeta).join('');
+    }).join('');
+  },
+
+  tarjeta: function (e) {
       var id = e._docId;
       var n = (e.preguntas || []).length;
       var abierta = e.estado !== 'cerrada';
       var nResp = ENC.conteos[id];
-      var autor = (RCR.esAdmin() && e.creadoPor && e.creadoPor !== RCR.user.correo)
-        ? ' · ' + RCR.esc(e.creadoPorNombre || e.creadoPor) : '';
+      var rol = ENC.rol(e);
+      var editable = ENC.puedeEditarEnc(e);
+      var autor = (rol !== 'propietario' && e.creadoPor)
+        ? ' · De ' + RCR.esc(e.creadoPorNombre || e.creadoPor) : '';
+      var nCompartido = (e.compartido || []).length;
       return '' +
       '<div class="card enc-card"' + (editable ? ' onclick="ENC.abrirForm(\'' + id + '\')"' : '') + '>' +
         '<div class="card-top">' +
@@ -245,6 +324,10 @@ var ENC = {
           '<span class="chip ' + (abierta ? 'verde' : 'neutro') + '"><span class="chip-dot"></span>' + (abierta ? 'Abierta' : 'Cerrada') + '</span>' +
           '<span class="chip neutro" id="enc-n-' + id + '">' +
             (nResp == null ? '…' : nResp + (nResp === 1 ? ' respuesta' : ' respuestas')) + '</span>' +
+          (rol === 'editor' || rol === 'lector'
+            ? '<span class="chip enc-chip-rol">' + ico('users', 13) + ENC.ROL_LABEL[rol] + '</span>' : '') +
+          (nCompartido && (rol === 'propietario' || rol === 'admin')
+            ? '<span class="chip neutro">' + ico('users', 13) + 'Compartida con ' + nCompartido + '</span>' : '') +
         '</div>' +
         '<div class="card-icobar" onclick="event.stopPropagation();">' +
           '<button class="btn-ico" title="Compartir enlace" aria-label="Compartir enlace" onclick="ENC.compartir(\'' + id + '\')">' + ico('link', 17) + '</button>' +
@@ -252,14 +335,16 @@ var ENC = {
           (window.RES && RCR.puedeVerSeccion('encuestas', 'resultados-encuesta')
             ? '<button class="btn-ico" title="Ver resultados" aria-label="Ver resultados" onclick="RES.abrir(\'' + id + '\')">' + ico('barChart', 17) + '</button>'
             : '') +
-          (editable ?
-          '<button class="btn-ico" title="Editar" aria-label="Editar" onclick="ENC.abrirForm(\'' + id + '\')">' + ico('edit', 16) + '</button>' +
-          '<button class="btn-ico" title="Duplicar" aria-label="Duplicar" onclick="ENC.duplicar(\'' + id + '\')">' + ico('copy', 16) + '</button>' +
-          '<button class="btn-ico danger" title="Eliminar" aria-label="Eliminar" onclick="ENC.pedirBorrar(\'' + id + '\')">' + ico('trash', 16) + '</button>'
-          : '') +
+          (editable && ENC.compartirPersonas
+            ? '<button class="btn-ico" title="Compartir con personas" aria-label="Compartir con personas" onclick="ENC.compartirPersonas(\'' + id + '\')">' + ico('users', 17) + '</button>' : '') +
+          (editable
+            ? '<button class="btn-ico" title="Editar" aria-label="Editar" onclick="ENC.abrirForm(\'' + id + '\')">' + ico('edit', 16) + '</button>' : '') +
+          (RCR.puedeEditar()
+            ? '<button class="btn-ico" title="Duplicar" aria-label="Duplicar" onclick="ENC.duplicar(\'' + id + '\')">' + ico('copy', 16) + '</button>' : '') +
+          (ENC.puedeBorrarEnc(e)
+            ? '<button class="btn-ico danger" title="Eliminar" aria-label="Eliminar" onclick="ENC.pedirBorrar(\'' + id + '\')">' + ico('trash', 16) + '</button>' : '') +
         '</div>' +
       '</div>';
-    }).join('');
   },
 
   /* ==========================================================================
@@ -282,8 +367,8 @@ var ENC = {
   },
 
   abrirForm: function (docId, base) {
-    if (!RCR.puedeEditar()) { RCR.toast('No tienes permiso para editar'); return; }
     var e = docId ? ENC.datos.find(function (x) { return x._docId === docId; }) : (base || null);
+    if (docId ? !ENC.puedeEditarEnc(e) : !RCR.puedeEditar()) { RCR.toast('No tienes permiso para editar'); return; }
     var src = e ? JSON.parse(JSON.stringify({
       titulo: e.titulo || '', descripcion: e.descripcion || '',
       estado: e.estado || 'abierta', preguntas: e.preguntas || []
@@ -556,9 +641,10 @@ var ENC = {
   /* ── Guardar ───────────────────────────────────────────────────────────── */
   guardar: async function () {
     if (ENC.guardando) return;
-    if (!RCR.puedeEditar()) { RCR.toast('No tienes permiso para editar'); return; }
-
     var b = ENC.b;
+    var actual = b.docId ? ENC.datos.find(function (x) { return x._docId === b.docId; }) : null;
+    if (b.docId ? !ENC.puedeEditarEnc(actual) : !RCR.puedeEditar()) { RCR.toast('No tienes permiso para editar'); return; }
+
     var titulo = String(b.titulo || '').trim();
     if (!titulo) { RCR.toast('Ponle un título a la encuesta'); document.getElementById('enc-f-titulo').focus(); return; }
     if (!b.preguntas.length) { RCR.toast('Agrega al menos una pregunta'); return; }
@@ -706,8 +792,8 @@ var ENC = {
      ELIMINAR (la encuesta y sus respuestas)
      ========================================================================== */
   pedirBorrar: function (docId) {
-    if (!RCR.puedeEditar()) { RCR.toast('No tienes permiso para eliminar'); return; }
     var e = ENC.datos.find(function (x) { return x._docId === docId; });
+    if (!ENC.puedeBorrarEnc(e)) { RCR.toast('Solo quien creó la encuesta puede eliminarla'); return; }
     ENC.pendienteBorrar = docId;
     var n = ENC.conteos[docId];
     RCR.confirmar({
