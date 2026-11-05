@@ -40,6 +40,9 @@ window.ICONS = {
     '<path d="M4 20h16"/><rect x="5.5" y="11" width="3.2" height="6.5" rx="1"/>' +
     '<rect x="10.4" y="5" width="3.2" height="12.5" rx="1"/><rect x="15.3" y="8.5" width="3.2" height="9" rx="1"/>',
 
+  table:
+    '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9.5h18M3 15h18M9 9.5V20"/>',
+
   /* ── Acciones ─────────────────────────────────────────────────────── */
   plus:        '<path d="M12 5v14M5 12h14"/>',
   x:           '<path d="M18 6L6 18M6 6l12 12"/>',

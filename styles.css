@@ -1576,3 +1576,57 @@ a:focus-visible,
   .res-barra{grid-template-columns:1fr 64px;row-gap:6px;}
   .res-barra-lbl{grid-column:1 / -1;}
 }
+
+/* ==========================================================================
+   ENCUESTAS — Datos (tabla de registros y Excel)
+   ========================================================================== */
+.dat-wrap{max-width:1100px;}
+.dat-acciones{display:flex;align-items:center;gap:8px;}
+.dat-excel{padding:10px 14px;font-size:13.5px;min-height:44px;}
+.dat-excel:disabled{opacity:.5;pointer-events:none;}
+.dat-buscar{margin-bottom:12px;}
+.dat-resumen{
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  font-size:13px;font-weight:600;color:var(--text);margin:0 4px 10px;
+}
+.dat-resumen span{font-weight:500;color:var(--text-muted);font-size:12px;}
+.dat-card{padding:0;overflow:hidden;}
+.dat-scroll{overflow:auto;max-height:70vh;-webkit-overflow-scrolling:touch;}
+.dat-scroll:focus-visible{outline:2px solid var(--blue2);outline-offset:-2px;}
+.dat-tabla{border-collapse:separate;border-spacing:0;width:100%;font-size:13px;}
+.dat-tabla th,.dat-tabla td{
+  padding:11px 14px;text-align:left;border-bottom:1px solid var(--border);
+  max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:top;
+}
+.dat-tabla th{
+  position:sticky;top:0;z-index:2;background:var(--surface);
+  font-size:11.5px;font-weight:700;color:var(--text-muted);
+  min-width:140px;
+}
+.dat-tabla th.dat-n,.dat-tabla td.dat-n{
+  position:sticky;left:0;z-index:1;min-width:0;width:46px;text-align:right;
+  color:var(--text-muted);font-variant-numeric:tabular-nums;background:var(--white);
+  border-right:1px solid var(--border);
+}
+.dat-tabla th.dat-n{z-index:3;background:var(--surface);}
+.dat-tabla th.dat-fecha,.dat-tabla td.dat-fecha{min-width:150px;color:var(--text-muted);}
+.dat-tabla td.dat-num{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;}
+.dat-tabla td.dat-vacio{color:#b8c0cc;}
+.dat-tabla tbody tr{cursor:pointer;transition:background .12s;}
+.dat-tabla tbody tr:hover td,.dat-tabla tbody tr:focus td{background:#f5f7ff;}
+.dat-tabla tbody tr:focus{outline:none;}
+.dat-tabla tbody tr:last-child td{border-bottom:none;}
+.dat-mas{margin-top:12px;}
+
+.dat-ficha-item{padding:12px 0;border-bottom:1px solid var(--border);}
+.dat-ficha-item:first-child{padding-top:0;}
+.dat-ficha-item:last-child{border-bottom:none;}
+.dat-ficha-q{font-size:12.5px;font-weight:700;color:var(--text-muted);margin-bottom:4px;line-height:1.35;}
+.dat-ficha-v{font-size:14.5px;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere;}
+.dat-ficha-v.vacio{color:#b8c0cc;font-style:italic;}
+.dat-borrar:hover{border-color:var(--pink);color:var(--pink);}
+
+@media (max-width:560px){
+  .dat-excel{padding:10px 12px;}
+  .dat-tabla th,.dat-tabla td{padding:10px 12px;max-width:200px;}
+}

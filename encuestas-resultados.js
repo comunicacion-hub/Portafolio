@@ -111,16 +111,24 @@ var RES = {
 
     RES.pintar(RCR.cargando('Cargando respuestas'));
     try {
-      var snap = await RCR.db.collection(ENC.COL_RESP).where('encuestaId', '==', id).get();
-      RES.cache[id] = snap.docs.map(function (d) { return Object.assign({ _docId: d.id }, d.data()); })
-        .sort(function (a, b) { return RES.ms(b.enviado) - RES.ms(a.enviado); });
-      ENC.conteos[id] = RES.cache[id].length;
+      await RES.leerRespuestas(id, forzar);
     } catch (e) {
       console.error('RES.cargarRespuestas:', e);
       if (id === RES.sel) RES.pintar(RCR.vacio('alert', 'No se pudieron cargar las respuestas', 'Revisa tu conexión y vuelve a intentar.'));
       return;
     }
     if (id === RES.sel) RES.render();
+  },
+
+  /* Lee (o reutiliza) las respuestas de una encuesta. Datos usa la misma caché
+     y la misma encuesta elegida (RES.sel), así ambas secciones van a la par. */
+  leerRespuestas: async function (id, forzar) {
+    if (RES.cache[id] && !forzar) return RES.cache[id];
+    var snap = await RCR.db.collection(ENC.COL_RESP).where('encuestaId', '==', id).get();
+    RES.cache[id] = snap.docs.map(function (d) { return Object.assign({ _docId: d.id }, d.data()); })
+      .sort(function (a, b) { return RES.ms(b.enviado) - RES.ms(a.enviado); });
+    ENC.conteos[id] = RES.cache[id].length;
+    return RES.cache[id];
   },
 
   ms: function (t) {
