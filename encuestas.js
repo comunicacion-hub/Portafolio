@@ -48,7 +48,7 @@ RCR.modulos.encuestas = {
   icono: 'encuesta',
   workspace: 'encuestas',
   enNav: true,
-  crear: { label: 'Nueva encuesta', soloEditor: true, accion: function () { ENC.abrirForm(null); } },
+  crear: { label: 'Nueva encuesta', soloEditor: true, accion: function () { ENC.abrirDatos(null); } },
   mount: function (root) { ENC.mount(root); },
   onShow: function () { if (ENC.cargado) ENC.render(); }
 };
@@ -150,15 +150,7 @@ var ENC = {
      LISTADO
      ========================================================================== */
   mount: function (root) {
-    root.innerHTML =
-      '<div class="section-header">' +
-        '<div>' +
-          '<div class="section-title">Encuestas</div>' +
-          '<div class="section-sub">Crea encuestas y comparte el enlace</div>' +
-        '</div>' +
-        '<div class="count-badge" id="enc-count">0</div>' +
-      '</div>' +
-      '<div id="enc-list">' + RCR.cargando('Cargando encuestas') + '</div>';
+    root.innerHTML = '<div id="enc-list">' + RCR.cargando('Cargando encuestas') + '</div>';
     ENC.cargar();
   },
 
@@ -279,8 +271,6 @@ var ENC = {
   render: function () {
     var list = document.getElementById('enc-list');
     if (!list) return;
-    var cnt = document.getElementById('enc-count');
-    if (cnt) cnt.textContent = ENC.datos.length;
 
     if (!ENC.datos.length) {
       list.innerHTML = RCR.vacio('encuesta', 'Aún no hay encuestas',
@@ -310,7 +300,7 @@ var ENC = {
         ? ' · De ' + RCR.esc(e.creadoPorNombre || e.creadoPor) : '';
       var nCompartido = (e.compartido || []).length;
       return '' +
-      '<div class="card enc-card"' + (editable ? ' onclick="ENC.abrirForm(\'' + id + '\')"' : '') + '>' +
+      '<div class="card enc-card"' + (editable ? ' onclick="ENC.abrirPreguntas(\'' + id + '\')"' : '') + '>' +
         '<div class="card-top">' +
           '<div class="card-badge-soft">' + ico('encuesta', 22) + '</div>' +
           '<div class="card-info">' +
@@ -331,16 +321,8 @@ var ENC = {
         '</div>' +
         '<div class="card-icobar" onclick="event.stopPropagation();">' +
           '<button class="btn-ico" title="Compartir enlace" aria-label="Compartir enlace" onclick="ENC.compartir(\'' + id + '\')">' + ico('link', 17) + '</button>' +
-          '<button class="btn-ico" title="Vista previa" aria-label="Vista previa" onclick="ENC.previa(\'' + id + '\')">' + ico('eye', 17) + '</button>' +
-          (window.RES && RCR.puedeVerSeccion('encuestas', 'resultados-encuesta')
-            ? '<button class="btn-ico" title="Ver resultados" aria-label="Ver resultados" onclick="RES.abrir(\'' + id + '\')">' + ico('barChart', 17) + '</button>'
-            : '') +
-          (editable && ENC.compartirPersonas
-            ? '<button class="btn-ico" title="Compartir con personas" aria-label="Compartir con personas" onclick="ENC.compartirPersonas(\'' + id + '\')">' + ico('users', 17) + '</button>' : '') +
           (editable
-            ? '<button class="btn-ico" title="Editar" aria-label="Editar" onclick="ENC.abrirForm(\'' + id + '\')">' + ico('edit', 16) + '</button>' : '') +
-          (RCR.puedeEditar()
-            ? '<button class="btn-ico" title="Duplicar" aria-label="Duplicar" onclick="ENC.duplicar(\'' + id + '\')">' + ico('copy', 16) + '</button>' : '') +
+            ? '<button class="btn-ico" title="Preguntas" aria-label="Preguntas" onclick="ENC.abrirPreguntas(\'' + id + '\')">' + ico('help', 17) + '</button>' : '') +
           (ENC.puedeBorrarEnc(e)
             ? '<button class="btn-ico danger" title="Eliminar" aria-label="Eliminar" onclick="ENC.pedirBorrar(\'' + id + '\')">' + ico('trash', 16) + '</button>' : '') +
         '</div>' +
@@ -366,47 +348,227 @@ var ENC = {
     };
   },
 
-  abrirForm: function (docId, base) {
-    var e = docId ? ENC.datos.find(function (x) { return x._docId === docId; }) : (base || null);
-    if (docId ? !ENC.puedeEditarEnc(e) : !RCR.puedeEditar()) { RCR.toast('No tienes permiso para editar'); return; }
-    var src = e ? JSON.parse(JSON.stringify({
-      titulo: e.titulo || '', descripcion: e.descripcion || '',
-      estado: e.estado || 'abierta', preguntas: e.preguntas || []
-    })) : null;
+  buscar: function (docId) {
+    return ENC.datos.find(function (x) { return x._docId === docId; }) || null;
+  },
 
-    ENC.b = src || { titulo: '', descripcion: '', estado: 'abierta', preguntas: [ENC.nuevaPregunta('unica')] };
-    ENC.b.docId = docId || null;
+  /* ── Paso 1: ventana con título, descripción y estado ──────────────────
+     Sirve para crear la encuesta (queda sin preguntas) y para editar esos
+     datos después, desde la cabecera de la pantalla de preguntas. */
+  abrirDatos: function (docId) {
+    var e = docId ? ENC.buscar(docId) : null;
+    if (docId ? !ENC.puedeEditarEnc(e) : !RCR.puedeEditar()) { RCR.toast('No tienes permiso para editar'); return; }
+    var d = e || { titulo: '', descripcion: '', estado: 'abierta' };
 
     RCR.modal({
-      id: 'm-enc-form',
+      id: 'm-enc-datos',
       persistente: true,
       titulo: docId ? 'Editar encuesta' : 'Nueva encuesta',
-      sub: 'Agrega preguntas y, si quieres, condiciones para mostrarlas',
+      sub: docId ? '' : 'Después de crearla, toca la tarjeta para agregar las preguntas.',
       cuerpo:
-        '<div class="form-grp"><label class="form-lbl">Título *</label>' +
-          '<input class="form-inp" id="enc-f-titulo" maxlength="140" placeholder="Ej. Encuesta de clima laboral" ' +
-            'value="' + ENC.attr(ENC.b.titulo) + '" oninput="ENC.b.titulo=this.value"></div>' +
-        '<div class="form-grp"><label class="form-lbl">Descripción <span class="opt">(opcional)</span></label>' +
-          '<textarea class="form-inp" id="enc-f-desc" rows="2" placeholder="Cuéntale a quien responde de qué se trata" ' +
-            'oninput="ENC.b.descripcion=this.value">' + RCR.esc(ENC.b.descripcion) + '</textarea></div>' +
-        '<div class="form-grp"><label class="form-lbl">Estado</label>' +
-          '<select class="form-inp" id="enc-f-estado" onchange="ENC.b.estado=this.value">' +
-            '<option value="abierta"' + (ENC.b.estado !== 'cerrada' ? ' selected' : '') + '>Abierta — recibe respuestas</option>' +
-            '<option value="cerrada"' + (ENC.b.estado === 'cerrada' ? ' selected' : '') + '>Cerrada — no recibe respuestas</option>' +
-          '</select></div>' +
-        '<div class="seg-sep">Preguntas</div>' +
-        '<div id="enc-preguntas"></div>' +
-        '<button class="rep-add" type="button" onclick="ENC.agregarPregunta()">' + ico('plus', 15) + 'Agregar pregunta</button>',
+        '<div class="form-grp"><label class="form-lbl" for="enc-d-titulo">Título *</label>' +
+          '<input class="form-inp" id="enc-d-titulo" maxlength="140" placeholder="Ej. Encuesta de clima laboral" ' +
+            'value="' + ENC.attr(d.titulo || '') + '"></div>' +
+        '<div class="form-grp"><label class="form-lbl" for="enc-d-desc">Descripción <span class="opt">(opcional)</span></label>' +
+          '<textarea class="form-inp" id="enc-d-desc" rows="3" placeholder="Cuéntale a quien responde de qué se trata">' +
+            RCR.esc(d.descripcion || '') + '</textarea></div>' +
+        '<div class="form-grp" style="margin-bottom:0"><label class="form-lbl" for="enc-d-estado">Estado</label>' +
+          '<select class="form-inp" id="enc-d-estado">' +
+            '<option value="abierta"' + (d.estado !== 'cerrada' ? ' selected' : '') + '>Abierta — recibe respuestas</option>' +
+            '<option value="cerrada"' + (d.estado === 'cerrada' ? ' selected' : '') + '>Cerrada — no recibe respuestas</option>' +
+          '</select></div>',
       acciones:
-        '<button class="btn btn-glass" onclick="RCR.cerrarModal(\'m-enc-form\')">Cancelar</button>' +
-        '<button class="btn btn-primary" id="enc-save" onclick="ENC.guardar()">Guardar</button>'
+        '<button class="btn btn-glass" onclick="RCR.cerrarModal(\'m-enc-datos\')">Cancelar</button>' +
+        '<button class="btn btn-primary" id="enc-d-save" onclick="ENC.guardarDatos(\'' + (docId || '') + '\')">' +
+          (docId ? 'Guardar' : 'Crear') + '</button>'
     });
+    setTimeout(function () { var t = document.getElementById('enc-d-titulo'); if (t && !docId) t.focus(); }, 60);
+  },
+
+  guardarDatos: async function (docId) {
+    if (ENC.guardando) return;
+    docId = docId || null;
+    var e = docId ? ENC.buscar(docId) : null;
+    if (docId ? !ENC.puedeEditarEnc(e) : !RCR.puedeEditar()) { RCR.toast('No tienes permiso para editar'); return; }
+
+    var titulo = document.getElementById('enc-d-titulo').value.trim();
+    if (!titulo) { RCR.toast('Ponle un título a la encuesta'); document.getElementById('enc-d-titulo').focus(); return; }
+    var data = {
+      titulo: titulo,
+      descripcion: document.getElementById('enc-d-desc').value.trim(),
+      estado: document.getElementById('enc-d-estado').value === 'cerrada' ? 'cerrada' : 'abierta',
+      actualizado: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    ENC.guardando = true;
+    var btn = document.getElementById('enc-d-save');
+    var txt = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+    try {
+      var id = docId;
+      if (id) {
+        await RCR.db.collection(ENC.COL).doc(id).update(data);
+      } else {
+        data.preguntas = [];
+        data.creadoPor = RCR.user.correo;
+        data.creadoPorNombre = RCR.user.nombre || RCR.user.correo;
+        data.creado = firebase.firestore.FieldValue.serverTimestamp();
+        id = (await RCR.db.collection(ENC.COL).add(data)).id;
+      }
+      ENC.guardarLocal(id, data, !docId);
+      if (ENC.b && ENC.b.docId === id) {
+        ENC.b.titulo = data.titulo; ENC.b.descripcion = data.descripcion; ENC.b.estado = data.estado;
+        ENC.pintarCabecera();
+      }
+      RCR.cerrarModal('m-enc-datos');
+      RCR.toast(docId ? 'Datos actualizados' : 'Encuesta creada');
+    } catch (err) {
+      console.error('ENC.guardarDatos:', err);
+      RCR.toast('No se pudo guardar. Revisa tu conexión.');
+    }
+    if (btn) { btn.disabled = false; btn.innerHTML = txt; }
+    ENC.guardando = false;
+  },
+
+  /* Copia local con fecha aproximada (el servidor pone la real) y repinta */
+  guardarLocal: function (id, data, nuevo) {
+    var ahora = firebase.firestore.Timestamp.now();
+    var local = Object.assign({}, data, { _docId: id, actualizado: ahora });
+    if (nuevo) local.creado = ahora;
+    var k = ENC.datos.findIndex(function (x) { return x._docId === id; });
+    if (k >= 0) Object.assign(ENC.datos[k], local);
+    else { ENC.datos.unshift(local); ENC.conteos[id] = 0; }
+    ENC.ordenar();
+    ENC.render();
+    if (window.RES && RES.poblarSel) RES.poblarSel();
+    if (window.DAT && DAT.poblarSel) DAT.poblarSel();
+  },
+
+  /* ── Paso 2: pantalla de nivel 2 para crear las preguntas ────────────── */
+  abrirPreguntas: function (docId) {
+    var e = ENC.buscar(docId);
+    if (!ENC.puedeEditarEnc(e)) { RCR.toast('No tienes permiso para editar'); return; }
+    ENC.b = JSON.parse(JSON.stringify({
+      titulo: e.titulo || '', descripcion: e.descripcion || '',
+      estado: e.estado || 'abierta', preguntas: e.preguntas || []
+    }));
+    ENC.b.docId = docId;
+    if (!ENC.b.preguntas.length) ENC.b.preguntas.push(ENC.nuevaPregunta('unica'));
+    ENC.reordenando = false;
+    ENC.foto = ENC.instantanea();
+
+    RCR.subvista({
+      titulo: 'Preguntas',
+      cuerpo:
+        '<div class="enc-sv-tools">' +
+          '<button class="enc-sv-btn" id="enc-sv-orden" type="button" title="Reordenar" aria-label="Reordenar preguntas" ' +
+            'aria-pressed="false" onclick="ENC.toggleReordenar()">' + ico('sort', 20) + '</button>' +
+          '<button class="enc-sv-btn primario" id="enc-save" type="button" title="Guardar" aria-label="Guardar" ' +
+            'onclick="ENC.guardar()">' + ico('save', 20) + '</button>' +
+        '</div>' +
+        '<div class="form-wrap">' +
+          '<div class="enc-sv-head" id="enc-sv-head"></div>' +
+          '<div id="enc-preguntas"></div>' +
+          '<button class="rep-add" id="enc-add-q" type="button" onclick="ENC.agregarPregunta()">' + ico('plus', 15) + 'Agregar pregunta</button>' +
+        '</div>',
+      onCerrar: function () { ENC.intentarCerrar(); }
+    });
+    ENC.pintarCabecera();
     ENC.renderPreguntas();
+  },
+
+  instantanea: function () { return JSON.stringify(ENC.b ? ENC.b.preguntas : null); },
+
+  intentarCerrar: function () {
+    if (!ENC.b || ENC.instantanea() === ENC.foto) { ENC.cerrarPreguntas(); return; }
+    RCR.confirmar({
+      titulo: '¿Salir sin guardar?',
+      texto: 'Los cambios en las preguntas se pierden.',
+      label: 'Salir',
+      onOk: "RCR.cerrarModal('m-confirm');ENC.cerrarPreguntas();"
+    });
+  },
+
+  cerrarPreguntas: function () {
+    ENC.b = null;
+    ENC.reordenando = false;
+    RCR.cerrarSubvista();
+  },
+
+  /* Título, descripción y estado arriba de las preguntas */
+  pintarCabecera: function () {
+    var el = document.getElementById('enc-sv-head');
+    if (!el || !ENC.b) return;
+    var abierta = ENC.b.estado !== 'cerrada';
+    el.innerHTML =
+      '<div class="enc-sv-tit-row">' +
+        '<div class="enc-sv-tit">' + RCR.esc(ENC.b.titulo || 'Sin título') + '</div>' +
+        '<button class="btn-ico" type="button" title="Editar título, descripción y estado" aria-label="Editar título, descripción y estado" ' +
+          'onclick="ENC.abrirDatos(\'' + ENC.b.docId + '\')">' + ico('edit', 16) + '</button>' +
+      '</div>' +
+      (ENC.b.descripcion ? '<div class="enc-sv-desc">' + RCR.esc(ENC.b.descripcion) + '</div>' : '') +
+      '<div class="chips-row">' +
+        '<span class="chip ' + (abierta ? 'verde' : 'neutro') + '"><span class="chip-dot"></span>' + (abierta ? 'Abierta' : 'Cerrada') + '</span>' +
+      '</div>';
+  },
+
+  /* Modo reordenar: lista compacta para arrastrar o mover con flechas */
+  toggleReordenar: function () {
+    ENC.reordenando = !ENC.reordenando;
+    var b = document.getElementById('enc-sv-orden');
+    if (b) { b.classList.toggle('activo', ENC.reordenando); b.setAttribute('aria-pressed', String(ENC.reordenando)); }
+    var add = document.getElementById('enc-add-q');
+    if (add) add.classList.toggle('hidden', ENC.reordenando);
+    ENC.renderPreguntas();
+  },
+
+  renderOrden: function (box) {
+    var ps = ENC.b.preguntas, total = ps.length;
+    box.innerHTML =
+      '<div class="enc-orden-nota">' + ico('sort', 14) + 'Arrastra las preguntas o usa las flechas. Toca el botón de reordenar otra vez para seguir editando.</div>' +
+      ps.map(function (q, i) {
+        var t = (q.texto || '').trim() || '(sin texto)';
+        return '' +
+        '<div class="enc-orden-row" draggable="true" data-i="' + i + '" ' +
+          'ondragstart="ENC.dragInicio(event,' + i + ')" ondragover="ENC.dragSobre(event)" ' +
+          'ondragleave="this.classList.remove(\'sobre\')" ondrop="ENC.soltar(event,' + i + ')" ondragend="ENC.dragFin()">' +
+          '<span class="enc-orden-grip" aria-hidden="true">' + ico('grip', 16) + '</span>' +
+          '<span class="enc-orden-num">' + (i + 1) + '</span>' +
+          '<span class="enc-orden-txt"><strong>' + RCR.esc(t) + '</strong>' +
+            '<small>' + RCR.esc(ENC.tipoLabel(q.tipo)) + (q.condicion ? ' · con condición' : '') + '</small></span>' +
+          '<button class="btn-ico" type="button" title="Subir" aria-label="Subir pregunta"' + (i === 0 ? ' disabled' : '') + ' onclick="ENC.mover(' + i + ',-1)">' + ico('chevronUp', 16) + '</button>' +
+          '<button class="btn-ico" type="button" title="Bajar" aria-label="Bajar pregunta"' + (i === total - 1 ? ' disabled' : '') + ' onclick="ENC.mover(' + i + ',1)">' + ico('chevronDown', 16) + '</button>' +
+        '</div>';
+      }).join('');
+  },
+
+  dragInicio: function (ev, i) {
+    ENC._arrastre = i;
+    ev.dataTransfer.effectAllowed = 'move';
+    try { ev.dataTransfer.setData('text/plain', String(i)); } catch (e) { /* algunos navegadores */ }
+    ev.currentTarget.classList.add('arrastrando');
+  },
+  dragSobre: function (ev) {
+    if (ENC._arrastre == null) return;
+    ev.preventDefault();
+    ev.currentTarget.classList.add('sobre');
+  },
+  soltar: function (ev, i) {
+    ev.preventDefault();
+    var de = ENC._arrastre;
+    ENC._arrastre = null;
+    if (de == null || de === i) { ENC.renderPreguntas(); return; }
+    ENC.moverA(de, i);
+  },
+  dragFin: function () {
+    ENC._arrastre = null;
+    document.querySelectorAll('.enc-orden-row').forEach(function (r) { r.classList.remove('arrastrando', 'sobre'); });
   },
 
   renderPreguntas: function () {
     var box = document.getElementById('enc-preguntas');
     if (!box) return;
+    if (ENC.reordenando) { ENC.renderOrden(box); return; }
     var ps = ENC.b.preguntas, total = ps.length;
 
     box.innerHTML = ps.map(function (q, i) {
@@ -439,8 +601,6 @@ var ENC = {
         '<div class="rep-head">' +
           '<span class="rep-num">Pregunta ' + (i + 1) + '</span>' +
           '<div class="enc-q-tools">' +
-            '<button class="btn-ico" type="button" title="Subir" aria-label="Subir pregunta"' + (i === 0 ? ' disabled' : '') + ' onclick="ENC.mover(' + i + ',-1)">' + ico('chevronUp', 16) + '</button>' +
-            '<button class="btn-ico" type="button" title="Bajar" aria-label="Bajar pregunta"' + (i === total - 1 ? ' disabled' : '') + ' onclick="ENC.mover(' + i + ',1)">' + ico('chevronDown', 16) + '</button>' +
             '<button class="btn-ico" type="button" title="Duplicar" aria-label="Duplicar pregunta" onclick="ENC.duplicarPregunta(' + i + ')">' + ico('copy', 15) + '</button>' +
             (total > 1 ? '<button class="btn-ico danger" type="button" title="Eliminar" aria-label="Eliminar pregunta" onclick="ENC.quitarPregunta(' + i + ')">' + ico('trash', 15) + '</button>' : '') +
           '</div>' +
@@ -598,10 +758,13 @@ var ENC = {
     ENC.renderPreguntas();
   },
 
-  mover: function (i, d) {
-    var ps = ENC.b.preguntas, j = i + d;
-    if (j < 0 || j >= ps.length) return;
-    var t = ps[i]; ps[i] = ps[j]; ps[j] = t;
+  mover: function (i, d) { ENC.moverA(i, i + d); },
+
+  /* Lleva la pregunta de la posición "de" a la posición "a" */
+  moverA: function (de, a) {
+    var ps = ENC.b.preguntas;
+    if (a < 0 || a >= ps.length || a === de) return;
+    ps.splice(a, 0, ps.splice(de, 1)[0]);
     var antes = JSON.stringify(ps.map(function (p) { return p.condicion; }));
     ENC.limpiarCondiciones();
     if (JSON.stringify(ps.map(function (p) { return p.condicion; })) !== antes) {
@@ -642,12 +805,10 @@ var ENC = {
   guardar: async function () {
     if (ENC.guardando) return;
     var b = ENC.b;
-    var actual = b.docId ? ENC.datos.find(function (x) { return x._docId === b.docId; }) : null;
-    if (b.docId ? !ENC.puedeEditarEnc(actual) : !RCR.puedeEditar()) { RCR.toast('No tienes permiso para editar'); return; }
-
-    var titulo = String(b.titulo || '').trim();
-    if (!titulo) { RCR.toast('Ponle un título a la encuesta'); document.getElementById('enc-f-titulo').focus(); return; }
+    if (!b || !b.docId) return;
+    if (!ENC.puedeEditarEnc(ENC.buscar(b.docId))) { RCR.toast('No tienes permiso para editar'); return; }
     if (!b.preguntas.length) { RCR.toast('Agrega al menos una pregunta'); return; }
+    if (ENC.reordenando) ENC.toggleReordenar();   // para poder señalar errores en la pregunta
 
     /* Normalizar y validar preguntas */
     for (var i = 0; i < b.preguntas.length; i++) {
@@ -666,9 +827,6 @@ var ENC = {
     ENC.limpiarCondiciones();
 
     var data = {
-      titulo: titulo,
-      descripcion: String(b.descripcion || '').trim(),
-      estado: b.estado === 'cerrada' ? 'cerrada' : 'abierta',
       preguntas: b.preguntas.map(function (q) {
         return {
           id: q.id, tipo: q.tipo, texto: q.texto, requerida: !!q.requerida,
@@ -684,34 +842,17 @@ var ENC = {
     if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
 
     try {
-      var id = b.docId;
-      if (id) {
-        await RCR.db.collection(ENC.COL).doc(id).update(data);
-      } else {
-        data.creadoPor = RCR.user.correo;
-        data.creadoPorNombre = RCR.user.nombre || RCR.user.correo;
-        data.creado = firebase.firestore.FieldValue.serverTimestamp();
-        var ref = await RCR.db.collection(ENC.COL).add(data);
-        id = ref.id;
-      }
-      /* Copia local con fecha aproximada (el servidor pone la real) */
-      var ahora = firebase.firestore.Timestamp.now();
-      var local = Object.assign({}, data, { _docId: id, actualizado: ahora });
-      if (!b.docId) local.creado = ahora;
-      var k = ENC.datos.findIndex(function (x) { return x._docId === id; });
-      if (k >= 0) ENC.datos[k] = Object.assign(ENC.datos[k], local);
-      else { ENC.datos.unshift(local); ENC.conteos[id] = 0; }
-      ENC.ordenar();
-      ENC.render();
-      RCR.cerrarModal('m-enc-form');
-      RCR.toast(b.docId ? 'Encuesta actualizada' : 'Encuesta creada');
-      if (!b.docId) ENC.compartir(id);
+      await RCR.db.collection(ENC.COL).doc(b.docId).update(data);
+      ENC.guardarLocal(b.docId, data, false);
+      ENC.renderPreguntas();            // muestra las opciones ya limpias
+      ENC.foto = ENC.instantanea();
+      RCR.toast('Preguntas guardadas');
     } catch (e) {
       console.error('ENC.guardar:', e);
       RCR.toast('No se pudo guardar. Revisa tu conexión.');
     }
 
-    if (btn) { btn.disabled = false; btn.innerHTML = 'Guardar'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = ico('save', 20); }
     ENC.guardando = false;
   },
 
@@ -722,14 +863,6 @@ var ENC = {
     el.classList.add('enc-q-error');
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     setTimeout(function () { el.classList.remove('enc-q-error'); }, 2400);
-  },
-
-  duplicar: function (docId) {
-    var e = ENC.datos.find(function (x) { return x._docId === docId; });
-    if (!e) return;
-    var copia = JSON.parse(JSON.stringify({ titulo: e.titulo, descripcion: e.descripcion, estado: 'abierta', preguntas: e.preguntas || [] }));
-    copia.titulo = 'Copia de ' + (copia.titulo || 'encuesta');
-    ENC.abrirForm(null, copia);
   },
 
   /* ==========================================================================
@@ -753,6 +886,7 @@ var ENC = {
           '<input class="form-inp" id="enc-link-url" value="' + ENC.attr(url) + '" readonly onclick="this.select()">' +
         '</div>',
       acciones:
+        '<button class="btn btn-glass" onclick="ENC.previa(\'' + docId + '\')">' + ico('eye', 15) + 'Vista previa</button>' +
         '<button class="btn btn-glass" onclick="ENC.gmail(\'' + docId + '\')">' + ico('mail', 15) + 'Gmail</button>' +
         '<button class="btn btn-primary" onclick="ENC.copiarLink()">' + ico('link', 15) + 'Copiar enlace</button>'
     });
