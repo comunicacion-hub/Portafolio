@@ -156,7 +156,7 @@ var RES = {
 
   /* Resumen por pregunta (lo usan el dashboard y las imágenes) */
   resumir: function (enc, resps) {
-    var ps = enc.preguntas || [];
+    var ps = ENC.soloPreguntas(enc.preguntas);
     return ps.map(function (q, i) {
       var vals = resps.map(function (r) { return (r.respuestas || {})[q.id]; })
         .filter(function (v) { return !RES.vacio(v); });
@@ -227,7 +227,7 @@ var RES = {
     var html =
       '<div class="res-kpis">' +
         RES.kpi(total, total === 1 ? 'Respuesta' : 'Respuestas') +
-        RES.kpi((enc.preguntas || []).length, 'Preguntas') +
+        RES.kpi(ENC.soloPreguntas(enc.preguntas).length, 'Preguntas') +
         RES.kpi(ultima ? RES.fmtDia(ultima) : '—', 'Última respuesta') +
       '</div>';
 
@@ -290,7 +290,7 @@ var RES = {
     var partes = [s.respondieron + (s.respondieron === 1 ? ' respondió' : ' respondieron')];
     var c = s.q.condicion;
     if (c) {
-      var ps = enc.preguntas || [];
+      var ps = ENC.soloPreguntas(enc.preguntas);
       var k = ps.findIndex(function (p) { return p.id === c.pregunta; });
       if (k >= 0) partes.push('solo si P' + (k + 1) + (ps[k].tipo === 'multiple' ? ' incluye ' : ' = ') + '«' + c.valor + '»');
     }

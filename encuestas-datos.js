@@ -152,7 +152,7 @@ var DAT = {
   /* Respuestas con su número (1 = la más antigua) y el texto para buscar */
   filas: function () {
     var enc = RES.encuesta(), resps = RES.cache[RES.sel] || [], total = resps.length;
-    var ps = (enc && enc.preguntas) || [];
+    var ps = ENC.soloPreguntas(enc && enc.preguntas);
     var todas = resps.map(function (r, i) {
       var ms = RES.ms(r.enviado);
       return { r: r, n: total - i, ms: ms };
@@ -171,7 +171,7 @@ var DAT = {
     var resps = RES.cache[RES.sel];
     if (ENC.toggleCompartir) ENC.toggleCompartir('dat-compartir', enc);
     if (!enc || !resps) return;
-    var ps = enc.preguntas || [];
+    var ps = ENC.soloPreguntas(enc.preguntas);
     DAT.botonExcel(resps.length > 0);
 
     if (!resps.length) {
@@ -233,7 +233,7 @@ var DAT = {
     if (!enc || i < 0) return;
     var r = resps[i], resp = r.respuestas || {}, n = resps.length - i;
 
-    var cuerpo = (enc.preguntas || []).map(function (q, k) {
+    var cuerpo = ENC.soloPreguntas(enc.preguntas).map(function (q, k) {
       var v = resp[q.id];
       return '<div class="dat-ficha-item">' +
         '<div class="dat-ficha-q">P' + (k + 1) + '. ' + RCR.esc(q.texto) + '</div>' +
@@ -322,7 +322,7 @@ var DAT = {
 
   /* Arma el libro (función aparte para poder probarla sin descargar) */
   libro: function (enc, resps) {
-    var ps = enc.preguntas || [];
+    var ps = ENC.soloPreguntas(enc.preguntas);
     var asc = resps.slice().sort(function (a, b) { return RES.ms(a.enviado) - RES.ms(b.enviado); });
 
     /* Hoja 1: Respuestas */

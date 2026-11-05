@@ -114,16 +114,25 @@ var ENC = {
      las respuestas dadas. Una pregunta se ve si no tiene condición, o si la
      pregunta de la que depende se ve y su respuesta cumple la condición. */
   visibles: function (preguntas, resp) {
-    var vis = {}, porId = {};
+    var vis = {}, porId = {}, secVis = true;
     (preguntas || []).forEach(function (q) {
       porId[q.id] = q;
-      var c = q.condicion;
-      if (!c || !c.pregunta) { vis[q.id] = true; return; }
-      var src = porId[c.pregunta];
-      vis[q.id] = !!(src && vis[src.id] && ENC.cumple(src, resp[src.id], c.valor));
+      var c = q.condicion, ok = true;
+      if (c && c.pregunta) {
+        var src = porId[c.pregunta];
+        ok = !!(src && vis[src.id] && ENC.cumple(src, resp[src.id], c.valor));
+      }
+      /* Una sección oculta esconde todas sus preguntas (hasta la siguiente) */
+      if (ENC.esSeccion(q)) { secVis = ok; vis[q.id] = ok; return; }
+      vis[q.id] = secVis && ok;
     });
     return vis;
   },
+
+  /* Las secciones van en la misma lista que las preguntas (tipo 'seccion'):
+     agrupan las preguntas que siguen hasta la próxima sección. */
+  esSeccion: function (q) { return !!q && q.tipo === 'seccion'; },
+  soloPreguntas: function (ps) { return (ps || []).filter(function (q) { return q.tipo !== 'seccion'; }); },
 
   /* Formatea un valor guardado para mostrarlo */
   fmtValor: function (v) {
@@ -291,7 +300,7 @@ var ENC = {
 
   tarjeta: function (e) {
       var id = e._docId;
-      var n = (e.preguntas || []).length;
+      var n = ENC.soloPreguntas(e.preguntas).length;
       var abierta = e.estado !== 'cerrada';
       var nResp = ENC.conteos[id];
       var rol = ENC.rol(e);
@@ -346,6 +355,10 @@ var ENC = {
       opciones: (tipo === 'unica' || tipo === 'multiple') ? ['Opción 1', 'Opción 2'] : [],
       condicion: null
     };
+  },
+
+  nuevaSeccion: function () {
+    return { id: ENC.nuevoId(), tipo: 'seccion', texto: '', descripcion: '', condicion: null };
   },
 
   buscar: function (docId) {
@@ -466,12 +479,26 @@ var ENC = {
           '<button class="enc-sv-btn primario" id="enc-save" type="button" title="Guardar" aria-label="Guardar" ' +
             'onclick="ENC.guardar()">' + ico('save', 20) + '</button>' +
         '</div>' +
-        '<div class="form-wrap">' +
-          '<div class="enc-sv-head" id="enc-sv-head"></div>' +
+        '<div class="eb-fondo" aria-hidden="true"></div>' +
+        '<div class="eb-techo" aria-hidden="true"></div>' +
+        '<div class="eb">' +
+          '<div id="enc-sv-head"></div>' +
           '<div id="enc-preguntas"></div>' +
-          '<button class="rep-add" id="enc-add-q" type="button" onclick="ENC.agregarPregunta()">' + ico('plus', 15) + 'Agregar pregunta</button>' +
+          /* Barra flotante tipo iOS: agregar pregunta o sección */
+          '<div class="eb-dock" id="enc-add-q" role="toolbar" aria-label="Agregar">' +
+            '<button type="button" class="eb-dock-btn" onclick="ENC.agregarPregunta()">' + ico('plus', 18, 2.2) + '<span>Pregunta</span></button>' +
+            '<span class="eb-dock-sep" aria-hidden="true"></span>' +
+            '<button type="button" class="eb-dock-btn" onclick="ENC.agregarSeccion()">' + ico('seccion', 18) + '<span>Sección</span></button>' +
+          '</div>' +
         '</div>',
       onCerrar: function () { ENC.intentarCerrar(); }
+    });
+    var box = document.getElementById('enc-preguntas');
+    /* Resalta la tarjeta en la que se está escribiendo */
+    box.addEventListener('focusin', function (ev) {
+      var card = ev.target.closest('.eb-q, .eb-sec');
+      box.querySelectorAll('.activa').forEach(function (c) { if (c !== card) c.classList.remove('activa'); });
+      if (card) card.classList.add('activa');
     });
     ENC.pintarCabecera();
     ENC.renderPreguntas();
@@ -501,15 +528,27 @@ var ENC = {
     if (!el || !ENC.b) return;
     var abierta = ENC.b.estado !== 'cerrada';
     el.innerHTML =
-      '<div class="enc-sv-tit-row">' +
-        '<div class="enc-sv-tit">' + RCR.esc(ENC.b.titulo || 'Sin título') + '</div>' +
-        '<button class="btn-ico" type="button" title="Editar título, descripción y estado" aria-label="Editar título, descripción y estado" ' +
-          'onclick="ENC.abrirDatos(\'' + ENC.b.docId + '\')">' + ico('edit', 16) + '</button>' +
-      '</div>' +
-      (ENC.b.descripcion ? '<div class="enc-sv-desc">' + RCR.esc(ENC.b.descripcion) + '</div>' : '') +
-      '<div class="chips-row">' +
-        '<span class="chip ' + (abierta ? 'verde' : 'neutro') + '"><span class="chip-dot"></span>' + (abierta ? 'Abierta' : 'Cerrada') + '</span>' +
-      '</div>';
+      '<header class="eb-hero">' +
+        '<div class="eb-hero-top">' +
+          '<span class="eb-estado ' + (abierta ? 'on' : '') + '"><i></i>' + (abierta ? 'Abierta' : 'Cerrada') + '</span>' +
+          '<button class="eb-pill" type="button" onclick="ENC.abrirDatos(\'' + ENC.b.docId + '\')" ' +
+            'aria-label="Editar título, descripción y estado">' + ico('edit', 14) + 'Editar</button>' +
+        '</div>' +
+        '<h1 class="eb-hero-tit">' + RCR.esc(ENC.b.titulo || 'Sin título') + '</h1>' +
+        (ENC.b.descripcion ? '<p class="eb-hero-desc">' + RCR.esc(ENC.b.descripcion) + '</p>' : '') +
+        '<div class="eb-hero-meta" id="enc-sv-meta"></div>' +
+      '</header>';
+    ENC.pintarMeta();
+  },
+
+  /* "3 preguntas · 2 secciones" bajo el título */
+  pintarMeta: function () {
+    var el = document.getElementById('enc-sv-meta');
+    if (!el || !ENC.b) return;
+    var nq = ENC.soloPreguntas(ENC.b.preguntas).length;
+    var ns = ENC.b.preguntas.length - nq;
+    el.textContent = nq + (nq === 1 ? ' pregunta' : ' preguntas') +
+      (ns ? ' · ' + ns + (ns === 1 ? ' sección' : ' secciones') : '');
   },
 
   /* Modo reordenar: lista compacta para arrastrar o mover con flechas */
@@ -523,23 +562,26 @@ var ENC = {
   },
 
   renderOrden: function (box) {
-    var ps = ENC.b.preguntas, total = ps.length;
+    var ps = ENC.b.preguntas, total = ps.length, nq = 0, ns = 0;
     box.innerHTML =
-      '<div class="enc-orden-nota">' + ico('sort', 14) + 'Arrastra las preguntas o usa las flechas. Toca el botón de reordenar otra vez para seguir editando.</div>' +
+      '<div class="eb-nota">' + ico('sort', 14) + 'Arrastra o usa las flechas. Toca reordenar otra vez para seguir editando.</div>' +
+      '<div class="eb-orden">' +
       ps.map(function (q, i) {
-        var t = (q.texto || '').trim() || '(sin texto)';
+        var sec = ENC.esSeccion(q);
+        var t = (q.texto || '').trim() || (sec ? '(sección sin título)' : '(sin texto)');
         return '' +
-        '<div class="enc-orden-row" draggable="true" data-i="' + i + '" ' +
+        '<div class="eb-orden-row' + (sec ? ' sec' : '') + '" draggable="true" data-i="' + i + '" ' +
           'ondragstart="ENC.dragInicio(event,' + i + ')" ondragover="ENC.dragSobre(event)" ' +
           'ondragleave="this.classList.remove(\'sobre\')" ondrop="ENC.soltar(event,' + i + ')" ondragend="ENC.dragFin()">' +
-          '<span class="enc-orden-grip" aria-hidden="true">' + ico('grip', 16) + '</span>' +
-          '<span class="enc-orden-num">' + (i + 1) + '</span>' +
-          '<span class="enc-orden-txt"><strong>' + RCR.esc(t) + '</strong>' +
-            '<small>' + RCR.esc(ENC.tipoLabel(q.tipo)) + (q.condicion ? ' · con condición' : '') + '</small></span>' +
-          '<button class="btn-ico" type="button" title="Subir" aria-label="Subir pregunta"' + (i === 0 ? ' disabled' : '') + ' onclick="ENC.mover(' + i + ',-1)">' + ico('chevronUp', 16) + '</button>' +
-          '<button class="btn-ico" type="button" title="Bajar" aria-label="Bajar pregunta"' + (i === total - 1 ? ' disabled' : '') + ' onclick="ENC.mover(' + i + ',1)">' + ico('chevronDown', 16) + '</button>' +
+          '<span class="eb-orden-grip" aria-hidden="true">' + ico('grip', 16) + '</span>' +
+          '<span class="eb-num' + (sec ? ' sec' : '') + '">' + (sec ? ico('seccion', 13) : (++nq)) + '</span>' +
+          '<span class="eb-orden-txt"><strong>' + RCR.esc(t) + '</strong>' +
+            '<small>' + (sec ? 'Sección ' + (++ns) : RCR.esc(ENC.tipoLabel(q.tipo))) + (q.condicion ? ' · con condición' : '') + '</small></span>' +
+          '<button class="eb-ico" type="button" title="Subir" aria-label="Subir"' + (i === 0 ? ' disabled' : '') + ' onclick="ENC.mover(' + i + ',-1)">' + ico('chevronUp', 16) + '</button>' +
+          '<button class="eb-ico" type="button" title="Bajar" aria-label="Bajar"' + (i === total - 1 ? ' disabled' : '') + ' onclick="ENC.mover(' + i + ',1)">' + ico('chevronDown', 16) + '</button>' +
         '</div>';
-      }).join('');
+      }).join('') +
+      '</div>';
   },
 
   dragInicio: function (ev, i) {
@@ -562,105 +604,146 @@ var ENC = {
   },
   dragFin: function () {
     ENC._arrastre = null;
-    document.querySelectorAll('.enc-orden-row').forEach(function (r) { r.classList.remove('arrastrando', 'sobre'); });
+    document.querySelectorAll('.eb-orden-row').forEach(function (r) { r.classList.remove('arrastrando', 'sobre'); });
   },
 
   renderPreguntas: function () {
     var box = document.getElementById('enc-preguntas');
     if (!box) return;
+    ENC.pintarMeta();
     if (ENC.reordenando) { ENC.renderOrden(box); return; }
-    var ps = ENC.b.preguntas, total = ps.length;
+    var ps = ENC.b.preguntas;
+    var nq = ENC.soloPreguntas(ps).length, kq = 0, ks = 0;
+    var chev = '<span class="eb-chev" aria-hidden="true">' + ico('chevronDown', 14, 2.4) + '</span>';
 
     box.innerHTML = ps.map(function (q, i) {
-      var conOpciones = q.tipo === 'unica' || q.tipo === 'multiple';
-      var opciones = '';
-      if (conOpciones) {
-        opciones =
-          '<div class="form-lbl">Opciones</div>' +
-          '<div class="enc-opts">' +
+      /* ── Sección ── */
+      if (ENC.esSeccion(q)) {
+        ks++;
+        return '' +
+        '<section class="eb-sec" id="encq-' + q.id + '">' +
+          '<div class="eb-sec-head">' +
+            '<span class="eb-sec-tag">' + ico('seccion', 14) + 'Sección ' + ks + '</span>' +
+            '<button class="eb-ico danger" type="button" title="Eliminar sección" aria-label="Eliminar sección" onclick="ENC.quitarPregunta(' + i + ')">' + ico('trash', 16) + '</button>' +
+          '</div>' +
+          '<input class="eb-sec-tit" value="' + ENC.attr(q.texto) + '" placeholder="Título de la sección" maxlength="140" ' +
+            'aria-label="Título de la sección" oninput="ENC.setTexto(' + i + ',this.value)">' +
+          '<textarea class="eb-sec-desc eb-autoalto" rows="1" placeholder="Descripción (opcional)" aria-label="Descripción de la sección" ' +
+            'oninput="ENC.b.preguntas[' + i + '].descripcion=this.value;ENC.autoAlto(this)">' + RCR.esc(q.descripcion || '') + '</textarea>' +
+          '<div class="eb-cond" id="encc-' + q.id + '">' + ENC.condHtml(i) + '</div>' +
+        '</section>';
+      }
+
+      /* ── Pregunta ── */
+      kq++;
+      var cuerpo = '';
+      if (q.tipo === 'unica' || q.tipo === 'multiple') {
+        cuerpo =
+          '<div class="eb-opts">' +
             q.opciones.map(function (o, j) {
-              return '<div class="enc-opt-row">' +
-                '<span class="enc-opt-mark ' + (q.tipo === 'multiple' ? 'cuadro' : '') + '"></span>' +
-                '<input class="form-inp" value="' + ENC.attr(o) + '" placeholder="Opción ' + (j + 1) + '" ' +
+              return '<div class="eb-opt">' +
+                '<span class="eb-mark' + (q.tipo === 'multiple' ? ' cuadro' : '') + '" aria-hidden="true"></span>' +
+                '<input class="eb-opt-inp" value="' + ENC.attr(o) + '" placeholder="Opción ' + (j + 1) + '" aria-label="Opción ' + (j + 1) + '" ' +
                   'oninput="ENC.setOpcion(' + i + ',' + j + ',this.value)">' +
                 (q.opciones.length > 2
-                  ? '<button class="btn-ico danger" type="button" title="Quitar opción" aria-label="Quitar opción" onclick="ENC.quitarOpcion(' + i + ',' + j + ')">' + ico('x', 15) + '</button>'
+                  ? '<button class="eb-quitar" type="button" title="Quitar opción" aria-label="Quitar opción ' + (j + 1) + '" onclick="ENC.quitarOpcion(' + i + ',' + j + ')">' + ico('x', 13, 2.6) + '</button>'
                   : '') +
               '</div>';
             }).join('') +
-          '</div>' +
-          '<button class="rep-add enc-add-opt" type="button" onclick="ENC.agregarOpcion(' + i + ')">' + ico('plus', 15) + 'Agregar opción</button>';
+            '<button class="eb-opt-add" type="button" onclick="ENC.agregarOpcion(' + i + ')">' +
+              '<span class="eb-mas" aria-hidden="true">' + ico('plus', 13, 2.6) + '</span>Agregar opción</button>' +
+          '</div>';
       } else if (q.tipo === 'escala') {
-        opciones = '<div class="form-help">Se responde eligiendo un número del 1 (bajo) al 5 (alto).</div>';
+        cuerpo = '<div class="eb-muestra"><div class="eb-escala">' +
+          [1, 2, 3, 4, 5].map(function (v) { return '<span>' + v + '</span>'; }).join('') +
+          '</div><div class="eb-escala-ext"><span>Bajo</span><span>Alto</span></div></div>';
       } else if (q.tipo === 'sino') {
-        opciones = '<div class="form-help">Se responde con Sí o No.</div>';
+        cuerpo = '<div class="eb-muestra"><div class="eb-sino"><span>Sí</span><span>No</span></div></div>';
+      } else {
+        cuerpo = '<div class="eb-muestra"><div class="eb-linea' + (q.tipo === 'largo' ? ' largo' : '') + '">' +
+          (q.tipo === 'largo' ? 'Respuesta larga' : 'Respuesta corta') + '</div></div>';
       }
 
       return '' +
-      '<div class="rep-block enc-q" id="encq-' + q.id + '">' +
-        '<div class="rep-head">' +
-          '<span class="rep-num">Pregunta ' + (i + 1) + '</span>' +
-          '<div class="enc-q-tools">' +
-            '<button class="btn-ico" type="button" title="Duplicar" aria-label="Duplicar pregunta" onclick="ENC.duplicarPregunta(' + i + ')">' + ico('copy', 15) + '</button>' +
-            (total > 1 ? '<button class="btn-ico danger" type="button" title="Eliminar" aria-label="Eliminar pregunta" onclick="ENC.quitarPregunta(' + i + ')">' + ico('trash', 15) + '</button>' : '') +
-          '</div>' +
+      '<article class="eb-q" id="encq-' + q.id + '">' +
+        '<div class="eb-q-head">' +
+          '<span class="eb-num">' + kq + '</span>' +
+          '<label class="eb-select">' +
+            '<select aria-label="Tipo de pregunta" onchange="ENC.setTipo(' + i + ',this.value)">' +
+              ENC.TIPOS.map(function (t) {
+                return '<option value="' + t.id + '"' + (t.id === q.tipo ? ' selected' : '') + '>' + t.label + '</option>';
+              }).join('') +
+            '</select>' + chev +
+          '</label>' +
+          '<span class="eb-flex"></span>' +
+          '<button class="eb-ico" type="button" title="Duplicar" aria-label="Duplicar pregunta" onclick="ENC.duplicarPregunta(' + i + ')">' + ico('copy', 16) + '</button>' +
+          (nq > 1 ? '<button class="eb-ico danger" type="button" title="Eliminar" aria-label="Eliminar pregunta" onclick="ENC.quitarPregunta(' + i + ')">' + ico('trash', 16) + '</button>' : '') +
         '</div>' +
-        '<div class="form-grp">' +
-          '<input class="form-inp enc-q-texto" value="' + ENC.attr(q.texto) + '" placeholder="Escribe la pregunta" ' +
-            'oninput="ENC.setTexto(' + i + ',this.value)">' +
+        '<textarea class="eb-q-txt eb-autoalto" rows="1" placeholder="Escribe la pregunta" aria-label="Texto de la pregunta ' + kq + '" ' +
+          'oninput="ENC.setTexto(' + i + ',this.value);ENC.autoAlto(this)">' + RCR.esc(q.texto) + '</textarea>' +
+        cuerpo +
+        '<div class="eb-ajustes">' +
+          '<label class="eb-fila"><span class="eb-fila-txt">Obligatoria</span>' +
+            '<span class="eb-switch"><input type="checkbox" role="switch"' + (q.requerida ? ' checked' : '') +
+              ' onchange="ENC.b.preguntas[' + i + '].requerida=this.checked"><i></i></span></label>' +
+          '<div class="eb-cond" id="encc-' + q.id + '">' + ENC.condHtml(i) + '</div>' +
         '</div>' +
-        '<div class="enc-q-fila">' +
-          '<select class="form-inp" aria-label="Tipo de pregunta" onchange="ENC.setTipo(' + i + ',this.value)">' +
-            ENC.TIPOS.map(function (t) {
-              return '<option value="' + t.id + '"' + (t.id === q.tipo ? ' selected' : '') + '>' + t.label + '</option>';
-            }).join('') +
-          '</select>' +
-          '<label class="check-line"><input type="checkbox"' + (q.requerida ? ' checked' : '') +
-            ' onchange="ENC.b.preguntas[' + i + '].requerida=this.checked"><span>Obligatoria</span></label>' +
-        '</div>' +
-        opciones +
-        '<div class="enc-cond" id="encc-' + q.id + '">' + ENC.condHtml(i) + '</div>' +
-      '</div>';
+      '</article>';
     }).join('');
+
+    box.querySelectorAll('.eb-autoalto').forEach(ENC.autoAlto);
   },
 
-  /* Bloque "Mostrar solo si…" de la pregunta i */
+  /* Los textos crecen con el contenido (como en Notas de iOS) */
+  autoAlto: function (el) {
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  },
+
+  /* Número visible de una pregunta (las secciones no cuentan) */
+  numDe: function (id) {
+    return ENC.soloPreguntas(ENC.b.preguntas).findIndex(function (p) { return p.id === id; }) + 1;
+  },
+
+  /* Bloque "Mostrar solo si…" de la pregunta o sección i */
   condHtml: function (i) {
     var q = ENC.b.preguntas[i];
+    var sec = ENC.esSeccion(q);
     var fuentes = ENC.b.preguntas.slice(0, i).filter(function (p) {
       return ENC.RAMIFICAN.indexOf(p.tipo) >= 0 && ENC.valoresDe(p).length;
     });
     if (!fuentes.length) {
-      return i > 0
-        ? '<div class="enc-cond-nota">' + ico('branch', 14) + 'Para usar una condición, antes debe haber una pregunta de opción, escala o Sí/No.</div>'
+      return (i > 0 && !sec)
+        ? '<div class="eb-fila nota">' + ico('branch', 14) + '<span>Para mostrar esta pregunta según una respuesta, antes agrega una de opción, escala o Sí/No.</span></div>'
         : '';
     }
 
     var c = q.condicion;
     var html =
-      '<label class="check-line"><input type="checkbox"' + (c ? ' checked' : '') +
-        ' onchange="ENC.toggleCond(' + i + ',this.checked)">' +
-        '<span>' + ico('branch', 14) + ' Mostrar solo si…</span></label>';
+      '<label class="eb-fila"><span class="eb-fila-txt">' + ico('branch', 15) +
+        (sec ? 'Mostrar la sección solo si…' : 'Mostrar solo si…') + '</span>' +
+        '<span class="eb-switch"><input type="checkbox" role="switch"' + (c ? ' checked' : '') +
+          ' onchange="ENC.toggleCond(' + i + ',this.checked)"><i></i></span></label>';
 
     if (c) {
       var src = ENC.b.preguntas.find(function (p) { return p.id === c.pregunta; });
       var vals = ENC.valoresDe(src);
+      var chev = '<span class="eb-chev" aria-hidden="true">' + ico('chevronDown', 14, 2.4) + '</span>';
       html +=
-        '<div class="enc-cond-campos">' +
-          '<select class="form-inp" aria-label="Pregunta de la condición" onchange="ENC.setCondPregunta(' + i + ',this.value)">' +
+        '<div class="eb-cond-campos">' +
+          '<label class="eb-select ancho"><select aria-label="Pregunta de la condición" onchange="ENC.setCondPregunta(' + i + ',this.value)">' +
             fuentes.map(function (p) {
-              var n = ENC.b.preguntas.indexOf(p) + 1;
               var t = (p.texto || '').trim() || '(sin texto)';
               return '<option value="' + p.id + '"' + (p.id === c.pregunta ? ' selected' : '') + '>' +
-                'P' + n + '. ' + RCR.esc(t.length > 60 ? t.slice(0, 60) + '…' : t) + '</option>';
+                'P' + ENC.numDe(p.id) + '. ' + RCR.esc(t.length > 60 ? t.slice(0, 60) + '…' : t) + '</option>';
             }).join('') +
-          '</select>' +
-          '<div class="enc-cond-op">' + (src && src.tipo === 'multiple' ? 'incluye' : 'es') + '</div>' +
-          '<select class="form-inp" aria-label="Respuesta de la condición" onchange="ENC.setCondValor(' + i + ',this.value)">' +
+          '</select>' + chev + '</label>' +
+          '<span class="eb-cond-op">' + (src && src.tipo === 'multiple' ? 'incluye' : 'es') + '</span>' +
+          '<label class="eb-select"><select aria-label="Respuesta de la condición" onchange="ENC.setCondValor(' + i + ',this.value)">' +
             vals.map(function (v) {
               return '<option value="' + ENC.attr(v) + '"' + (v === c.valor ? ' selected' : '') + '>' + RCR.esc(v) + '</option>';
             }).join('') +
-          '</select>' +
+          '</select>' + chev + '</label>' +
         '</div>';
     }
     return html;
@@ -723,7 +806,7 @@ var ENC = {
     var q = ENC.b.preguntas[i];
     q.opciones.push('Opción ' + (q.opciones.length + 1));
     ENC.renderPreguntas();
-    var inputs = document.querySelectorAll('#encq-' + q.id + ' .enc-opt-row input');
+    var inputs = document.querySelectorAll('#encq-' + q.id + ' .eb-opt-inp');
     var ult = inputs[inputs.length - 1];
     if (ult) { ult.focus(); ult.select(); }
   },
@@ -735,12 +818,22 @@ var ENC = {
   },
 
   agregarPregunta: function () {
-    var ps = ENC.b.preguntas;
-    var tipo = ps.length ? ps[ps.length - 1].tipo : 'unica';
-    var q = ENC.nuevaPregunta(tipo);
-    ps.push(q);
+    var solo = ENC.soloPreguntas(ENC.b.preguntas);
+    var q = ENC.nuevaPregunta(solo.length ? solo[solo.length - 1].tipo : 'unica');
+    ENC.b.preguntas.push(q);
     ENC.renderPreguntas();
-    var el = document.querySelector('#encq-' + q.id + ' .enc-q-texto');
+    ENC.enfocar(q.id, '.eb-q-txt');
+  },
+
+  agregarSeccion: function () {
+    var s = ENC.nuevaSeccion();
+    ENC.b.preguntas.push(s);
+    ENC.renderPreguntas();
+    ENC.enfocar(s.id, '.eb-sec-tit');
+  },
+
+  enfocar: function (id, sel) {
+    var el = document.querySelector('#encq-' + id + ' ' + sel);
     if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus({ preventScroll: true }); }
   },
 
@@ -752,7 +845,8 @@ var ENC = {
   },
 
   quitarPregunta: function (i) {
-    if (ENC.b.preguntas.length <= 1) return;
+    /* Siempre queda al menos una pregunta; las secciones se pueden quitar todas */
+    if (!ENC.esSeccion(ENC.b.preguntas[i]) && ENC.soloPreguntas(ENC.b.preguntas).length <= 1) return;
     ENC.b.preguntas.splice(i, 1);
     ENC.limpiarCondiciones();
     ENC.renderPreguntas();
@@ -807,19 +901,27 @@ var ENC = {
     var b = ENC.b;
     if (!b || !b.docId) return;
     if (!ENC.puedeEditarEnc(ENC.buscar(b.docId))) { RCR.toast('No tienes permiso para editar'); return; }
-    if (!b.preguntas.length) { RCR.toast('Agrega al menos una pregunta'); return; }
+    if (!ENC.soloPreguntas(b.preguntas).length) { RCR.toast('Agrega al menos una pregunta'); return; }
     if (ENC.reordenando) ENC.toggleReordenar();   // para poder señalar errores en la pregunta
 
-    /* Normalizar y validar preguntas */
+    /* Normalizar y validar preguntas y secciones */
+    var nq = 0, ns = 0;
     for (var i = 0; i < b.preguntas.length; i++) {
       var q = b.preguntas[i];
       q.texto = String(q.texto || '').trim();
-      if (!q.texto) { ENC.marcarError(q.id, 'La pregunta ' + (i + 1) + ' no tiene texto'); return; }
+      if (ENC.esSeccion(q)) {
+        ns++;
+        q.descripcion = String(q.descripcion || '').trim();
+        if (!q.texto) { ENC.marcarError(q.id, 'La sección ' + ns + ' no tiene título'); return; }
+        continue;
+      }
+      nq++;
+      if (!q.texto) { ENC.marcarError(q.id, 'La pregunta ' + nq + ' no tiene texto'); return; }
       if (q.tipo === 'unica' || q.tipo === 'multiple') {
         var vistas = {};
         q.opciones = q.opciones.map(function (o) { return String(o).trim(); })
           .filter(function (o) { if (!o || vistas[o.toLowerCase()]) return false; vistas[o.toLowerCase()] = 1; return true; });
-        if (q.opciones.length < 2) { ENC.marcarError(q.id, 'La pregunta ' + (i + 1) + ' necesita al menos 2 opciones distintas'); return; }
+        if (q.opciones.length < 2) { ENC.marcarError(q.id, 'La pregunta ' + nq + ' necesita al menos 2 opciones distintas'); return; }
       } else {
         q.opciones = [];
       }
@@ -828,10 +930,11 @@ var ENC = {
 
     var data = {
       preguntas: b.preguntas.map(function (q) {
+        var cond = q.condicion ? { pregunta: q.condicion.pregunta, valor: q.condicion.valor } : null;
+        if (ENC.esSeccion(q)) return { id: q.id, tipo: 'seccion', texto: q.texto, descripcion: q.descripcion, condicion: cond };
         return {
           id: q.id, tipo: q.tipo, texto: q.texto, requerida: !!q.requerida,
-          opciones: q.opciones,
-          condicion: q.condicion ? { pregunta: q.condicion.pregunta, valor: q.condicion.valor } : null
+          opciones: q.opciones, condicion: cond
         };
       }),
       actualizado: firebase.firestore.FieldValue.serverTimestamp()

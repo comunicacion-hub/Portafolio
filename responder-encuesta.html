@@ -74,6 +74,13 @@ RCR.esc = function (v) {
     var name = 'q_' + q.id, campo = '';
     var a = ENC.attr;
 
+    if (ENC.esSeccion(q)) {
+      return '<div class="resp-sec" id="rq-' + q.id + '">' +
+        '<h2>' + RCR.esc(q.texto) + '</h2>' +
+        (q.descripcion ? '<p>' + RCR.esc(q.descripcion) + '</p>' : '') +
+      '</div>';
+    }
+
     if (q.tipo === 'corto') {
       campo = '<input class="form-inp" name="' + name + '" maxlength="500" placeholder="Tu respuesta">';
     } else if (q.tipo === 'largo') {
@@ -135,7 +142,7 @@ RCR.esc = function (v) {
   /* ── Leer respuestas y aplicar la lógica condicional ──────────────────── */
   function leer() {
     var form = document.getElementById('resp-form'), r = {};
-    (enc.preguntas || []).forEach(function (q) {
+    ENC.soloPreguntas(enc.preguntas).forEach(function (q) {
       var name = 'q_' + q.id;
       if (q.tipo === 'corto' || q.tipo === 'largo') {
         var el = form.elements[name];
@@ -162,6 +169,7 @@ RCR.esc = function (v) {
       if (!fs) return;
       var ver = !!vis[q.id];
       fs.classList.toggle('hidden', !ver);
+      if (ENC.esSeccion(q)) return;
       fs.disabled = !ver;
       if (ver) fs.querySelector('.resp-q-n').textContent = (++n) + '.';
     });
@@ -174,7 +182,7 @@ RCR.esc = function (v) {
     var st = actualizar();
     var primero = null;
 
-    (enc.preguntas || []).forEach(function (q) {
+    ENC.soloPreguntas(enc.preguntas).forEach(function (q) {
       var fs = document.getElementById('rq-' + q.id);
       var falta = st.vis[q.id] && q.requerida && vacio(st.r[q.id]);
       fs.classList.toggle('con-error', falta);
@@ -189,7 +197,7 @@ RCR.esc = function (v) {
 
     /* Solo se guardan las preguntas visibles y respondidas */
     var respuestas = {};
-    (enc.preguntas || []).forEach(function (q) {
+    ENC.soloPreguntas(enc.preguntas).forEach(function (q) {
       if (st.vis[q.id] && !vacio(st.r[q.id])) respuestas[q.id] = st.r[q.id];
     });
 
@@ -241,7 +249,7 @@ RCR.esc = function (v) {
         estado('clock', enc.titulo || 'Encuesta', 'Esta encuesta ya no recibe respuestas.');
         return;
       }
-      if (!(enc.preguntas || []).length) { estado('inbox', enc.titulo || 'Encuesta', 'Esta encuesta todavía no tiene preguntas.'); return; }
+      if (!ENC.soloPreguntas(enc.preguntas).length) { estado('inbox', enc.titulo || 'Encuesta', 'Esta encuesta todavía no tiene preguntas.'); return; }
       pintar();
     } catch (e) {
       console.error('responder-encuesta:', e);
