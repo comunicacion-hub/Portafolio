@@ -317,8 +317,8 @@ RCR.esc = function (v) {
     var btn = document.getElementById('resp-enviar');
     btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
     try {
-      await db.collection(ENC.COL_RESP).add({
-        encuestaId: id,
+      /* Se guarda dentro de la encuesta: Encuestas/{id}/Respuestas */
+      await db.collection(ENC.COL).doc(id).collection(ENC.SUB_RESP).add({
         respuestas: respuestas,
         enviado: firebase.firestore.FieldValue.serverTimestamp()
       });

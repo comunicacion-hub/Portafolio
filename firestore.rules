@@ -1,0 +1,113 @@
+rules_version = '2';
+// Reglas de Firestore de Mi RCR.
+// Cómo publicarlas: consola de Firebase → Firestore Database → Reglas →
+// reemplazar todo por este archivo → Publicar.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function esDominio() {
+      return request.auth != null &&
+             request.auth.token.email.matches('.*@redesconrostro\\.org');
+    }
+    function esAdmin() {
+      return request.auth.token.email == 'comunicacion@redesconrostro.org';
+    }
+    function miCorreo() {
+      return request.auth.token.email;
+    }
+
+    match /Colaboradores/{doc} {
+      allow read: if esDominio();
+      allow write: if esAdmin();
+    }
+    match /Seguimiento/{doc} {
+      allow read: if esDominio();
+      allow write: if esDominio();
+    }
+    match /Accesos/{doc} {
+      allow read: if esDominio();
+      allow write: if esAdmin();
+    }
+    match /Usuarios/{doc} {
+      allow read: if esDominio();
+      allow write: if esAdmin();
+    }
+    match /{semaforo}/{doc} {
+      allow read: if esDominio() && semaforo.matches('Sem.*foro');
+      allow create: if esDominio() && semaforo.matches('Sem.*foro');
+      allow delete: if esDominio() && semaforo.matches('Sem.*foro');
+      allow update: if esAdmin() && semaforo.matches('Sem.*foro');
+    }
+    /* Curriculum: cada persona lee y escribe solo su propio documento */
+    match /Curriculums/{correo} {
+      allow read, write: if esDominio() && request.auth.token.email == correo;
+    }
+    /* Informes: cada persona lee y escribe solo los que ella misma creó.
+       "get" (un documento puntual, por su ID) está abierto a cualquiera SIN
+       iniciar sesión: es lo que permite el link público de "ver informe en
+       PDF" sin exponer el resto. "list" sigue restringido. */
+    match /Informes/{doc} {
+      allow get: if true;
+      allow list: if esDominio() &&
+        (resource.data.correo == request.auth.token.email || esAdmin());
+      allow create: if esDominio() && request.resource.data.correo == request.auth.token.email;
+      allow update, delete: if esDominio() &&
+        (resource.data.correo == request.auth.token.email || esAdmin());
+    }
+
+    /* ── ENCUESTAS ──────────────────────────────────────────────────────────
+       Cada encuesta la ven solo quien la creó (creadoPor) y las personas con
+       las que se compartió (compartidoCon); la editan quien la creó y los
+       editores (editoresCon). Ni el rol Admin ve las ajenas.
+       "get" queda abierto: el enlace público necesita leer las preguntas
+       para mostrarlas a quien responde (sin iniciar sesión). */
+    function encuesta(id) {
+      return get(/databases/$(database)/documents/Encuestas/$(id)).data;
+    }
+    function puedeVerEnc(e) {
+      return esDominio() && (e.creadoPor == miCorreo() || miCorreo() in e.get('compartidoCon', []));
+    }
+    function puedeEditarEnc(e) {
+      return esDominio() && (e.creadoPor == miCorreo() || miCorreo() in e.get('editoresCon', []));
+    }
+
+    match /Encuestas/{id} {
+      allow get: if true;
+      allow list: if esDominio() &&
+        (resource.data.creadoPor == miCorreo() || miCorreo() in resource.data.compartidoCon);
+      allow create: if esDominio() && request.resource.data.creadoPor == miCorreo();
+      allow update: if puedeEditarEnc(resource.data) &&
+        request.resource.data.creadoPor == resource.data.creadoPor;
+      allow delete: if esDominio() && resource.data.creadoPor == miCorreo();
+
+      /* Respuestas: cualquiera puede enviar una (sin sesión) si la encuesta
+         está abierta y con el formato exacto; las leen solo quienes ven la
+         encuesta y las borran quienes la pueden editar. Nadie las modifica.
+         La segunda condición de "create" permite que quien edita la encuesta
+         mueva aquí las respuestas del formato antiguo. */
+      match /Respuestas/{rid} {
+        allow create: if (request.resource.data.keys().hasOnly(['respuestas', 'enviado'])
+                          && request.resource.data.respuestas is map
+                          && request.resource.data.enviado == request.time
+                          && encuesta(id).estado == 'abierta')
+                      || puedeEditarEnc(encuesta(id));
+        allow read: if puedeVerEnc(encuesta(id));
+        allow delete: if puedeEditarEnc(encuesta(id));
+        allow update: if false;
+      }
+    }
+
+    /* Formato antiguo de respuestas: ya no recibe nuevas. La app mueve lo que
+       quede a Encuestas/{id}/Respuestas cuando la abre quien la puede editar.
+       Cuando ya no quede nada aquí, este bloque se puede borrar. */
+    match /RespuestasEncuesta/{rid} {
+      allow read, delete: if esDominio();
+      allow create, update: if false;
+    }
+
+    /* Avisos de encuestas compartidas: cada persona ve y marca solo los suyos */
+    match /Notificaciones/{id} {
+      allow create: if esDominio() && request.resource.data.de == miCorreo();
+      allow read, update, delete: if esDominio() && resource.data.para == miCorreo();
+    }
+  }
+}

@@ -125,8 +125,7 @@ var RES = {
      y la misma encuesta elegida (RES.sel), así ambas secciones van a la par. */
   leerRespuestas: async function (id, forzar) {
     if (RES.cache[id] && !forzar) return RES.cache[id];
-    var snap = await RCR.db.collection(ENC.COL_RESP).where('encuestaId', '==', id).get();
-    RES.cache[id] = snap.docs.map(function (d) { return Object.assign({ _docId: d.id }, d.data()); })
+    RES.cache[id] = (await ENC.leerRespuestasDe(id))
       .sort(function (a, b) { return RES.ms(b.enviado) - RES.ms(a.enviado); });
     ENC.conteos[id] = RES.cache[id].length;
     return RES.cache[id];

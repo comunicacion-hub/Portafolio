@@ -4,39 +4,24 @@
    · Encuestas: crear / editar encuestas con preguntas de varios tipos y
      lógica condicional ("mostrar solo si…"), y compartir el enlace público.
    · El enlace público (responder-encuesta.html) se responde SIN iniciar sesión
-     y guarda cada respuesta en la colección "RespuestasEncuesta".
+     y guarda cada respuesta dentro de la encuesta (subcolección "Respuestas").
 
    Colecciones de Firestore
      Encuestas/{id}            { titulo, descripcion, estado: 'abierta'|'cerrada',
                                  preguntas: [Pregunta], creadoPor, creadoPorNombre,
+                                 compartido, compartidoCon, editoresCon,
                                  creado, actualizado }
-     RespuestasEncuesta/{id}   { encuestaId, respuestas: { <preguntaId>: valor }, enviado }
+     Encuestas/{id}/Respuestas/{rid}  { respuestas: { <preguntaId>: valor }, enviado }
+     (RespuestasEncuesta/{id}: formato antiguo, se mueve solo a la subcolección)
 
    Pregunta = { id, tipo, texto, requerida, opciones: [..], condicion: null | { pregunta, valor } }
-     tipo: corto | largo | unica | multiple | escala | sino
-     valor guardado: texto (corto/largo/unica/sino), número 1–5 (escala), lista (multiple)
+     tipo: corto | largo | unica | multiple | escala | sino | numero | imagen | cuadricula | seccion
+     valor guardado: texto, número (escala/numero), lista (multiple),
+     JPEG base64 (imagen), { idFila: columna } (cuadricula)
 
-   Reglas de Firestore necesarias (pegar dentro de
-   "match /databases/{database}/documents { … }", sin borrar las que ya existen):
-
-     match /Encuestas/{id} {
-       allow get: if true;                                  // el enlace público lee la encuesta
-       allow list, create, update, delete: if request.auth != null;
-     }
-     match /RespuestasEncuesta/{id} {
-       allow create: if request.resource.data.keys().hasOnly(['encuestaId', 'respuestas', 'enviado'])
-         && request.resource.data.encuestaId is string
-         && request.resource.data.respuestas is map
-         && request.resource.data.enviado == request.time
-         && get(/databases/$(database)/documents/Encuestas/$(request.resource.data.encuestaId)).data.estado == 'abierta';
-       allow read, delete: if request.auth != null;
-       allow update: if false;
-     }
-     match /Notificaciones/{id} {                            // avisos de encuestas compartidas
-       allow create: if request.auth != null;
-       allow read, update, delete: if request.auth != null
-         && resource.data.para == request.auth.token.email;
-     }
+   Reglas de Firestore: ver firestore.rules (en la raíz del repositorio).
+   Privacidad: cada encuesta la ven solo creadoPor y los correos de
+   compartidoCon; la editan creadoPor y editoresCon.
 
    Este archivo también lo carga responder-encuesta.html (con un RCR mínimo):
    no debe ejecutar nada al cargarse, solo definir objetos.
@@ -55,7 +40,66 @@ RCR.modulos.encuestas = {
 
 var ENC = {
   COL: 'Encuestas',
-  COL_RESP: 'RespuestasEncuesta',
+  COL_RESP: 'RespuestasEncuesta',   // formato antiguo: solo se lee para moverlo
+  SUB_RESP: 'Respuestas',           // Encuestas/{id}/Respuestas/{rid}
+
+  /* Respuestas de una encuesta (subcolección: así las reglas de Firestore
+     pueden permitir leerlas solo a quien creó la encuesta o la recibió). */
+  refResp: function (encId) {
+    return RCR.db.collection(ENC.COL).doc(encId).collection(ENC.SUB_RESP);
+  },
+
+  /* Lee todas las respuestas de una encuesta. Si quedan del formato antiguo
+     y quien mira puede editar la encuesta, las mueve a la subcolección. */
+  leerRespuestasDe: async function (encId) {
+    var snap = await ENC.refResp(encId).get();
+    var lista = snap.docs.map(function (d) { return Object.assign({ _docId: d.id }, d.data()); });
+    var viejas = [];
+    try {
+      viejas = (await RCR.db.collection(ENC.COL_RESP).where('encuestaId', '==', encId).get()).docs;
+    } catch (e) { /* la colección antigua ya no se puede leer: no hay nada que mover */ }
+    if (!viejas.length) return lista;
+
+    var movidas = false;
+    if (ENC.puedeEditarEnc(ENC.buscar(encId))) {
+      try { await ENC.migrarRespuestas(encId, viejas); movidas = true; }
+      catch (e) { console.warn('ENC.migrarRespuestas:', e); }
+    }
+    viejas.forEach(function (d) {
+      lista.push(Object.assign({ _docId: d.id }, d.data(), movidas ? {} : { _legado: true }));
+    });
+    return lista;
+  },
+
+  migrarRespuestas: async function (encId, docs) {
+    for (var i = 0; i < docs.length; i += 200) {
+      var lote = RCR.db.batch();
+      docs.slice(i, i + 200).forEach(function (d) {
+        var x = d.data();
+        lote.set(ENC.refResp(encId).doc(d.id), { respuestas: x.respuestas || {}, enviado: x.enviado || null });
+        lote.delete(d.ref);
+      });
+      await lote.commit();
+    }
+  },
+
+  /* Al cargar: completa en mis encuestas los campos que usan las reglas
+     (compartidoCon y editoresCon), por si se crearon antes de existir. */
+  completarCampos: function () {
+    var yo = String(RCR.user.correo || '').toLowerCase();
+    ENC.datos.forEach(function (e) {
+      if (String(e.creadoPor || '').toLowerCase() !== yo) return;
+      if (Array.isArray(e.compartidoCon) && Array.isArray(e.editoresCon)) return;
+      var comp = e.compartido || [];
+      var cambios = {
+        compartidoCon: comp.map(function (c) { return String(c.correo).toLowerCase(); }),
+        editoresCon: comp.filter(function (c) { return c.rol === 'editor'; }).map(function (c) { return String(c.correo).toLowerCase(); })
+      };
+      RCR.db.collection(ENC.COL).doc(e._docId).update(cambios)
+        .then(function () { Object.assign(e, cambios); })
+        .catch(function (err) { console.warn('ENC.completarCampos:', err); });
+    });
+  },
 
   datos: [],
   conteos: {},
@@ -282,6 +326,7 @@ var ENC = {
         ENC.datos = Object.keys(porId).map(function (k) { return porId[k]; });
         ENC.ordenar();
         ENC.cargado = true;
+        ENC.completarCampos();
       }).finally(function () { ENC._leyendo = null; });
     }
     return ENC._leyendo;
@@ -366,11 +411,17 @@ var ENC = {
 
   /* Número de respuestas por encuesta (se completa después de pintar) */
   contarRespuestas: function () {
-    ENC.datos.forEach(function (e) {
-      var q = RCR.db.collection(ENC.COL_RESP).where('encuestaId', '==', e._docId);
-      var p = (typeof q.count === 'function')
+    var contar = function (q) {
+      return (typeof q.count === 'function')
         ? q.count().get().then(function (s) { return s.data().count; })
         : q.get().then(function (s) { return s.size; });
+    };
+    ENC.datos.forEach(function (e) {
+      /* Nuevas (dentro de la encuesta) + las que queden del formato antiguo */
+      var p = Promise.all([
+        contar(ENC.refResp(e._docId)),
+        contar(RCR.db.collection(ENC.COL_RESP).where('encuestaId', '==', e._docId)).catch(function () { return 0; })
+      ]).then(function (n) { return n[0] + n[1]; });
       p.then(function (n) {
         ENC.conteos[e._docId] = n;
         var el = document.getElementById('enc-n-' + e._docId);
@@ -536,6 +587,9 @@ var ENC = {
         await RCR.db.collection(ENC.COL).doc(id).update(data);
       } else {
         data.preguntas = [];
+        data.compartido = [];
+        data.compartidoCon = [];   // correos que pueden verla (los usan las reglas)
+        data.editoresCon = [];     // correos que pueden editarla
         data.creadoPor = RCR.user.correo;
         data.creadoPorNombre = RCR.user.nombre || RCR.user.correo;
         data.creado = firebase.firestore.FieldValue.serverTimestamp();
@@ -1548,16 +1602,19 @@ var ENC = {
     var btn = document.getElementById('confirm-ok');
     if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
     try {
-      await RCR.db.collection(ENC.COL).doc(id).delete();
-      /* Respuestas: en lotes de hasta 450 */
-      try {
-        var snap = await RCR.db.collection(ENC.COL_RESP).where('encuestaId', '==', id).get();
+      /* Primero las respuestas (las reglas consultan la encuesta para
+         permitirlo), en lotes de hasta 450; luego la encuesta. */
+      var borrarTodas = async function (snap) {
         for (var i = 0; i < snap.docs.length; i += 450) {
           var lote = RCR.db.batch();
           snap.docs.slice(i, i + 450).forEach(function (d) { lote.delete(d.ref); });
           await lote.commit();
         }
-      } catch (e2) { console.warn('ENC.borrar respuestas:', e2); }
+      };
+      await borrarTodas(await ENC.refResp(id).get());
+      try { await borrarTodas(await RCR.db.collection(ENC.COL_RESP).where('encuestaId', '==', id).get()); }
+      catch (e2) { /* formato antiguo ya cerrado */ }
+      await RCR.db.collection(ENC.COL).doc(id).delete();
       ENC.datos = ENC.datos.filter(function (x) { return x._docId !== id; });
       delete ENC.conteos[id];
       ENC.render();

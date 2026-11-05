@@ -310,7 +310,9 @@ var DAT = {
     var btn = document.getElementById('confirm-ok');
     if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
     try {
-      await RCR.db.collection(ENC.COL_RESP).doc(rid).delete();
+      var r = (RES.cache[encId] || []).find(function (x) { return x._docId === rid; });
+      var ref = (r && r._legado) ? RCR.db.collection(ENC.COL_RESP).doc(rid) : ENC.refResp(encId).doc(rid);
+      await ref.delete();
       if (RES.cache[encId]) {
         RES.cache[encId] = RES.cache[encId].filter(function (r) { return r._docId !== rid; });
         ENC.conteos[encId] = RES.cache[encId].length;

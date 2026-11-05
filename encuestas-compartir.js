@@ -218,7 +218,8 @@ ENC.shGuardar = async function () {
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
 
   try {
-    await RCR.db.collection(ENC.COL).doc(sh.id).update({ compartido: lista, compartidoCon: correos });
+    var editores = lista.filter(function (p) { return p.rol === 'editor'; }).map(function (p) { return p.correo; });
+    await RCR.db.collection(ENC.COL).doc(sh.id).update({ compartido: lista, compartidoCon: correos, editoresCon: editores });
   } catch (err) {
     console.error('ENC.shGuardar:', err);
     RCR.toast('No se pudo compartir. Revisa tu conexión.');
@@ -229,6 +230,7 @@ ENC.shGuardar = async function () {
 
   e.compartido = lista;
   e.compartidoCon = correos;
+  e.editoresCon = editores;
   ENC.render();
 
   /* Avisos a las personas nuevas: notificación en la app (y correo, si está activo) */
