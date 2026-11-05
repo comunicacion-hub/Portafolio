@@ -51,6 +51,9 @@ window.ICONS = {
     '<circle cx="12" cy="12" r="9.5"/>' +
     '<path d="M9.4 9.3a2.7 2.7 0 0 1 5.2.9c0 1.8-2.6 2.4-2.6 4"/><path d="M12 17.4h.01"/>',
 
+  mas:
+    '<circle cx="5.5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="18.5" cy="12" r="1.5" fill="currentColor"/>',
+
   seccion:
     '<rect x="3.5" y="4" width="17" height="6" rx="1.8"/><path d="M4.5 14.5h15M4.5 19h10"/>',
 

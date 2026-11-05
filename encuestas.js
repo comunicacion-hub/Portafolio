@@ -611,6 +611,34 @@ var ENC = {
     });
     ENC.pintarCabecera();
     ENC.renderPreguntas();
+
+    /* La altura de los textos depende del ancho y de la fuente: se recalcula
+       cuando cambia el ancho (barra de scroll, girar el celular, ventana) y
+       cuando termina de cargar la tipografía. */
+    var anchoPrevio = box.clientWidth;
+    if (window.ResizeObserver) {
+      ENC._ro && ENC._ro.disconnect();
+      ENC._ro = new ResizeObserver(function () {
+        if (box.clientWidth === anchoPrevio) return;
+        anchoPrevio = box.clientWidth;
+        ENC.ajustarAltos();
+      });
+      ENC._ro.observe(box);
+    }
+    if (!ENC._alResize) {
+      var t;
+      ENC._alResize = function () { clearTimeout(t); t = setTimeout(ENC.ajustarAltos, 120); };
+      window.addEventListener('resize', ENC._alResize);
+    }
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(ENC.ajustarAltos);
+    requestAnimationFrame(function () { requestAnimationFrame(ENC.ajustarAltos); });
+  },
+
+  ajustarAltos: function () {
+    var box = document.getElementById('enc-preguntas');
+    if (box) box.querySelectorAll('.eb-autoalto').forEach(ENC.autoAlto);
+    var head = document.getElementById('enc-sv-head');
+    if (head) head.querySelectorAll('.eb-autoalto').forEach(ENC.autoAlto);
   },
 
   instantanea: function () { return JSON.stringify(ENC.b ? ENC.b.preguntas : null); },
@@ -626,6 +654,8 @@ var ENC = {
   },
 
   cerrarPreguntas: function () {
+    if (ENC._ro) { ENC._ro.disconnect(); ENC._ro = null; }
+    ENC.cerrarMenu();
     ENC.b = null;
     ENC.reordenando = false;
     RCR.cerrarSubvista();
@@ -735,8 +765,11 @@ var ENC = {
             ENC.asaHtml(i, 'sección ' + ks) +
             '<span class="eb-sec-tag">' + ico('seccion', 14) + 'Sección ' + ks + '</span>' +
             '<span class="eb-flex"></span>' +
-            ENC.botonesApoyo(i) +
-            '<button class="eb-ico danger" type="button" title="Eliminar sección" aria-label="Eliminar sección" onclick="ENC.quitarPregunta(' + i + ')">' + ico('trash', 16) + '</button>' +
+            '<span class="eb-acc">' +
+              ENC.botonesApoyo(i) +
+              '<button class="eb-ico danger" type="button" title="Eliminar sección" aria-label="Eliminar sección" onclick="ENC.quitarPregunta(' + i + ')">' + ico('trash', 16) + '</button>' +
+            '</span>' +
+            ENC.botonMas(i) +
           '</div>' +
           '<input class="eb-sec-tit" value="' + ENC.attr(q.texto) + '" placeholder="Título de la sección" maxlength="140" ' +
             'aria-label="Título de la sección" oninput="ENC.setTexto(' + i + ',this.value)">' +
@@ -756,8 +789,9 @@ var ENC = {
             q.opciones.map(function (o, j) {
               return '<div class="eb-opt">' +
                 '<span class="eb-mark' + (q.tipo === 'multiple' ? ' cuadro' : '') + '" aria-hidden="true"></span>' +
-                '<input class="eb-opt-inp" value="' + ENC.attr(o) + '" placeholder="Opción ' + (j + 1) + '" aria-label="Opción ' + (j + 1) + '" ' +
-                  'oninput="ENC.setOpcion(' + i + ',' + j + ',this.value)">' +
+                '<textarea class="eb-opt-inp eb-autoalto" rows="1" placeholder="Opción ' + (j + 1) + '" aria-label="Opción ' + (j + 1) + '" ' +
+                  'onkeydown="ENC.enterLista(event,\'agregarOpcion\',' + i + ')" ' +
+                  'oninput="ENC.setOpcion(' + i + ',' + j + ',this.value);ENC.autoAlto(this)">' + RCR.esc(o) + '</textarea>' +
                 (q.opciones.length > 2
                   ? '<button class="eb-quitar" type="button" title="Quitar opción" aria-label="Quitar opción ' + (j + 1) + '" onclick="ENC.quitarOpcion(' + i + ',' + j + ')">' + ico('x', 13, 2.6) + '</button>'
                   : '') +
@@ -803,9 +837,12 @@ var ENC = {
             '</select>' + chev +
           '</label>' +
           '<span class="eb-flex"></span>' +
-          ENC.botonesApoyo(i) +
-          '<button class="eb-ico" type="button" title="Duplicar" aria-label="Duplicar pregunta" onclick="ENC.duplicarPregunta(' + i + ')">' + ico('copy', 16) + '</button>' +
-          (nq > 1 ? '<button class="eb-ico danger" type="button" title="Eliminar" aria-label="Eliminar pregunta" onclick="ENC.quitarPregunta(' + i + ')">' + ico('trash', 16) + '</button>' : '') +
+          '<span class="eb-acc">' +
+            ENC.botonesApoyo(i) +
+            '<button class="eb-ico" type="button" title="Duplicar" aria-label="Duplicar pregunta" onclick="ENC.duplicarPregunta(' + i + ')">' + ico('copy', 16) + '</button>' +
+            (nq > 1 ? '<button class="eb-ico danger" type="button" title="Eliminar" aria-label="Eliminar pregunta" onclick="ENC.quitarPregunta(' + i + ')">' + ico('trash', 16) + '</button>' : '') +
+          '</span>' +
+          ENC.botonMas(i) +
         '</div>' +
         '<textarea class="eb-q-txt eb-autoalto" rows="1" placeholder="Escribe la pregunta" aria-label="Texto de la pregunta ' + kq + '" ' +
           'oninput="ENC.setTexto(' + i + ',this.value);ENC.autoAlto(this)">' + RCR.esc(q.texto) + '</textarea>' +
@@ -923,6 +960,68 @@ var ENC = {
     d.raf = requestAnimationFrame(auto);
   },
 
+  /* ── Menú "⋯" de la tarjeta (en pantallas angostas reemplaza los íconos) ── */
+  botonMas: function (i) {
+    return '<button class="eb-ico eb-mas-btn" type="button" title="Más acciones" aria-label="Más acciones" aria-haspopup="menu" ' +
+      'onclick="ENC.menuAcciones(event,' + i + ')">' + ico('mas', 18) + '</button>';
+  },
+
+  menuAcciones: function (ev, i) {
+    ev.stopPropagation();
+    var btn = ev.currentTarget;
+    if (ENC._menu && ENC._menu.btn === btn) { ENC.cerrarMenu(); return; }
+    ENC.cerrarMenu();
+    var q = ENC.b.preguntas[i], sec = ENC.esSeccion(q);
+    var puedeQuitar = sec || ENC.soloPreguntas(ENC.b.preguntas).length > 1;
+    var items = [
+      { ico: 'image', t: q.apoyoImg ? 'Cambiar imagen' : 'Agregar imagen', fn: function () { ENC.elegirApoyoImg(i); } },
+      { ico: 'link', t: q.enlace ? 'Editar enlace' : 'Agregar enlace', fn: function () { ENC.agregarEnlace(i); } }
+    ];
+    if (!sec) items.push({ ico: 'copy', t: 'Duplicar', fn: function () { ENC.duplicarPregunta(i); } });
+    if (puedeQuitar) items.push({ ico: 'trash', t: sec ? 'Eliminar sección' : 'Eliminar pregunta', peligro: true, fn: function () { ENC.quitarPregunta(i); } });
+
+    var m = document.createElement('div');
+    m.className = 'eb-menu';
+    m.setAttribute('role', 'menu');
+    items.forEach(function (it) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'menuitem');
+      b.className = 'eb-menu-it' + (it.peligro ? ' peligro' : '');
+      b.innerHTML = '<span>' + RCR.esc(it.t) + '</span>' + ico(it.ico, 17);
+      b.onclick = function () { ENC.cerrarMenu(); it.fn(); };
+      m.appendChild(b);
+    });
+    document.getElementById('subvista').appendChild(m);
+    var r = btn.getBoundingClientRect();
+    var top = r.bottom + 6;
+    if (top + m.offsetHeight > window.innerHeight - 12) top = Math.max(12, r.top - 6 - m.offsetHeight);
+    m.style.top = top + 'px';
+    m.style.right = Math.max(12, window.innerWidth - r.right) + 'px';
+    requestAnimationFrame(function () { m.classList.add('open'); });
+    btn.setAttribute('aria-expanded', 'true');
+
+    var fuera = function (e) { if (!m.contains(e.target) && e.target !== btn && !btn.contains(e.target)) ENC.cerrarMenu(); };
+    var tecla = function (e) { if (e.key === 'Escape') { ENC.cerrarMenu(); btn.focus(); } };
+    var sc = document.getElementById('subvista-body');
+    document.addEventListener('pointerdown', fuera, true);
+    document.addEventListener('keydown', tecla);
+    if (sc) sc.addEventListener('scroll', ENC.cerrarMenu, { once: true });
+    ENC._menu = { el: m, btn: btn, fuera: fuera, tecla: tecla };
+    var primero = m.querySelector('button');
+    if (primero) primero.focus({ preventScroll: true });
+  },
+
+  cerrarMenu: function () {
+    var x = ENC._menu;
+    if (!x) return;
+    ENC._menu = null;
+    document.removeEventListener('pointerdown', x.fuera, true);
+    document.removeEventListener('keydown', x.tecla);
+    x.btn.setAttribute('aria-expanded', 'false');
+    x.el.remove();
+  },
+
   /* ── Imagen y enlace de apoyo (los ve quien responde) ──────────────────── */
   botonesApoyo: function (i) {
     var q = ENC.b.preguntas[i];
@@ -990,8 +1089,16 @@ var ENC = {
 
   /* Los textos crecen con el contenido (como en Notas de iOS) */
   autoAlto: function (el) {
+    if (!el || !el.isConnected || !el.offsetParent) return;   // oculto: se ajusta luego
     el.style.height = 'auto';
     el.style.height = el.scrollHeight + 'px';
+  },
+
+  /* Enter en una opción, fila o columna agrega la siguiente (sin saltos de línea) */
+  enterLista: function (ev, fn, i) {
+    if (ev.key !== 'Enter' || ev.isComposing) return;
+    ev.preventDefault();
+    ENC[fn](i);
   },
 
   /* Número visible de una pregunta (las secciones no cuentan) */
@@ -1129,9 +1236,10 @@ var ENC = {
           ? '<span class="eb-grid-n" aria-hidden="true">' + (j + 1) + '</span>'
           : '<span class="eb-grid-color" aria-hidden="true" style="background:' + ENC.colorColumna(j, items.length).fondo + '"></span>';
         return '<div class="eb-opt">' + marca +
-          '<input class="eb-opt-inp" value="' + ENC.attr(t) + '" placeholder="' + (esFila ? 'Fila ' : 'Columna ') + (j + 1) + '" ' +
+          '<textarea class="eb-opt-inp eb-autoalto" rows="1" placeholder="' + (esFila ? 'Fila ' : 'Columna ') + (j + 1) + '" ' +
             'aria-label="' + (esFila ? 'Fila ' : 'Columna ') + (j + 1) + '" ' +
-            'oninput="ENC.' + (esFila ? 'setFila' : 'setColumna') + '(' + i + ',' + j + ',this.value)">' +
+            'onkeydown="ENC.enterLista(event,\'' + (esFila ? 'agregarFila' : 'agregarColumna') + '\',' + i + ')" ' +
+            'oninput="ENC.' + (esFila ? 'setFila' : 'setColumna') + '(' + i + ',' + j + ',this.value);ENC.autoAlto(this)">' + RCR.esc(t) + '</textarea>' +
           (items.length > min
             ? '<button class="eb-quitar" type="button" title="Quitar" aria-label="Quitar ' + (esFila ? 'fila ' : 'columna ') + (j + 1) + '" ' +
                 'onclick="ENC.' + (esFila ? 'quitarFila' : 'quitarColumna') + '(' + i + ',' + j + ')">' + ico('x', 13, 2.6) + '</button>'

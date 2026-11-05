@@ -1562,13 +1562,19 @@ a:focus-visible,
 
 /* Opciones: lista agrupada con separadores finos */
 .eb-opts{border-radius:16px;background:rgba(255,255,255,.55);border:1px solid var(--eb-sep);overflow:hidden;margin-bottom:10px;}
-.eb-opt{display:flex;align-items:center;gap:11px;padding:0 6px 0 14px;min-height:46px;border-bottom:1px solid var(--eb-sep);}
+/* Las marcas y la "x" se alinean con la primera línea: el texto puede ocupar varias */
+.eb-opt{display:flex;align-items:flex-start;gap:11px;padding:0 6px 0 14px;min-height:46px;border-bottom:1px solid var(--eb-sep);}
+.eb-opt > :not(.eb-opt-inp){margin-top:13.5px;}
+.eb-opt > .eb-quitar{margin-top:11px;}
 .eb-mark{width:19px;height:19px;border-radius:50%;border:2px solid #c7cbd3;flex-shrink:0;}
 .eb-mark.cuadro{border-radius:6px;}
 .eb-opt-inp{
-  flex:1;min-width:0;border:none;outline:none;background:transparent;
-  font-family:inherit;font-size:15px;color:#1d1d1f;padding:12px 0;
+  display:block;flex:1;min-width:0;border:none;outline:none;background:transparent;resize:none;overflow:hidden;
+  font-family:inherit;font-size:15px;line-height:1.4;color:#1d1d1f;padding:12px 0;
+  overflow-wrap:anywhere;
 }
+/* Navegadores que lo permiten ajustan la altura solos (sin esperar al script) */
+.eb-autoalto{field-sizing:content;}
 .eb-quitar{
   width:24px;height:24px;border-radius:50%;flex-shrink:0;margin:0 6px;
   border:none;background:rgba(118,118,128,.16);color:#6e6e73;cursor:pointer;
@@ -1670,9 +1676,14 @@ a:focus-visible,
   position:sticky;bottom:calc(18px + var(--safe-bottom));z-index:5;
   display:flex;align-items:center;gap:2px;width:max-content;max-width:100%;
   margin:22px auto 0;padding:6px;border-radius:999px;
-  background:rgba(255,255,255,.72);
+  /* Casi opaca: el texto que pasa por detrás no se mezcla con los botones */
+  background:rgba(255,255,255,.92);
+  backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);
   box-shadow:0 12px 34px rgba(28,39,76,.16),0 2px 6px rgba(28,39,76,.06),inset 0 1px 0 rgba(255,255,255,.95);
 }
+/* Al enfocar un campo, el navegador lo deja visible sin quedar bajo la barra
+   flotante ni bajo los botones de arriba */
+.subvista-body:has(.eb){scroll-padding-top:100px;scroll-padding-bottom:110px;}
 .eb-dock-btn{
   display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:999px;
   border:none;background:transparent;color:#1d1d1f;cursor:pointer;
@@ -1718,9 +1729,38 @@ a:focus-visible,
   .eb-q,.eb-sec{border-radius:22px;padding:12px 14px 4px;}
   .eb-ajustes{margin:0 -14px;padding:0 14px;}
   .eb-dock-btn{padding:11px 16px;}
-  .eb-q-head .eb-ico,.eb-sec-head .eb-ico{width:30px;height:30px;}
-  .eb-q-head,.eb-sec-head{gap:4px;}
+  .eb-q-head,.eb-sec-head{gap:6px;}
 }
+
+/* Acciones de la tarjeta: íconos en pantallas anchas, menú "⋯" en el celular */
+.eb-acc{display:flex;align-items:center;gap:2px;flex-shrink:0;}
+.eb-mas-btn{display:none;}
+.eb-select{flex:0 1 auto;}
+.eb-select select{min-width:0;width:100%;}
+@media (max-width:520px){
+  .eb-acc{display:none;}
+  .eb-mas-btn{display:flex;}
+}
+.eb-menu{
+  position:fixed;z-index:950;min-width:220px;max-width:calc(100vw - 24px);
+  padding:6px;border-radius:16px;
+  background:rgba(255,255,255,.97);
+  backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);
+  border:1px solid rgba(255,255,255,.8);
+  box-shadow:0 18px 44px rgba(28,39,76,.2),0 2px 8px rgba(28,39,76,.08);
+  opacity:0;transform:scale(.96);transform-origin:top right;transition:opacity .14s,transform .14s;
+}
+.eb-menu.open{opacity:1;transform:none;}
+.eb-menu-it{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;
+  padding:11px 12px;border:none;border-radius:10px;background:transparent;cursor:pointer;
+  font-family:inherit;font-size:15px;color:#1d1d1f;text-align:left;
+}
+.eb-menu-it + .eb-menu-it{box-shadow:inset 0 1px 0 rgba(60,60,67,.1);}
+.eb-menu-it:hover,.eb-menu-it:focus-visible{background:rgba(80,108,255,.1);outline:none;}
+.eb-menu-it svg{color:#5f6673;flex-shrink:0;}
+.eb-menu-it.peligro{color:#ff3b30;}
+.eb-menu-it.peligro svg{color:#ff3b30;}
 
 /* ==========================================================================
    ENCUESTAS — página pública para responder (responder-encuesta.html)
