@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#e8f4fd">
+<meta name="theme-color" content="#eef1fb">
 <title>Encuesta — Redes Con Rostro</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,7 +15,12 @@
 
 <!-- Página pública para responder una encuesta: sin login ni navegación.
      Se abre con ?id=<encuesta> o con ?c=<código corto> (desde /e/?código).
-     Lee Encuestas/{id} y guarda la respuesta en Encuestas/{id}/Respuestas. -->
+     Lee Encuestas/{id} y guarda la respuesta en Encuestas/{id}/Respuestas.
+     · Cada sección es un paso (tarjeta) con Atrás / Continuar.
+     · Funciona sin conexión después de abrirla una vez con internet:
+       la página queda guardada (sw-encuestas.js) y las respuestas esperan en
+       el teléfono hasta que vuelve la conexión (persistencia de Firestore). -->
+<div class="rg-fondo" aria-hidden="true"></div>
 <div class="resp-wrap">
   <div id="resp-app">
     <div class="resp-estado">
@@ -50,9 +55,32 @@ RCR.esc = function (v) {
   var id = params.get('id');
   var previa = params.get('previa') === '1';
   var app = document.getElementById('resp-app');
-  var enc = null, db = null, enviando = false;
-  var fotos = {};   // { idPregunta: base64 JPEG } de las preguntas "Subir imagen"
+  var enc = null, db = null, enviando = false, persistente = false;
+  var fotos = {};          // { idPregunta: base64 JPEG } de las preguntas "Subir imagen"
+  var pags = [];           // [{ sec: Sección|null, items: [Pregunta] }]
+  var pagAct = 0;
 
+  /* ── Avisos breves ────────────────────────────────────────────────────── */
+  function toast(msg) {
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { el.classList.remove('show'); }, 3200);
+  }
+
+  function estado(icono, titulo, texto, extra, clase) {
+    app.innerHTML =
+      '<div class="resp-estado ' + (clase || '') + '">' +
+        '<div class="resp-estado-ico">' + ico(icono, 28, 2.2) + '</div>' +
+        '<h2>' + RCR.esc(titulo) + '</h2>' +
+        (texto ? '<p>' + RCR.esc(texto) + '</p>' : '') +
+        (extra || '') +
+      '</div>';
+    pintarRed();
+  }
+
+  /* ── Fotos (preguntas "Subir imagen") ─────────────────────────────────── */
   function pintarFoto(qid) {
     var box = document.getElementById('rf-' + qid);
     if (!box) return;
@@ -77,8 +105,7 @@ RCR.esc = function (v) {
     ENC.comprimirImagen(file, ENC.IMG_RESP).then(function (url) {
       fotos[qid] = url;
       pintarFoto(qid);
-      var fs = document.getElementById('rq-' + qid);
-      if (fs) { fs.classList.remove('con-error'); fs.querySelector('.resp-err').textContent = ''; }
+      limpiarError(document.getElementById('rq-' + qid));
       actualizar();
     }).catch(function () { toast('Elige un archivo de imagen (JPG o PNG)'); });
   };
@@ -89,31 +116,14 @@ RCR.esc = function (v) {
     actualizar();
   };
 
-  function toast(msg) {
-    var el = document.getElementById('toast');
-    el.textContent = msg;
-    el.classList.add('show');
-    clearTimeout(toast._t);
-    toast._t = setTimeout(function () { el.classList.remove('show'); }, 3200);
-  }
-
-  function estado(icono, titulo, texto, extra) {
-    app.innerHTML =
-      '<div class="resp-estado">' +
-        '<div class="resp-estado-ico">' + ico(icono, 26) + '</div>' +
-        '<h2>' + RCR.esc(titulo) + '</h2>' +
-        (texto ? '<p>' + RCR.esc(texto) + '</p>' : '') +
-        (extra || '') +
-      '</div>';
-  }
-
-  /* ── Pintar el formulario ─────────────────────────────────────────────── */
-  function preguntaHtml(q, n) {
+  /* ── HTML de cada pregunta ────────────────────────────────────────────── */
+  function preguntaHtml(q) {
     var name = 'q_' + q.id, campo = '';
     var a = ENC.attr;
 
     if (ENC.esSeccion(q)) {
       return '<div class="resp-sec" id="rq-' + q.id + '">' +
+        '<div class="resp-sec-tag">' + ico('seccion', 14) + 'Sección</div>' +
         '<h2>' + RCR.esc(q.texto) + '</h2>' +
         (q.descripcion ? '<p>' + RCR.esc(q.descripcion) + '</p>' : '') +
         ENC.apoyoPublico(q) +
@@ -121,12 +131,13 @@ RCR.esc = function (v) {
     }
 
     if (q.tipo === 'numero') {
-      campo = '<input class="form-inp resp-numero" name="' + name + '" inputmode="decimal" autocomplete="off" maxlength="30" placeholder="Escribe un número">';
+      campo = '<input class="rg-campo resp-numero" name="' + name + '" inputmode="decimal" autocomplete="off" maxlength="30" placeholder="Escribe un número">';
     } else if (q.tipo === 'imagen') {
       campo = '<div class="resp-foto" id="rf-' + q.id + '">' +
         '<label class="resp-subir">' +
           '<input type="file" accept="image/*" class="sr-only" data-q="' + q.id + '" onchange="window.__elegirFoto(this.dataset.q, this)">' +
-          ico('image', 22) + '<span><strong>Subir una foto</strong><small>JPG o PNG · también puedes tomarla con el celular</small></span>' +
+          '<span class="resp-subir-ico">' + ico('image', 22) + '</span>' +
+          '<span><strong>Subir una foto</strong><small>JPG o PNG · también puedes tomarla con el celular</small></span>' +
         '</label>' +
       '</div>';
     } else if (q.tipo === 'cuadricula') {
@@ -137,17 +148,19 @@ RCR.esc = function (v) {
         (q.filas || []).map(function (f) {
           return '<div class="resp-grid-fila" role="radiogroup" aria-label="' + a(f.t) + '">' +
             '<div class="resp-grid-lbl">' + RCR.esc(f.t) + '</div>' +
+            '<div class="resp-grid-celdas">' +
             cols.map(function (c) {
               return '<label class="resp-grid-celda"><input type="radio" name="' + name + '_' + a(f.id) + '" value="' + a(c) + '" aria-label="' + a(f.t + ': ' + c) + '">' +
                 '<span class="resp-marca"></span><span class="resp-grid-col">' + RCR.esc(c) + '</span></label>';
             }).join('') +
+            '</div>' +
           '</div>';
         }).join('') +
       '</div>';
     } else if (q.tipo === 'corto') {
-      campo = '<input class="form-inp" name="' + name + '" maxlength="500" placeholder="Tu respuesta">';
+      campo = '<input class="rg-campo" name="' + name + '" maxlength="500" placeholder="Tu respuesta" autocomplete="off">';
     } else if (q.tipo === 'largo') {
-      campo = '<textarea class="form-inp" name="' + name + '" rows="4" maxlength="5000" placeholder="Tu respuesta"></textarea>';
+      campo = '<textarea class="rg-campo" name="' + name + '" rows="4" maxlength="5000" placeholder="Tu respuesta"></textarea>';
     } else if (q.tipo === 'unica' || q.tipo === 'multiple') {
       var tipoInput = q.tipo === 'multiple' ? 'checkbox' : 'radio';
       campo = '<div class="resp-opciones">' + (q.opciones || []).map(function (o) {
@@ -161,50 +174,150 @@ RCR.esc = function (v) {
           '</div>'
         : '');
     } else if (q.tipo === 'escala') {
-      campo = '<div class="resp-escala">' + [1, 2, 3, 4, 5].map(function (v) {
+      campo = '<div class="rg-seg resp-escala">' + [1, 2, 3, 4, 5].map(function (v) {
         return '<label class="resp-num"><input type="radio" name="' + name + '" value="' + v + '"><span>' + v + '</span></label>';
       }).join('') + '</div>' +
       '<div class="resp-escala-ext"><span>Bajo</span><span>Alto</span></div>';
     } else if (q.tipo === 'sino') {
-      campo = '<div class="resp-sino">' + ['Sí', 'No'].map(function (v) {
+      campo = '<div class="rg-seg resp-sino">' + ['Sí', 'No'].map(function (v) {
         return '<label class="resp-num"><input type="radio" name="' + name + '" value="' + v + '"><span>' + v + '</span></label>';
       }).join('') + '</div>';
     }
 
     return '' +
-      '<fieldset class="card resp-q" id="rq-' + q.id + '" data-id="' + q.id + '">' +
-        '<legend class="resp-q-txt"><span class="resp-q-n">' + n + '.</span> ' + RCR.esc(q.texto) +
-          (q.requerida ? ' <span class="resp-req" aria-label="obligatoria">*</span>' : '') + '</legend>' +
+      '<fieldset class="resp-q" id="rq-' + q.id + '" data-id="' + q.id + '">' +
+        '<legend class="resp-q-txt"><span class="resp-q-n"></span><span class="resp-q-t">' + RCR.esc(q.texto) +
+          (q.requerida ? ' <span class="resp-req" aria-label="obligatoria">*</span>' : '') + '</span></legend>' +
         ENC.apoyoPublico(q) +
         campo +
         '<div class="resp-err" role="alert"></div>' +
       '</fieldset>';
   }
 
+  /* ── Pasos: cada sección es una tarjeta; lo que va antes de la primera
+     sección forma el primer paso, junto con la bienvenida. ─────────────── */
+  function armarPaginas(ps) {
+    var out = [], act = { sec: null, items: [] };
+    ps.forEach(function (q) {
+      if (ENC.esSeccion(q)) {
+        if (act.sec || act.items.length) out.push(act);
+        act = { sec: q, items: [] };
+      } else act.items.push(q);
+    });
+    if (act.sec || act.items.length) out.push(act);
+    return out;
+  }
+
+  /* Pasos que se ven según las respuestas (una sección con condición que no
+     se cumple, o sin ninguna pregunta visible, se salta) */
+  function pagVisibles(vis) {
+    return pags.map(function (p, k) { return k; }).filter(function (k) {
+      var p = pags[k];
+      if (k === 0) return true;
+      if (p.sec && !vis[p.sec.id]) return false;
+      return p.items.some(function (q) { return vis[q.id]; });
+    });
+  }
+
   function pintar() {
     var ps = enc.preguntas || [];
+    pags = armarPaginas(ps);
     var hayReq = ps.some(function (q) { return q.requerida; });
-    app.innerHTML =
-      (previa ? '<div class="resp-previa">' + ico('eye', 16) + '<span>Vista previa: las respuestas no se guardan.</span></div>' : '') +
-      '<header class="card resp-head">' +
+    var nPreg = ENC.soloPreguntas(ps).length;
+    var varias = pags.length > 1;
+
+    var hero =
+      '<header class="resp-head">' +
         '<div class="resp-marca-app">mi redes con rostro</div>' +
         '<h1>' + RCR.esc(enc.titulo || 'Encuesta') + '</h1>' +
         (enc.descripcion ? '<p class="resp-desc">' + RCR.esc(enc.descripcion) + '</p>' : '') +
-        (hayReq ? '<p class="resp-nota"><span class="resp-req">*</span> Obligatoria</p>' : '') +
-      '</header>' +
+        '<div class="resp-head-meta">' +
+          '<span>' + ico('encuesta', 14) + nPreg + (nPreg === 1 ? ' pregunta' : ' preguntas') + '</span>' +
+          (hayReq ? '<span><b class="resp-req">*</b> Obligatoria</span>' : '') +
+        '</div>' +
+      '</header>';
+
+    app.innerHTML =
+      (previa ? '<div class="resp-previa">' + ico('eye', 16) + '<span>Vista previa: las respuestas no se guardan.</span></div>' : '') +
+      '<div class="rg-barra" id="rg-barra">' +
+        '<span class="rg-barra-tit">' + RCR.esc(enc.titulo || 'Encuesta') + '</span>' +
+        '<span class="rg-red hidden" id="rg-red"></span>' +
+        (varias ? '<span class="rg-paso" id="rg-paso"></span>' : '') +
+        (varias ? '<div class="rg-prog" aria-hidden="true"><i id="rg-prog-fill"></i></div>' : '') +
+      '</div>' +
       '<form id="resp-form" novalidate>' +
-        ps.map(function (q) { return preguntaHtml(q, 0); }).join('') +
-        '<button type="submit" class="btn btn-primary resp-enviar" id="resp-enviar">Enviar respuestas</button>' +
+        pags.map(function (p, k) {
+          return '<section class="rg-pag" data-p="' + k + '"' + (k ? ' hidden' : '') + '>' +
+            (k === 0 ? hero : '') +
+            (p.sec ? preguntaHtml(p.sec) : '') +
+            p.items.map(preguntaHtml).join('') +
+          '</section>';
+        }).join('') +
+        '<div class="rg-nav">' +
+          '<button type="button" class="rg-btn rg-btn-sec" id="rg-atras" hidden>' + ico('chevronLeft', 18, 2.4) + '<span>Atrás</span></button>' +
+          '<button type="submit" class="rg-btn rg-btn-pri" id="resp-enviar"><span>Continuar</span>' + ico('chevronRight', 18, 2.4) + '</button>' +
+        '</div>' +
       '</form>';
 
     var form = document.getElementById('resp-form');
-    form.addEventListener('change', actualizar);
-    form.addEventListener('input', function (e) {
-      var fs = e.target.closest('.resp-q');
-      if (fs) { fs.classList.remove('con-error'); fs.querySelector('.resp-err').textContent = ''; }
-    });
-    form.addEventListener('submit', function (e) { e.preventDefault(); enviar(); });
+    form.addEventListener('change', function () { pintarProgreso(); });
+    form.addEventListener('input', function (e) { limpiarError(e.target.closest('.resp-q')); });
+    form.addEventListener('submit', function (e) { e.preventDefault(); continuar(); });
+    document.getElementById('rg-atras').addEventListener('click', atras);
     actualizar();
+    irA(0, 0);
+    pintarRed();
+  }
+
+  /* ── Navegación entre pasos ───────────────────────────────────────────── */
+  function irA(k, dir) {
+    var st = actualizar();
+    var vs = pagVisibles(st.vis);
+    pagAct = k;
+    document.querySelectorAll('.rg-pag').forEach(function (s) {
+      var esta = +s.dataset.p === k;
+      s.hidden = !esta;
+      s.classList.remove('entra-der', 'entra-izq');
+      if (esta && dir) { void s.offsetWidth; s.classList.add(dir > 0 ? 'entra-der' : 'entra-izq'); }
+    });
+    pintarProgreso(vs);
+    if (dir) window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* Paso actual, barra de progreso y botones (cambian si una respuesta
+     muestra u oculta una sección) */
+  function pintarProgreso(vs) {
+    vs = vs || pagVisibles(actualizar().vis);
+    var pos = Math.max(0, vs.indexOf(pagAct)), total = vs.length, ultimo = pos === total - 1;
+    var paso = document.getElementById('rg-paso');
+    if (paso) paso.textContent = 'Paso ' + (pos + 1) + ' de ' + total;
+    var fill = document.getElementById('rg-prog-fill');
+    if (fill) fill.style.width = Math.round((pos + 1) / total * 100) + '%';
+    document.getElementById('rg-atras').hidden = pos <= 0;
+    var btn = document.getElementById('resp-enviar');
+    if (btn.disabled) return;
+    btn.classList.toggle('final', ultimo);
+    btn.innerHTML = ultimo
+      ? '<span>' + (previa ? 'Terminar vista previa' : 'Enviar respuestas') + '</span>' + ico('check', 18, 2.6)
+      : '<span>Continuar</span>' + ico('chevronRight', 18, 2.4);
+  }
+
+  function continuar() {
+    if (enviando) return;
+    var st = actualizar();
+    var pag = pags[pagAct];
+    var err = validar(pag.items, st);
+    if (err) { mostrarError(err); return; }
+    var vs = pagVisibles(st.vis);
+    var siguientes = vs.filter(function (k) { return k > pagAct; });
+    if (siguientes.length) irA(siguientes[0], 1);
+    else enviar(st);
+  }
+
+  function atras() {
+    var vs = pagVisibles(actualizar().vis);
+    var antes = vs.filter(function (k) { return k < pagAct; });
+    if (antes.length) irA(antes[antes.length - 1], -1);
   }
 
   /* ── Leer respuestas y aplicar la lógica condicional ──────────────────── */
@@ -251,7 +364,7 @@ RCR.esc = function (v) {
       fs.classList.toggle('hidden', !ver);
       if (ENC.esSeccion(q)) return;
       fs.disabled = !ver;
-      if (ver) fs.querySelector('.resp-q-n').textContent = (++n) + '.';
+      if (ver) fs.querySelector('.resp-q-n').textContent = ++n;
       /* Opción múltiple con tope: al llegar al máximo se bloquean las demás */
       var max = ENC.maxValido(q);
       if (max) {
@@ -269,34 +382,66 @@ RCR.esc = function (v) {
     return { r: r, vis: vis };
   }
 
-  /* ── Enviar ───────────────────────────────────────────────────────────── */
-  async function enviar() {
-    if (enviando) return;
-    var st = actualizar();
-    var primero = null;
+  /* ── Validación (de un paso o de todo) ────────────────────────────────── */
+  function limpiarError(fs) {
+    if (!fs || !fs.classList.contains('con-error')) return;
+    fs.classList.remove('con-error');
+    fs.querySelector('.resp-err').textContent = '';
+  }
 
-    ENC.soloPreguntas(enc.preguntas).forEach(function (q) {
+  function validar(qs, st) {
+    var primero = null;
+    qs.forEach(function (q) {
+      if (ENC.esSeccion(q)) return;
       var fs = document.getElementById('rq-' + q.id);
-      var falta = st.vis[q.id] && q.requerida && vacio(st.r[q.id]);
-      var malNum = st.vis[q.id] && q.tipo === 'numero' && !vacio(st.r[q.id]) && isNaN(ENC.leerNumero(st.r[q.id]));
+      if (!fs) return;
+      var v = st.vis[q.id], r = st.r[q.id];
+      var falta = v && q.requerida && vacio(r);
+      var malNum = v && q.tipo === 'numero' && !vacio(r) && isNaN(ENC.leerNumero(r));
       var max = ENC.maxValido(q);
-      var demas = st.vis[q.id] && max && (st.r[q.id] || []).length > max;
-      /* Cuadrícula obligatoria: hay que responder todas las filas */
-      var faltaFila = st.vis[q.id] && q.requerida && q.tipo === 'cuadricula' && !falta &&
-        Object.keys(st.r[q.id] || {}).length < (q.filas || []).length;
-      var mal = !!(falta || malNum || demas || faltaFila);
-      fs.classList.toggle('con-error', mal);
-      fs.querySelector('.resp-err').textContent = falta ? 'Esta pregunta es obligatoria'
+      var demas = v && max && (r || []).length > max;
+      var faltaFila = v && q.requerida && q.tipo === 'cuadricula' && !falta &&
+        Object.keys(r || {}).length < (q.filas || []).length;
+      var msg = falta ? 'Esta pregunta es obligatoria'
         : (faltaFila ? 'Responde todas las filas'
         : (malNum ? 'Escribe solo un número (por ejemplo 12 o 3,5)'
         : (demas ? 'Elige como máximo ' + max : '')));
-      if (mal && !primero) primero = fs;
+      fs.classList.toggle('con-error', !!msg);
+      fs.querySelector('.resp-err').innerHTML = msg ? ico('alert', 14) + '<span>' + RCR.esc(msg) + '</span>' : '';
+      if (msg && !primero) primero = fs;
     });
-    if (primero) {
-      primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      var msg = primero.querySelector('.resp-err').textContent;
-      toast(msg.indexOf('número') >= 0 ? 'Revisa los números'
-        : ((msg.indexOf('máximo') >= 0 || msg.indexOf('filas') >= 0) ? msg : 'Faltan preguntas obligatorias'));
+    return primero;
+  }
+
+  function mostrarError(fs) {
+    fs.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    fs.classList.remove('sacude'); void fs.offsetWidth; fs.classList.add('sacude');
+    var msg = fs.querySelector('.resp-err').textContent;
+    toast(msg.indexOf('número') >= 0 ? 'Revisa los números'
+      : ((msg.indexOf('máximo') >= 0 || msg.indexOf('filas') >= 0) ? msg : 'Faltan preguntas obligatorias'));
+  }
+
+  /* ── Enviar (también sin conexión) ────────────────────────────────────── */
+  var CLAVE_PEND = 'rcr-enc-pend-';
+  function pendientes() {
+    try { return JSON.parse(localStorage.getItem(CLAVE_PEND + id) || '[]'); } catch (e) { return []; }
+  }
+  function guardarPend(lista) {
+    try {
+      if (lista.length) localStorage.setItem(CLAVE_PEND + id, JSON.stringify(lista));
+      else localStorage.removeItem(CLAVE_PEND + id);
+    } catch (e) { /* sin almacenamiento: solo se pierde el contador */ }
+    pintarRed();
+  }
+
+  async function enviar(st) {
+    if (enviando) return;
+    /* Revisión final de todo (por si algo quedó en un paso anterior) */
+    var err = validar(ENC.soloPreguntas(enc.preguntas), st);
+    if (err) {
+      var k = pags.findIndex(function (p) { return p.items.some(function (q) { return 'rq-' + q.id === err.id; }); });
+      if (k >= 0 && k !== pagAct) irA(k, -1);
+      setTimeout(function () { mostrarError(err); }, 60);
       return;
     }
 
@@ -312,31 +457,99 @@ RCR.esc = function (v) {
       return;
     }
 
-    if (previa) { gracias(true); return; }
+    if (previa) { gracias('previa'); return; }
 
     enviando = true;
     var btn = document.getElementById('resp-enviar');
     btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
-    try {
-      /* Se guarda dentro de la encuesta: Encuestas/{id}/Respuestas */
-      await db.collection(ENC.COL).doc(id).collection(ENC.SUB_RESP).add({
-        respuestas: respuestas,
-        enviado: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      gracias(false);
-    } catch (e) {
+
+    /* La respuesta queda en la cola de Firestore (en el teléfono) aunque no
+       haya internet; se envía sola cuando vuelve la conexión. */
+    var ref = db.collection(ENC.COL).doc(id).collection(ENC.SUB_RESP).doc();
+    var escritura = ref.set({ respuestas: respuestas, enviado: firebase.firestore.FieldValue.serverTimestamp() });
+    guardarPend(pendientes().concat([ref.id]));
+    escritura.then(function () {
+      guardarPend(pendientes().filter(function (x) { return x !== ref.id; }));
+    }, function (e) {
       console.error('responder-encuesta:', e);
-      toast('No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.');
-      btn.disabled = false; btn.textContent = 'Enviar respuestas';
+      guardarPend(pendientes().filter(function (x) { return x !== ref.id; }));
+    });
+
+    var espera = navigator.onLine ? 9000 : 700;
+    try {
+      var res = await Promise.race([
+        escritura.then(function () { return 'ok'; }),
+        new Promise(function (ok) { setTimeout(function () { ok('cola'); }, espera); })
+      ]);
+      gracias(res);
+    } catch (e) {
+      toast('No se pudo enviar: la encuesta puede estar cerrada. Inténtalo de nuevo.');
+      btn.disabled = false;
+      pintarProgreso();
     }
     enviando = false;
   }
 
-  function gracias(esPrevia) {
+  function gracias(modo) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    estado('check', esPrevia ? 'Vista previa completada' : '¡Gracias por responder!',
-      esPrevia ? 'En el enlace real, aquí se habría guardado la respuesta.' : 'Tu respuesta quedó registrada.',
-      '<button class="btn btn-glass resp-otra" onclick="location.reload()">Enviar otra respuesta</button>');
+    var otra = '<button class="rg-btn rg-btn-sec resp-otra" onclick="location.reload()">' + ico('plus', 16, 2.4) + '<span>Enviar otra respuesta</span></button>';
+    if (modo === 'previa') {
+      estado('check', 'Vista previa completada', 'En el enlace real, aquí se habría guardado la respuesta.', otra, 'listo');
+    } else if (modo === 'cola') {
+      estado('clock', 'Respuesta guardada en este teléfono',
+        persistente
+          ? 'No hay internet en este momento. Se enviará sola cuando vuelva la conexión y abras esta página.'
+          : 'No hay internet en este momento. Deja esta página abierta: se enviará sola cuando vuelva la conexión.',
+        otra, 'cola');
+    } else {
+      estado('check', '¡Gracias por responder!', 'Tu respuesta quedó registrada.', otra, 'listo');
+    }
+  }
+
+  /* ── Estado de la conexión y de lo que falta enviar ───────────────────── */
+  function pintarRed() {
+    var el = document.getElementById('rg-red');
+    var n = pendientes().length;
+    var sin = !navigator.onLine;
+    var txt = sin
+      ? 'Sin conexión' + (n ? ' · ' + n + ' por enviar' : '')
+      : (n ? 'Enviando ' + n + (n === 1 ? ' respuesta' : ' respuestas') + '…' : '');
+    if (el) {
+      el.textContent = txt;
+      el.classList.toggle('hidden', !txt);
+      el.classList.toggle('sin', sin);
+    }
+    var chip = document.getElementById('rg-red-est');
+    if (!el && txt) {
+      if (!chip) {
+        chip = document.createElement('div');
+        chip.id = 'rg-red-est';
+        chip.className = 'rg-red flotante';
+        document.body.appendChild(chip);
+      }
+      chip.textContent = txt;
+      chip.classList.toggle('sin', sin);
+    } else if (chip && (el || !txt)) chip.remove();
+  }
+  window.addEventListener('online', function () { pintarRed(); toast('Volvió la conexión'); });
+  window.addEventListener('offline', function () { pintarRed(); toast('Sin conexión: puedes seguir respondiendo'); });
+
+  /* Respuestas guardadas sin conexión en visitas anteriores: Firestore las
+     reenvía al abrir la página; cuando terminan se limpia el contador. */
+  function vigilarPendientes() {
+    if (!pendientes().length || !db.waitForPendingWrites) return;
+    db.waitForPendingWrites().then(function () {
+      var n = pendientes().length;
+      guardarPend([]);
+      if (n) toast(n === 1 ? 'Se envió la respuesta pendiente' : 'Se enviaron ' + n + ' respuestas pendientes');
+    }).catch(function () { /* se reintenta en la próxima visita */ });
+  }
+
+  /* ── Página disponible sin conexión ───────────────────────────────────── */
+  if ('serviceWorker' in navigator && !previa && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    navigator.serviceWorker.register('sw-encuestas.js', { scope: './' }).catch(function (e) {
+      console.warn('sw-encuestas:', e);
+    });
   }
 
   /* ── Arranque ─────────────────────────────────────────────────────────── */
@@ -353,6 +566,10 @@ RCR.esc = function (v) {
         appId: "1:138746747295:web:1ceb9c60d4a4073e6885aa"
       });
       db = firebase.firestore();
+      /* Guarda en el teléfono la encuesta y la cola de respuestas */
+      try { await db.enablePersistence({ synchronizeTabs: true }); persistente = true; }
+      catch (e) { console.warn('Sin persistencia sin conexión:', e && e.code); }
+
       /* Enlace corto (/e/?codigo): el código dice qué encuesta abrir */
       if (!id) {
         var cs = await db.collection(ENC.COL_COD).doc(codigo).get();
@@ -366,6 +583,7 @@ RCR.esc = function (v) {
       if (!snap.exists) { estado('alert', 'Esta encuesta ya no está disponible', 'Puede que la hayan eliminado.'); return; }
       enc = snap.data();
       document.title = (enc.titulo || 'Encuesta') + ' — Redes Con Rostro';
+      vigilarPendientes();
       if (enc.estado === 'cerrada' && !previa) {
         estado('clock', enc.titulo || 'Encuesta', 'Esta encuesta ya no recibe respuestas.');
         return;
@@ -374,7 +592,9 @@ RCR.esc = function (v) {
       pintar();
     } catch (e) {
       console.error('responder-encuesta:', e);
-      estado('alert', 'No se pudo abrir la encuesta', 'Revisa tu conexión o pide que te reenvíen el enlace.');
+      estado('alert', 'No se pudo abrir la encuesta',
+        navigator.onLine ? 'Revisa tu conexión o pide que te reenvíen el enlace.'
+          : 'Sin conexión: para usarla sin internet, primero ábrela una vez con conexión.');
     }
   })();
 })();
