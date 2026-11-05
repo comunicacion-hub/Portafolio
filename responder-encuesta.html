@@ -50,6 +50,43 @@ RCR.esc = function (v) {
   var previa = params.get('previa') === '1';
   var app = document.getElementById('resp-app');
   var enc = null, db = null, enviando = false;
+  var fotos = {};   // { idPregunta: base64 JPEG } de las preguntas "Subir imagen"
+
+  function pintarFoto(qid) {
+    var box = document.getElementById('rf-' + qid);
+    if (!box) return;
+    var url = fotos[qid];
+    var lbl = box.querySelector('.resp-subir');
+    var prev = box.querySelector('.resp-foto-prev');
+    if (prev) prev.remove();
+    lbl.classList.toggle('hidden', !!url);
+    if (url) {
+      box.insertAdjacentHTML('afterbegin',
+        '<div class="resp-foto-prev"><img src="' + url + '" alt="Foto elegida">' +
+          '<button type="button" class="resp-foto-quitar" data-q="' + qid + '" onclick="window.__quitarFoto(this.dataset.q)">' + ico('x', 14, 2.6) + 'Quitar</button>' +
+        '</div>');
+    }
+  }
+
+  window.__elegirFoto = function (qid, input) {
+    var file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    toast('Preparando la foto…');
+    ENC.comprimirImagen(file, ENC.IMG_RESP).then(function (url) {
+      fotos[qid] = url;
+      pintarFoto(qid);
+      var fs = document.getElementById('rq-' + qid);
+      if (fs) { fs.classList.remove('con-error'); fs.querySelector('.resp-err').textContent = ''; }
+      actualizar();
+    }).catch(function () { toast('Elige un archivo de imagen (JPG o PNG)'); });
+  };
+
+  window.__quitarFoto = function (qid) {
+    delete fotos[qid];
+    pintarFoto(qid);
+    actualizar();
+  };
 
   function toast(msg) {
     var el = document.getElementById('toast');
@@ -78,10 +115,20 @@ RCR.esc = function (v) {
       return '<div class="resp-sec" id="rq-' + q.id + '">' +
         '<h2>' + RCR.esc(q.texto) + '</h2>' +
         (q.descripcion ? '<p>' + RCR.esc(q.descripcion) + '</p>' : '') +
+        ENC.apoyoPublico(q) +
       '</div>';
     }
 
-    if (q.tipo === 'corto') {
+    if (q.tipo === 'numero') {
+      campo = '<input class="form-inp resp-numero" name="' + name + '" inputmode="decimal" autocomplete="off" maxlength="30" placeholder="Escribe un número">';
+    } else if (q.tipo === 'imagen') {
+      campo = '<div class="resp-foto" id="rf-' + q.id + '">' +
+        '<label class="resp-subir">' +
+          '<input type="file" accept="image/*" class="sr-only" data-q="' + q.id + '" onchange="window.__elegirFoto(this.dataset.q, this)">' +
+          ico('image', 22) + '<span><strong>Subir una foto</strong><small>JPG o PNG · también puedes tomarla con el celular</small></span>' +
+        '</label>' +
+      '</div>';
+    } else if (q.tipo === 'corto') {
       campo = '<input class="form-inp" name="' + name + '" maxlength="500" placeholder="Tu respuesta">';
     } else if (q.tipo === 'largo') {
       campo = '<textarea class="form-inp" name="' + name + '" rows="4" maxlength="5000" placeholder="Tu respuesta"></textarea>';
@@ -108,6 +155,7 @@ RCR.esc = function (v) {
       '<fieldset class="card resp-q" id="rq-' + q.id + '" data-id="' + q.id + '">' +
         '<legend class="resp-q-txt"><span class="resp-q-n">' + n + '.</span> ' + RCR.esc(q.texto) +
           (q.requerida ? ' <span class="resp-req" aria-label="obligatoria">*</span>' : '') + '</legend>' +
+        ENC.apoyoPublico(q) +
         campo +
         '<div class="resp-err" role="alert"></div>' +
       '</fieldset>';
@@ -133,7 +181,7 @@ RCR.esc = function (v) {
     form.addEventListener('change', actualizar);
     form.addEventListener('input', function (e) {
       var fs = e.target.closest('.resp-q');
-      if (fs) fs.classList.remove('con-error');
+      if (fs) { fs.classList.remove('con-error'); fs.querySelector('.resp-err').textContent = ''; }
     });
     form.addEventListener('submit', function (e) { e.preventDefault(); enviar(); });
     actualizar();
@@ -144,9 +192,11 @@ RCR.esc = function (v) {
     var form = document.getElementById('resp-form'), r = {};
     ENC.soloPreguntas(enc.preguntas).forEach(function (q) {
       var name = 'q_' + q.id;
-      if (q.tipo === 'corto' || q.tipo === 'largo') {
+      if (q.tipo === 'corto' || q.tipo === 'largo' || q.tipo === 'numero') {
         var el = form.elements[name];
         r[q.id] = el ? el.value.trim() : '';
+      } else if (q.tipo === 'imagen') {
+        r[q.id] = fotos[q.id] || '';
       } else if (q.tipo === 'multiple') {
         r[q.id] = Array.prototype.slice.call(form.querySelectorAll('input[name="' + name + '"]:checked'))
           .map(function (x) { return x.value; });
@@ -185,21 +235,28 @@ RCR.esc = function (v) {
     ENC.soloPreguntas(enc.preguntas).forEach(function (q) {
       var fs = document.getElementById('rq-' + q.id);
       var falta = st.vis[q.id] && q.requerida && vacio(st.r[q.id]);
-      fs.classList.toggle('con-error', falta);
-      fs.querySelector('.resp-err').textContent = falta ? 'Esta pregunta es obligatoria' : '';
-      if (falta && !primero) primero = fs;
+      var malNum = st.vis[q.id] && q.tipo === 'numero' && !vacio(st.r[q.id]) && isNaN(ENC.leerNumero(st.r[q.id]));
+      fs.classList.toggle('con-error', falta || malNum);
+      fs.querySelector('.resp-err').textContent = falta ? 'Esta pregunta es obligatoria' : (malNum ? 'Escribe solo un número (por ejemplo 12 o 3,5)' : '');
+      if ((falta || malNum) && !primero) primero = fs;
     });
     if (primero) {
       primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      toast('Faltan preguntas obligatorias');
+      toast(primero.querySelector('.resp-err').textContent.indexOf('número') >= 0 ? 'Revisa los números' : 'Faltan preguntas obligatorias');
       return;
     }
 
     /* Solo se guardan las preguntas visibles y respondidas */
     var respuestas = {};
     ENC.soloPreguntas(enc.preguntas).forEach(function (q) {
-      if (st.vis[q.id] && !vacio(st.r[q.id])) respuestas[q.id] = st.r[q.id];
+      if (st.vis[q.id] && !vacio(st.r[q.id])) {
+        respuestas[q.id] = q.tipo === 'numero' ? ENC.leerNumero(st.r[q.id]) : st.r[q.id];
+      }
     });
+    if (JSON.stringify(respuestas).length > ENC.LIMITE_DOC) {
+      toast('Las fotos pesan demasiado. Quita alguna e inténtalo de nuevo.');
+      return;
+    }
 
     if (previa) { gracias(true); return; }
 

@@ -168,6 +168,32 @@ var RES = {
         return s;
       }
 
+      /* Número: promedio, mínimo, máximo y mediana */
+      if (q.tipo === 'numero') {
+        var nums = vals.map(Number).filter(isFinite).sort(function (a, b) { return a - b; });
+        var fmt = function (x) {
+          return (Math.round(x * 100) / 100).toLocaleString('es-EC', { maximumFractionDigits: 2 });
+        };
+        if (nums.length) {
+          var m = nums.length >> 1;
+          s.numeros = {
+            promedio: fmt(nums.reduce(function (a, b) { return a + b; }, 0) / nums.length),
+            min: fmt(nums[0]), max: fmt(nums[nums.length - 1]),
+            mediana: fmt(nums.length % 2 ? nums[m] : (nums[m - 1] + nums[m]) / 2)
+          };
+        }
+        s.respondieron = nums.length;
+        return s;
+      }
+
+      /* Subir imagen: galería de fotos */
+      if (q.tipo === 'imagen') {
+        s.fotos = resps.filter(function (r) { return ENC.esImagen((r.respuestas || {})[q.id]); })
+          .map(function (r) { return { v: r.respuestas[q.id], ms: RES.ms(r.enviado), rid: r._docId }; });
+        s.respondieron = s.fotos.length;
+        return s;
+      }
+
       /* Conteo por opción; se suman también valores que ya no existen como
          opción (si la encuesta se editó después de recibir respuestas). */
       var orden = ENC.valoresDe(q), cuenta = {};
@@ -316,6 +342,33 @@ var RES = {
         '<div class="res-sin">Nadie respondió esta pregunta todavía.</div></div>';
     }
 
+    /* Número: el promedio destacado y tres datos de apoyo */
+    if (s.numeros) {
+      return '<div class="card res-card">' + cabeza(false) +
+        '<div class="res-hero"><strong>' + RCR.esc(s.numeros.promedio) + '</strong><span>promedio</span></div>' +
+        '<div class="res-num-fila">' +
+          RES.kpi(s.numeros.min, 'Mínimo') + RES.kpi(s.numeros.mediana, 'Mediana') + RES.kpi(s.numeros.max, 'Máximo') +
+        '</div>' +
+      '</div>';
+    }
+
+    /* Fotos: galería; al tocar una se ve en grande */
+    if (s.fotos) {
+      var todasF = !!RES.expandir[q.id], LIM = 12;
+      var visF = todasF ? s.fotos : s.fotos.slice(0, LIM);
+      RES.fotos[q.id] = s.fotos;
+      return '<div class="card res-card">' + cabeza(false) +
+        '<div class="res-galeria">' + visF.map(function (f, k) {
+          return '<button type="button" class="res-foto" onclick="RES.verFoto(\'' + q.id + '\',' + k + ')" ' +
+            'aria-label="Ver foto ' + (k + 1) + '"><img src="' + f.v + '" alt="" loading="lazy"></button>';
+        }).join('') + '</div>' +
+        (s.fotos.length > LIM
+          ? '<button class="rep-add res-mas" onclick="RES.verTodas(\'' + q.id + '\')">' +
+              (todasF ? 'Ver menos' : 'Ver todas (' + s.fotos.length + ')') + '</button>'
+          : '') +
+      '</div>';
+    }
+
     /* Preguntas abiertas: lista de respuestas (no es un gráfico) */
     if (s.textos) {
       var todas = !!RES.expandir[q.id];
@@ -352,6 +405,29 @@ var RES = {
     }).join('') + '</div>';
 
     return '<div class="card res-card">' + cabeza(true) + hero + barras + '</div>';
+  },
+
+  fotos: {},
+
+  /* Foto en grande, con botón para descargarla */
+  verFoto: function (qid, k) {
+    var f = (RES.fotos[qid] || [])[k];
+    if (!f || !ENC.esImagen(f.v)) return;
+    RES.mostrarFoto(f.v, 'Foto ' + (k + 1) + ' de ' + RES.fotos[qid].length, f.ms ? RES.fmtDia(f.ms, true) : '',
+      RES.nombreArchivo((RES.encuesta() || {}).titulo, 'foto ' + (k + 1)));
+  },
+
+  mostrarFoto: function (url, titulo, sub, archivo) {
+    if (!ENC.esImagen(url)) return;
+    RCR.modal({
+      id: 'm-res-foto',
+      titulo: titulo,
+      sub: RCR.esc(sub || ''),
+      cuerpo: '<img class="res-foto-grande" src="' + url + '" alt="' + ENC.attr(titulo) + '">',
+      acciones:
+        '<a class="btn btn-glass" href="' + url + '" download="' + ENC.attr(archivo || 'foto') + '.jpg">' + ico('download', 15) + 'Descargar</a>' +
+        '<button class="btn btn-primary" onclick="RCR.cerrarModal(\'m-res-foto\')">Cerrar</button>'
+    });
   },
 
   verTodas: function (qid) {

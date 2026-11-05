@@ -207,8 +207,9 @@ var DAT = {
         ps.map(function (q) {
           var v = resp[q.id];
           if (RES.vacio(v)) return '<td class="dat-vacio">—</td>';
+          if (ENC.esImagen(v)) return '<td class="dat-img"><img src="' + v + '" alt="Imagen adjunta" loading="lazy"></td>';
           var t = ENC.fmtValor(v);
-          return '<td' + (q.tipo === 'escala' ? ' class="dat-num"' : '') + ' title="' + ENC.attr(t) + '">' + RCR.esc(t) + '</td>';
+          return '<td' + (q.tipo === 'escala' || q.tipo === 'numero' ? ' class="dat-num"' : '') + ' title="' + ENC.attr(t) + '">' + RCR.esc(t) + '</td>';
         }).join('') +
       '</tr>';
     }).join('');
@@ -226,6 +227,15 @@ var DAT = {
     );
   },
 
+  /* Foto de una respuesta en grande (con descarga) */
+  verFoto: function (rid, qid, n, pn) {
+    var r = (RES.cache[RES.sel] || []).find(function (x) { return x._docId === rid; });
+    var v = r && (r.respuestas || {})[qid];
+    if (!ENC.esImagen(v)) return;
+    RES.mostrarFoto(v, 'Respuesta #' + n + ' · P' + pn, DAT.fmtFechaHora(RES.ms(r.enviado)),
+      RES.nombreArchivo((RES.encuesta() || {}).titulo, 'respuesta ' + n + ' P' + pn));
+  },
+
   /* ── Ficha de una respuesta ────────────────────────────────────────────── */
   abrirFicha: function (rid) {
     var enc = RES.encuesta(), resps = RES.cache[RES.sel] || [];
@@ -239,7 +249,10 @@ var DAT = {
         '<div class="dat-ficha-q">P' + (k + 1) + '. ' + RCR.esc(q.texto) + '</div>' +
         (RES.vacio(v)
           ? '<div class="dat-ficha-v vacio">Sin respuesta</div>'
-          : '<div class="dat-ficha-v">' + RCR.esc(ENC.fmtValor(v)) + '</div>') +
+          : ENC.esImagen(v)
+            ? '<button type="button" class="dat-ficha-img" title="Ver en grande" ' +
+                'onclick="DAT.verFoto(\'' + rid + '\',\'' + q.id + '\',' + n + ',' + (k + 1) + ')"><img src="' + v + '" alt="Imagen adjunta"></button>'
+            : '<div class="dat-ficha-v">' + RCR.esc(ENC.fmtValor(v)) + '</div>') +
       '</div>';
     }).join('');
 
@@ -332,7 +345,8 @@ var DAT = {
       return [i + 1, ms ? new Date(ms) : ''].concat(ps.map(function (q) {
         var v = resp[q.id];
         if (RES.vacio(v)) return '';
-        if (q.tipo === 'escala') { var x = Number(v); return isFinite(x) ? x : String(v); }
+        if (q.tipo === 'escala' || q.tipo === 'numero') { var x = Number(v); return isFinite(x) ? x : String(v); }
+        if (ENC.esImagen(v)) return 'Imagen adjunta (ver en Mi RCR)';
         return Array.isArray(v) ? v.join('; ') : String(v);
       }));
     }));
@@ -351,16 +365,17 @@ var DAT = {
     ws['!autofilter'] = { ref: ws['!ref'] };
 
     /* Hoja 2: Preguntas */
-    var aoa2 = [['N°', 'Pregunta', 'Tipo', 'Obligatoria', 'Opciones', 'Se muestra solo si']].concat(ps.map(function (q, i) {
+    var aoa2 = [['N°', 'Pregunta', 'Tipo', 'Obligatoria', 'Opciones', 'Se muestra solo si', 'Enlace de apoyo']].concat(ps.map(function (q, i) {
       var cond = '';
       if (q.condicion) {
         var k = ps.findIndex(function (p) { return p.id === q.condicion.pregunta; });
         if (k >= 0) cond = 'P' + (k + 1) + (ps[k].tipo === 'multiple' ? ' incluye ' : ' = ') + q.condicion.valor;
       }
-      return [i + 1, q.texto, ENC.tipoLabel(q.tipo), q.requerida ? 'Sí' : 'No', (q.opciones || []).join('; '), cond];
+      return [i + 1, q.texto, ENC.tipoLabel(q.tipo), q.requerida ? 'Sí' : 'No', (q.opciones || []).join('; '), cond,
+        (q.enlace && ENC.urlSegura(q.enlace.url)) || ''];
     }));
     var ws2 = XLSX.utils.aoa_to_sheet(aoa2);
-    ws2['!cols'] = [{ wch: 5 }, { wch: 55 }, { wch: 16 }, { wch: 11 }, { wch: 45 }, { wch: 28 }];
+    ws2['!cols'] = [{ wch: 5 }, { wch: 55 }, { wch: 16 }, { wch: 11 }, { wch: 45 }, { wch: 28 }, { wch: 40 }];
 
     var wb = XLSX.utils.book_new();
     wb.Props = { Title: enc.titulo || 'Encuesta', Author: 'Redes Con Rostro', CreatedDate: new Date() };

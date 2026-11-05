@@ -73,8 +73,16 @@ var ENC = {
     { id: 'unica',    label: 'Opción única' },
     { id: 'multiple', label: 'Opción múltiple' },
     { id: 'escala',   label: 'Escala 1 a 5' },
-    { id: 'sino',     label: 'Sí / No' }
+    { id: 'sino',     label: 'Sí / No' },
+    { id: 'numero',   label: 'Número' },
+    { id: 'imagen',   label: 'Subir imagen' }
   ],
+
+  /* Imágenes: se guardan como JPEG en base64 dentro del documento (como la
+     foto del currículo). Firestore admite hasta 1 MB por documento. */
+  IMG_APOYO: { lado: 1000, calidad: 0.72 },   // imagen que acompaña una pregunta
+  IMG_RESP:  { lado: 1000, calidad: 0.7 },    // foto que sube quien responde
+  LIMITE_DOC: 950000,                         // margen bajo el 1 MB de Firestore
 
   /* Tipos que pueden servir de condición para otra pregunta */
   RAMIFICAN: ['unica', 'multiple', 'sino', 'escala'],
@@ -137,7 +145,78 @@ var ENC = {
   /* Formatea un valor guardado para mostrarlo */
   fmtValor: function (v) {
     if (Array.isArray(v)) return v.join(', ');
+    if (ENC.esImagen(v)) return 'Imagen adjunta';
+    if (typeof v === 'number') return String(v).replace('.', ',');
     return v == null ? '' : String(v);
+  },
+
+  /* Solo se muestran como imagen los base64 de imagen bien formados (las
+     respuestas llegan de fuera: nunca se pinta un valor cualquiera en src). */
+  esImagen: function (v) {
+    return typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
+  },
+
+  /* Enlace seguro: solo http(s); se agrega https:// si falta. '' si no sirve. */
+  urlSegura: function (u) {
+    u = String(u || '').trim();
+    if (!u) return '';
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = 'https://' + u;
+    try {
+      var p = new URL(u);
+      return (p.protocol === 'http:' || p.protocol === 'https:') && p.hostname.indexOf('.') > 0 ? p.href : '';
+    } catch (e) { return ''; }
+  },
+
+  /* Texto visible del enlace: el que puso quien creó la encuesta o el dominio */
+  textoEnlace: function (en) {
+    if (!en) return '';
+    if (en.texto && String(en.texto).trim()) return String(en.texto).trim();
+    try { return new URL(en.url).hostname.replace(/^www\./, ''); } catch (e) { return en.url; }
+  },
+
+  /* Lee un archivo de imagen y la reduce a JPEG (lado mayor = o.lado) */
+  comprimirImagen: function (file, o) {
+    return new Promise(function (ok, mal) {
+      if (!file || !/^image\//.test(file.type)) { mal(new Error('no-imagen')); return; }
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () {
+        var k = Math.min(1, o.lado / Math.max(img.width, img.height));
+        var cnv = document.createElement('canvas');
+        cnv.width = Math.max(1, Math.round(img.width * k));
+        cnv.height = Math.max(1, Math.round(img.height * k));
+        var cx = cnv.getContext('2d');
+        cx.fillStyle = '#fff';                       // PNG con transparencia → fondo blanco
+        cx.fillRect(0, 0, cnv.width, cnv.height);
+        cx.drawImage(img, 0, 0, cnv.width, cnv.height);
+        URL.revokeObjectURL(url);
+        ok(cnv.toDataURL('image/jpeg', o.calidad));
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); mal(new Error('no-se-pudo-leer')); };
+      img.src = url;
+    });
+  },
+
+  /* Número escrito por la persona ("3,5" o "3.5") → Number, o NaN */
+  leerNumero: function (t) {
+    t = String(t == null ? '' : t).trim().replace(/\s/g, '');
+    if (!/^-?\d+([.,]\d+)?$/.test(t)) return NaN;
+    return Number(t.replace(',', '.'));
+  },
+
+  /* Imagen y enlace de apoyo de una pregunta o sección, para quien responde */
+  apoyoPublico: function (q) {
+    var h = '';
+    if (q.apoyoImg && ENC.esImagen(q.apoyoImg)) {
+      h += '<img class="resp-apoyo-img" src="' + q.apoyoImg + '" alt="Imagen de la pregunta">';
+    }
+    var url = q.enlace && ENC.urlSegura(q.enlace.url);
+    if (url) {
+      h += '<a class="resp-enlace" href="' + ENC.attr(url) + '" target="_blank" rel="noopener noreferrer">' +
+        ico('link', 15) + '<span>' + RCR.esc(ENC.textoEnlace({ url: url, texto: q.enlace.texto })) + '</span>' +
+        ico('chevronRight', 15) + '</a>';
+    }
+    return h ? '<div class="resp-apoyo">' + h + '</div>' : '';
   },
 
   fmtFecha: function (d) {
@@ -624,12 +703,15 @@ var ENC = {
         '<section class="eb-sec" id="encq-' + q.id + '">' +
           '<div class="eb-sec-head">' +
             '<span class="eb-sec-tag">' + ico('seccion', 14) + 'Sección ' + ks + '</span>' +
+            '<span class="eb-flex"></span>' +
+            ENC.botonesApoyo(i) +
             '<button class="eb-ico danger" type="button" title="Eliminar sección" aria-label="Eliminar sección" onclick="ENC.quitarPregunta(' + i + ')">' + ico('trash', 16) + '</button>' +
           '</div>' +
           '<input class="eb-sec-tit" value="' + ENC.attr(q.texto) + '" placeholder="Título de la sección" maxlength="140" ' +
             'aria-label="Título de la sección" oninput="ENC.setTexto(' + i + ',this.value)">' +
           '<textarea class="eb-sec-desc eb-autoalto" rows="1" placeholder="Descripción (opcional)" aria-label="Descripción de la sección" ' +
             'oninput="ENC.b.preguntas[' + i + '].descripcion=this.value;ENC.autoAlto(this)">' + RCR.esc(q.descripcion || '') + '</textarea>' +
+          ENC.apoyoHtml(q, i) +
           '<div class="eb-cond" id="encc-' + q.id + '">' + ENC.condHtml(i) + '</div>' +
         '</section>';
       }
@@ -659,6 +741,11 @@ var ENC = {
           '</div><div class="eb-escala-ext"><span>Bajo</span><span>Alto</span></div></div>';
       } else if (q.tipo === 'sino') {
         cuerpo = '<div class="eb-muestra"><div class="eb-sino"><span>Sí</span><span>No</span></div></div>';
+      } else if (q.tipo === 'numero') {
+        cuerpo = '<div class="eb-muestra"><div class="eb-linea eb-linea-num"><b>123</b>Respuesta con un número</div></div>';
+      } else if (q.tipo === 'imagen') {
+        cuerpo = '<div class="eb-muestra"><div class="eb-subir">' + ico('image', 20) +
+          '<span><strong>Subir una foto</strong>Quien responde podrá adjuntar una imagen o tomarla con el celular.</span></div></div>';
       } else {
         cuerpo = '<div class="eb-muestra"><div class="eb-linea' + (q.tipo === 'largo' ? ' largo' : '') + '">' +
           (q.tipo === 'largo' ? 'Respuesta larga' : 'Respuesta corta') + '</div></div>';
@@ -676,11 +763,13 @@ var ENC = {
             '</select>' + chev +
           '</label>' +
           '<span class="eb-flex"></span>' +
+          ENC.botonesApoyo(i) +
           '<button class="eb-ico" type="button" title="Duplicar" aria-label="Duplicar pregunta" onclick="ENC.duplicarPregunta(' + i + ')">' + ico('copy', 16) + '</button>' +
           (nq > 1 ? '<button class="eb-ico danger" type="button" title="Eliminar" aria-label="Eliminar pregunta" onclick="ENC.quitarPregunta(' + i + ')">' + ico('trash', 16) + '</button>' : '') +
         '</div>' +
         '<textarea class="eb-q-txt eb-autoalto" rows="1" placeholder="Escribe la pregunta" aria-label="Texto de la pregunta ' + kq + '" ' +
           'oninput="ENC.setTexto(' + i + ',this.value);ENC.autoAlto(this)">' + RCR.esc(q.texto) + '</textarea>' +
+        ENC.apoyoHtml(q, i) +
         cuerpo +
         '<div class="eb-ajustes">' +
           '<label class="eb-fila"><span class="eb-fila-txt">Obligatoria</span>' +
@@ -692,6 +781,71 @@ var ENC = {
     }).join('');
 
     box.querySelectorAll('.eb-autoalto').forEach(ENC.autoAlto);
+  },
+
+  /* ── Imagen y enlace de apoyo (los ve quien responde) ──────────────────── */
+  botonesApoyo: function (i) {
+    var q = ENC.b.preguntas[i];
+    return '' +
+      '<button class="eb-ico' + (q.apoyoImg ? ' on' : '') + '" type="button" title="' + (q.apoyoImg ? 'Cambiar imagen' : 'Agregar imagen') + '" ' +
+        'aria-label="' + (q.apoyoImg ? 'Cambiar imagen' : 'Agregar imagen') + '" onclick="ENC.elegirApoyoImg(' + i + ')">' + ico('image', 16) + '</button>' +
+      '<button class="eb-ico' + (q.enlace ? ' on' : '') + '" type="button" title="Agregar enlace" aria-label="Agregar enlace" ' +
+        'onclick="ENC.agregarEnlace(' + i + ')">' + ico('link', 16) + '</button>';
+  },
+
+  apoyoHtml: function (q, i) {
+    var h = '';
+    if (q.apoyoImg && ENC.esImagen(q.apoyoImg)) {
+      h += '<div class="eb-apoyo-img"><img src="' + q.apoyoImg + '" alt="Imagen de apoyo">' +
+        '<button class="eb-quitar sobre" type="button" title="Quitar imagen" aria-label="Quitar imagen" onclick="ENC.quitarApoyoImg(' + i + ')">' + ico('x', 13, 2.6) + '</button></div>';
+    }
+    if (q.enlace) {
+      h += '<div class="eb-opts eb-enlace">' +
+        '<div class="eb-opt">' + '<span class="eb-enlace-ico" aria-hidden="true">' + ico('link', 15) + '</span>' +
+          '<input class="eb-opt-inp" type="url" inputmode="url" value="' + ENC.attr(q.enlace.url) + '" placeholder="https://… (video, documento, página)" ' +
+            'aria-label="Dirección del enlace" oninput="ENC.b.preguntas[' + i + '].enlace.url=this.value">' +
+          '<button class="eb-quitar" type="button" title="Quitar enlace" aria-label="Quitar enlace" onclick="ENC.quitarEnlace(' + i + ')">' + ico('x', 13, 2.6) + '</button>' +
+        '</div>' +
+        '<div class="eb-opt"><span class="eb-enlace-ico" aria-hidden="true">' + ico('edit', 14) + '</span>' +
+          '<input class="eb-opt-inp" value="' + ENC.attr(q.enlace.texto || '') + '" maxlength="80" placeholder="Texto del botón (opcional)" ' +
+            'aria-label="Texto del enlace" oninput="ENC.b.preguntas[' + i + '].enlace.texto=this.value">' +
+        '</div>' +
+      '</div>';
+    }
+    return h;
+  },
+
+  elegirApoyoImg: function (i) {
+    var q = ENC.b.preguntas[i];
+    var inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'image/*';
+    inp.onchange = function () {
+      var f = inp.files && inp.files[0];
+      if (!f) return;
+      RCR.toast('Preparando la imagen…');
+      ENC.comprimirImagen(f, ENC.IMG_APOYO).then(function (url) {
+        q.apoyoImg = url;
+        ENC.renderPreguntas();
+      }).catch(function () { RCR.toast('Elige un archivo de imagen (JPG o PNG)'); });
+    };
+    inp.click();
+  },
+
+  quitarApoyoImg: function (i) {
+    delete ENC.b.preguntas[i].apoyoImg;
+    ENC.renderPreguntas();
+  },
+
+  agregarEnlace: function (i) {
+    var q = ENC.b.preguntas[i];
+    if (!q.enlace) { q.enlace = { url: '', texto: '' }; ENC.renderPreguntas(); }
+    ENC.enfocar(q.id, '.eb-enlace input');
+  },
+
+  quitarEnlace: function (i) {
+    delete ENC.b.preguntas[i].enlace;
+    ENC.renderPreguntas();
   },
 
   /* Los textos crecen con el contenido (como en Notas de iOS) */
@@ -909,6 +1063,13 @@ var ENC = {
     for (var i = 0; i < b.preguntas.length; i++) {
       var q = b.preguntas[i];
       q.texto = String(q.texto || '').trim();
+      /* Enlace de apoyo: vacío se quita; mal escrito se avisa */
+      if (q.enlace) {
+        var u = String(q.enlace.url || '').trim();
+        if (!u) { delete q.enlace; }
+        else if (!ENC.urlSegura(u)) { ENC.marcarError(q.id, 'El enlace «' + u + '» no es una dirección web válida'); return; }
+        else q.enlace = { url: ENC.urlSegura(u), texto: String(q.enlace.texto || '').trim() };
+      }
       if (ENC.esSeccion(q)) {
         ns++;
         q.descripcion = String(q.descripcion || '').trim();
@@ -931,14 +1092,19 @@ var ENC = {
     var data = {
       preguntas: b.preguntas.map(function (q) {
         var cond = q.condicion ? { pregunta: q.condicion.pregunta, valor: q.condicion.valor } : null;
-        if (ENC.esSeccion(q)) return { id: q.id, tipo: 'seccion', texto: q.texto, descripcion: q.descripcion, condicion: cond };
-        return {
-          id: q.id, tipo: q.tipo, texto: q.texto, requerida: !!q.requerida,
-          opciones: q.opciones, condicion: cond
-        };
+        var x = ENC.esSeccion(q)
+          ? { id: q.id, tipo: 'seccion', texto: q.texto, descripcion: q.descripcion, condicion: cond }
+          : { id: q.id, tipo: q.tipo, texto: q.texto, requerida: !!q.requerida, opciones: q.opciones, condicion: cond };
+        if (q.apoyoImg && ENC.esImagen(q.apoyoImg)) x.apoyoImg = q.apoyoImg;
+        if (q.enlace) x.enlace = { url: q.enlace.url, texto: q.enlace.texto };
+        return x;
       }),
       actualizado: firebase.firestore.FieldValue.serverTimestamp()
     };
+    if (JSON.stringify(data.preguntas).length > ENC.LIMITE_DOC) {
+      RCR.toast('Las imágenes pesan demasiado para una sola encuesta. Quita alguna e intenta de nuevo.');
+      return;
+    }
 
     ENC.guardando = true;
     var btn = document.getElementById('enc-save');
