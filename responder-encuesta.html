@@ -232,17 +232,9 @@ RCR.esc = function (v) {
   function pintar() {
     var ps = enc.preguntas || [];
     pags = armarPaginas(ps);
-    var hayReq = ps.some(function (q) { return q.requerida; });
     var varias = pags.length > 1;
 
-    var hero =
-      '<header class="resp-head">' +
-        '<div class="resp-marca-app">Redes Con Rostro</div>' +
-        '<h1>' + RCR.esc(enc.titulo || 'Encuesta') + '</h1>' +
-        (enc.descripcion ? '<p class="resp-desc">' + RCR.esc(enc.descripcion) + '</p>' : '') +
-        (hayReq ? '<p class="resp-nota"><b class="resp-req">*</b> Pregunta obligatoria</p>' : '') +
-      '</header>';
-
+    /* Sin tarjeta de bienvenida: el título va solo en la barra de arriba */
     app.innerHTML =
       (previa ? '<div class="resp-previa">' + ico('eye', 16) + '<span>Vista previa: las respuestas no se guardan.</span></div>' : '') +
       '<div class="rg-barra" id="rg-barra">' +
@@ -253,7 +245,6 @@ RCR.esc = function (v) {
       '<form id="resp-form" novalidate>' +
         pags.map(function (p, k) {
           return '<section class="rg-pag" data-p="' + k + '"' + (k ? ' hidden' : '') + '>' +
-            (k === 0 ? hero : '') +
             (p.sec ? preguntaHtml(p.sec) : '') +
             p.items.map(preguntaHtml).join('') +
           '</section>';
