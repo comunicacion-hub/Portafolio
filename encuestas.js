@@ -297,9 +297,47 @@ var ENC = {
     } catch (e) { return ''; }
   },
 
+  /* Enlace para responder. Con código corto: …/e/?k7m2qx (los enlaces
+     largos con ?id= siguen funcionando). La vista previa usa el largo. */
   urlPublica: function (id, previa) {
     var base = location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, '');
+    var e = (ENC.datos || []).find(function (x) { return x._docId === id; });
+    if (e && ENC.esCodigo(e.codigo) && !previa) return base + 'e/?' + e.codigo;
     return base + 'responder-encuesta.html?id=' + encodeURIComponent(id) + (previa ? '&previa=1' : '');
+  },
+
+  /* ── Código corto del enlace: Codigos/{codigo} = { encuestaId, creadoPor } ── */
+  COL_COD: 'Codigos',
+  ALFABETO: '23456789abcdefghjkmnpqrstuvwxyz',   // sin 0/o, 1/l/i: no se confunden al dictarlo
+  esCodigo: function (c) { return typeof c === 'string' && /^[a-z0-9]{4,12}$/.test(c); },
+  nuevoCodigo: function (n) {
+    var a = ENC.ALFABETO, out = '', r = new Uint32Array(n);
+    (window.crypto || window.msCrypto).getRandomValues(r);
+    for (var i = 0; i < n; i++) out += a[r[i] % a.length];
+    return out;
+  },
+
+  /* Le asigna un código corto a la encuesta si aún no tiene (solo quien la
+     puede editar). Devuelve el código, o null si no se pudo (queda el largo). */
+  asegurarCodigo: async function (e) {
+    if (!e) return null;
+    if (ENC.esCodigo(e.codigo)) return e.codigo;
+    if (!ENC.puedeEditarEnc(e)) return null;
+    for (var intento = 0; intento < 5; intento++) {
+      var c = ENC.nuevoCodigo(6);
+      try {
+        var ref = RCR.db.collection(ENC.COL_COD).doc(c);
+        if ((await ref.get()).exists) continue;          // ocupado: otro código
+        await ref.set({ encuestaId: e._docId, creadoPor: RCR.user.correo });
+        await RCR.db.collection(ENC.COL).doc(e._docId).update({ codigo: c });
+        e.codigo = c;
+        return c;
+      } catch (err) {
+        console.warn('ENC.asegurarCodigo:', err);
+        return null;
+      }
+    }
+    return null;
   },
 
   /* ==========================================================================
@@ -596,6 +634,7 @@ var ENC = {
         id = (await RCR.db.collection(ENC.COL).add(data)).id;
       }
       ENC.guardarLocal(id, data, !docId);
+      if (!docId) ENC.asegurarCodigo(ENC.buscar(id));   // enlace corto desde el inicio
       if (ENC.b && ENC.b.docId === id) {
         ENC.b.titulo = data.titulo; ENC.b.descripcion = data.descripcion; ENC.b.estado = data.estado;
         ENC.pintarCabecera();
@@ -1545,6 +1584,14 @@ var ENC = {
         '<button class="btn btn-glass" onclick="ENC.gmail(\'' + docId + '\')">' + ico('mail', 15) + 'Gmail</button>' +
         '<button class="btn btn-primary" onclick="ENC.copiarLink()">' + ico('link', 15) + 'Copiar enlace</button>'
     });
+
+    /* Si todavía no tiene código corto, se crea y se cambia el enlace */
+    if (!ENC.esCodigo(e.codigo)) {
+      ENC.asegurarCodigo(e).then(function (c) {
+        var inp = document.getElementById('enc-link-url');
+        if (c && inp) inp.value = ENC.urlPublica(docId);
+      });
+    }
   },
 
   copiarLink: function () {
@@ -1612,6 +1659,11 @@ var ENC = {
         }
       };
       await borrarTodas(await ENC.refResp(id).get());
+      var enc = ENC.buscar(id);
+      if (enc && ENC.esCodigo(enc.codigo)) {
+        try { await RCR.db.collection(ENC.COL_COD).doc(enc.codigo).delete(); }
+        catch (e3) { console.warn('ENC.borrar código:', e3); }
+      }
       try { await borrarTodas(await RCR.db.collection(ENC.COL_RESP).where('encuestaId', '==', id).get()); }
       catch (e2) { /* formato antiguo ya cerrado */ }
       await RCR.db.collection(ENC.COL).doc(id).delete();

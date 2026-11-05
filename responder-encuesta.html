@@ -14,7 +14,8 @@
 <body class="resp-body">
 
 <!-- Página pública para responder una encuesta: sin login ni navegación.
-     Lee Encuestas/{id} y guarda la respuesta en RespuestasEncuesta. -->
+     Se abre con ?id=<encuesta> o con ?c=<código corto> (desde /e/?código).
+     Lee Encuestas/{id} y guarda la respuesta en Encuestas/{id}/Respuestas. -->
 <div class="resp-wrap">
   <div id="resp-app">
     <div class="resp-estado">
@@ -340,7 +341,8 @@ RCR.esc = function (v) {
 
   /* ── Arranque ─────────────────────────────────────────────────────────── */
   (async function () {
-    if (!id) { estado('alert', 'Enlace incompleto', 'Pide que te reenvíen el enlace de la encuesta.'); return; }
+    var codigo = String(params.get('c') || '').trim().toLowerCase();
+    if (!id && !ENC.esCodigo(codigo)) { estado('alert', 'Enlace incompleto', 'Pide que te reenvíen el enlace de la encuesta.'); return; }
     try {
       firebase.initializeApp({
         apiKey: "AIzaSyB4-Agk4jG2HFMnvLQyB1q4vapZQ01Bh4o",
@@ -351,6 +353,15 @@ RCR.esc = function (v) {
         appId: "1:138746747295:web:1ceb9c60d4a4073e6885aa"
       });
       db = firebase.firestore();
+      /* Enlace corto (/e/?codigo): el código dice qué encuesta abrir */
+      if (!id) {
+        var cs = await db.collection(ENC.COL_COD).doc(codigo).get();
+        if (!cs.exists || !cs.data().encuestaId) {
+          estado('alert', 'Esta encuesta ya no está disponible', 'Revisa que el enlace esté completo o pide que te lo reenvíen.');
+          return;
+        }
+        id = cs.data().encuestaId;
+      }
       var snap = await db.collection(ENC.COL).doc(id).get();
       if (!snap.exists) { estado('alert', 'Esta encuesta ya no está disponible', 'Puede que la hayan eliminado.'); return; }
       enc = snap.data();

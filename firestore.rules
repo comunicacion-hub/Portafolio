@@ -96,6 +96,19 @@ service cloud.firestore {
       }
     }
 
+    /* Códigos del enlace corto (/e/?codigo): cualquiera puede leer uno por
+       su código para abrir la encuesta; los crea y borra quien puede editarla.
+       No se pueden listar ni modificar. */
+    match /Codigos/{codigo} {
+      allow get: if true;
+      allow create: if esDominio()
+        && request.resource.data.keys().hasOnly(['encuestaId', 'creadoPor'])
+        && request.resource.data.creadoPor == miCorreo()
+        && puedeEditarEnc(encuesta(request.resource.data.encuestaId));
+      allow delete: if esDominio() && puedeEditarEnc(encuesta(resource.data.encuestaId));
+      allow list, update: if false;
+    }
+
     /* Formato antiguo de respuestas: ya no recibe nuevas. La app mueve lo que
        quede a Encuestas/{id}/Respuestas cuando la abre quien la puede editar.
        Cuando ya no quede nada aquí, este bloque se puede borrar. */

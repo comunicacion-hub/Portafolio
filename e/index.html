@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Encuesta — Redes Con Rostro</title>
+<meta property="og:title" content="Encuesta — Redes Con Rostro">
+<meta property="og:description" content="Te invitamos a responder esta encuesta.">
+<!-- Enlace corto de encuestas: /e/?CODIGO abre la página para responder.
+     El código se busca en Firestore (colección Codigos) desde esa página. -->
+<script>
+(function () {
+  var c = location.search.replace(/^\?/, '').split('&')[0];
+  location.replace('../responder-encuesta.html' + (c ? '?c=' + encodeURIComponent(c) : ''));
+})();
+</script>
+</head>
+<body>
+<noscript>Para responder la encuesta, activa JavaScript en tu navegador.</noscript>
+</body>
+</html>
