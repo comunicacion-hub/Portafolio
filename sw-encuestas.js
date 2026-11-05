@@ -6,13 +6,16 @@
    conexión. Las respuestas no pasan por aquí: Firestore las deja en cola en
    el teléfono y las envía al volver la conexión.
 
-   Solo atiende estos archivos; el resto de la app (index.html, etc.) va a la
-   red como siempre. Con conexión se usa siempre la versión nueva (primero la
-   red); sin conexión, la guardada.
+   · Solo atiende la página de la encuesta (responder-encuesta.html y /e/) y
+     los archivos que ESA página pide. El resto de la app (index.html y lo
+     que carga) va directo a la red, sin pasar por aquí.
+   · Con conexión: siempre la versión nueva de la red (si la red no responde
+     en 8 s, la copia guardada). Sin conexión: la copia guardada.
    ========================================================================== */
-var CACHE = 'rcr-encuestas-v1';
+var CACHE = 'rcr-encuestas-v2';
 var BASE = new URL('./', self.location).pathname;          // "/" en el dominio
-var PROPIOS = ['responder-encuesta.html', 'e/', 'e/index.html', 'styles.css', 'icons.js', 'encuestas.js'];
+var PAGINAS = ['responder-encuesta.html', 'e/', 'e/index.html'];
+var PROPIOS = PAGINAS.concat(['styles.css', 'icons.js', 'encuestas.js']);
 var SDK = [
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js'
@@ -21,7 +24,7 @@ var SDK = [
 self.addEventListener('install', function (ev) {
   ev.waitUntil(caches.open(CACHE).then(function (c) {
     var propios = PROPIOS.map(function (p) {
-      return c.add(BASE + p).catch(function () { /* se guardará al usarse */ });
+      return c.add(new Request(BASE + p, { cache: 'reload' })).catch(function () { /* se guardará al usarse */ });
     });
     var sdk = SDK.map(function (u) {
       return fetch(new Request(u, { mode: 'no-cors' })).then(function (r) { return c.put(u, r); }).catch(function () {});
@@ -37,28 +40,37 @@ self.addEventListener('activate', function (ev) {
   }).then(function () { return self.clients.claim(); }));
 });
 
-function esPropio(url) {
-  if (url.origin !== self.location.origin) return false;
-  return PROPIOS.some(function (p) { return url.pathname === BASE + p; });
+function rutaDe(u) {
+  try { var x = new URL(u); return x.origin === self.location.origin ? x.pathname : null; } catch (e) { return null; }
+}
+function esPagina(path) {
+  return PAGINAS.some(function (p) { return path === BASE + p; });
+}
+function esPropio(path) {
+  return PROPIOS.some(function (p) { return path === BASE + p; });
 }
 
-/* Primero la red (con 4 s de espera máxima si ya hay copia); si falla, la copia */
+/* Red primero (8 s como máximo); si falla, la copia guardada */
 function redPrimero(req) {
+  var clave = new URL(req.url); clave.search = '';
   return caches.open(CACHE).then(function (c) {
-    var clave = new URL(req.url); clave.search = '';
-    var desdeRed = fetch(req).then(function (r) {
-      if (r && (r.ok || r.type === 'opaque')) c.put(clave.href, r.clone());
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var t = ctrl ? setTimeout(function () { ctrl.abort(); }, 8000) : null;
+    return fetch(req, ctrl ? { signal: ctrl.signal } : undefined).then(function (r) {
+      clearTimeout(t);
+      if (r && r.ok) c.put(clave.href, r.clone());
       return r;
-    });
-    return c.match(clave.href).then(function (copia) {
-      if (!copia) return desdeRed;
-      var tarde = new Promise(function (ok) { setTimeout(function () { ok(copia); }, 4000); });
-      return Promise.race([desdeRed.catch(function () { return copia; }), tarde]);
+    }).catch(function () {
+      clearTimeout(t);
+      return c.match(clave.href).then(function (copia) {
+        if (copia) return copia;
+        throw new Error('sin red y sin copia');
+      });
     });
   });
 }
 
-/* Primero la copia (SDK con versión fija y tipografía) */
+/* Copia primero (SDK con versión fija y tipografía) */
 function copiaPrimero(req) {
   return caches.open(CACHE).then(function (c) {
     return c.match(req.url).then(function (copia) {
@@ -74,9 +86,22 @@ function copiaPrimero(req) {
 self.addEventListener('fetch', function (ev) {
   var req = ev.request;
   if (req.method !== 'GET') return;
+  var path = rutaDe(req.url);
+
+  /* La página de la encuesta */
+  if (req.mode === 'navigate') {
+    if (path && esPagina(path)) ev.respondWith(redPrimero(req));
+    return;
+  }
+
+  /* SDK de Firebase (versión fija) y tipografía: no cambian, se guardan */
   var url = new URL(req.url);
-  if (esPropio(url)) { ev.respondWith(redPrimero(req)); return; }
   if (SDK.indexOf(url.href) >= 0 || url.host === 'fonts.googleapis.com' || url.host === 'fonts.gstatic.com') {
     ev.respondWith(copiaPrimero(req));
+    return;
   }
+
+  /* Archivos propios pedidos DESDE la página de la encuesta (no desde la app) */
+  var desde = rutaDe(req.referrer || '');
+  if (desde && esPagina(desde) && path && esPropio(path)) ev.respondWith(redPrimero(req));
 });

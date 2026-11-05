@@ -1800,13 +1800,24 @@ a:focus-visible,
 }
 #resp-app{flex:1;}
 
-/* Superficies de vidrio */
+/* Superficies: las tarjetas son casi opacas y SIN desenfoque (en celulares
+   de gama media, desenfocar muchas tarjetas a la vez traba el scroll); solo
+   la barra superior, flotante, lleva el efecto de vidrio. */
 .resp-head,.resp-sec,.resp-q,.rg-barra,.resp-previa{
-  background:var(--g-glass);
-  backdrop-filter:blur(22px) saturate(170%);-webkit-backdrop-filter:blur(22px) saturate(170%);
+  background:rgba(255,255,255,.88);
   border:1px solid var(--g-borde);
   box-shadow:var(--g-sombra);
 }
+.rg-barra{
+  background:rgba(255,255,255,.78);
+  backdrop-filter:blur(20px) saturate(170%);-webkit-backdrop-filter:blur(20px) saturate(170%);
+}
+/* Al enfocar un campo, que no quede debajo de la barra de arriba ni de los
+   botones de abajo */
+html:has(body.resp-body){scroll-padding-top:72px;scroll-padding-bottom:96px;}
+/* Avisos breves arriba, sobre la barra (como una notificación de iOS),
+   para no tapar preguntas ni chocar con los botones o el contador */
+.resp-body #toast{top:calc(10px + var(--safe-top));bottom:auto;z-index:60;max-width:calc(100vw - 32px);text-align:center;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.18);}
 
 /* ── Barra superior: título y progreso ─────────────────────────────────── */
 .rg-barra{
@@ -2045,9 +2056,10 @@ textarea.rg-campo{resize:vertical;min-height:92px;line-height:1.45;}
 }
 
 /* Mensajes a pantalla completa (gracias, guardada, errores): sin tarjeta,
-   centrados en el espacio disponible. Mientras carga, la pantalla queda
-   vacía (sin indicador). */
+   centrados en el espacio disponible. Si la carga tarda más de 2,5 s, solo
+   un texto discreto. */
 #resp-app.con-estado{display:flex;flex-direction:column;justify-content:center;}
+.resp-cargando{text-align:center;font-size:13.5px;color:var(--g-gris);}
 .resp-estado{text-align:center;padding:24px 8px;color:var(--g-gris);}
 .resp-estado-ico{
   width:56px;height:56px;border-radius:50%;margin:0 auto 14px;

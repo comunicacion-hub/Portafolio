@@ -409,12 +409,10 @@ RCR.esc = function (v) {
     return primero;
   }
 
+  /* El mensaje en rojo bajo la pregunta ya explica qué falta: sin aviso extra */
   function mostrarError(fs) {
     fs.scrollIntoView({ behavior: 'smooth', block: 'center' });
     fs.classList.remove('sacude'); void fs.offsetWidth; fs.classList.add('sacude');
-    var msg = fs.querySelector('.resp-err').textContent;
-    toast(msg.indexOf('número') >= 0 ? 'Revisa los números'
-      : ((msg.indexOf('máximo') >= 0 || msg.indexOf('filas') >= 0) ? msg : 'Faltan preguntas obligatorias'));
   }
 
   /* ── Enviar (también sin conexión) ────────────────────────────────────── */
@@ -513,6 +511,7 @@ RCR.esc = function (v) {
   window.__nuevaRespuesta = function () {
     fotos = {};
     enviando = false;
+    tocado = false;
     pintar();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -570,53 +569,116 @@ RCR.esc = function (v) {
     });
   }
 
-  /* ── Arranque ─────────────────────────────────────────────────────────── */
+  /* ── Arranque ─────────────────────────────────────────────────────────────
+     Pensado para que el celular nunca quede en blanco:
+     · Se muestra al instante la copia de la encuesta guardada en el teléfono
+       (de la última visita) y luego se revisa si hay una versión nueva.
+     · Si el almacenamiento del teléfono (IndexedDB) se traba, cosa que pasa
+       en algunos iPhone y Android al recargar, se usa una conexión sin él.
+     · Todo tiene tiempo límite; si falla, hay botón para reintentar. */
+  var CONFIG = {
+    apiKey: "AIzaSyB4-Agk4jG2HFMnvLQyB1q4vapZQ01Bh4o",
+    authDomain: "redes-con-rostro.firebaseapp.com",
+    projectId: "redes-con-rostro",
+    storageBucket: "redes-con-rostro.firebasestorage.app",
+    messagingSenderId: "138746747295",
+    appId: "1:138746747295:web:1ceb9c60d4a4073e6885aa"
+  };
+  var CACHE_ENC = 'rcr-enc-doc-', CACHE_COD = 'rcr-enc-cod-';
+  var mostrada = false, tocado = false;
+
+  function leerLocal(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
+  function guardarLocal(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* lleno o bloqueado */ } }
+  function esperar(ms, valor) { return new Promise(function (ok) { setTimeout(function () { ok(valor); }, ms); }); }
+  function conLimite(p, ms) {
+    return Promise.race([p, esperar(ms).then(function () { throw new Error('tiempo'); })]);
+  }
+
+  /* Muestra la encuesta (o el mensaje de cerrada / sin preguntas) */
+  function mostrar(datos) {
+    enc = datos;
+    document.title = (enc.titulo || 'Encuesta') + ' — Redes Con Rostro';
+    mostrada = true;
+    if (enc.estado === 'cerrada' && !previa) { estado('clock', enc.titulo || 'Encuesta', 'Esta encuesta ya no recibe respuestas.'); return; }
+    if (!ENC.soloPreguntas(enc.preguntas).length) { estado('inbox', enc.titulo || 'Encuesta', 'Esta encuesta todavía no tiene preguntas.'); return; }
+    pintar();
+  }
+
+  function errorAbrir() {
+    if (mostrada) return;
+    estado('alert', 'No se pudo abrir la encuesta',
+      navigator.onLine ? 'Revisa tu conexión e inténtalo de nuevo.'
+        : 'Sin conexión: para usarla sin internet, primero ábrela una vez con conexión.',
+      '<button class="rg-btn rg-btn-pri resp-otra" onclick="location.reload()">' + ico('refresh', 16, 2.4) + '<span>Reintentar</span></button>');
+  }
+
+  /* Firestore con el almacenamiento del teléfono; si no responde en 3 s,
+     una segunda conexión sin él (sigue funcionando, sin cola persistente) */
+  async function abrirBase() {
+    firebase.initializeApp(CONFIG);
+    var base = firebase.firestore();
+    var r = await Promise.race([
+      base.enablePersistence({ synchronizeTabs: true }).then(function () { return 'ok'; }, function () { return 'no'; }),
+      esperar(3000, 'lento')
+    ]);
+    if (r === 'ok') { persistente = true; return base; }
+    if (r === 'no') return base;                       // sigue en memoria
+    console.warn('Almacenamiento del teléfono trabado: se usa conexión sin él');
+    return firebase.initializeApp(CONFIG, 'sin-cache').firestore();
+  }
+
   (async function () {
     var codigo = String(params.get('c') || '').trim().toLowerCase();
     if (!id && !ENC.esCodigo(codigo)) { estado('alert', 'Enlace incompleto', 'Pide que te reenvíen el enlace de la encuesta.'); return; }
-    try {
-      firebase.initializeApp({
-        apiKey: "AIzaSyB4-Agk4jG2HFMnvLQyB1q4vapZQ01Bh4o",
-        authDomain: "redes-con-rostro.firebaseapp.com",
-        projectId: "redes-con-rostro",
-        storageBucket: "redes-con-rostro.firebasestorage.app",
-        messagingSenderId: "138746747295",
-        appId: "1:138746747295:web:1ceb9c60d4a4073e6885aa"
-      });
-      db = firebase.firestore();
-      /* Guarda en el teléfono la encuesta y la cola de respuestas */
-      try { await db.enablePersistence({ synchronizeTabs: true }); persistente = true; }
-      catch (e) { console.warn('Sin persistencia sin conexión:', e && e.code); }
+    if (!id) id = leerLocal(CACHE_COD + codigo) || null;
 
-      /* Enlace corto (/e/?codigo): el código dice qué encuesta abrir */
+    /* 1) Copia guardada: se ve al instante (también sin conexión) */
+    var copia = id && leerLocal(CACHE_ENC + id);
+    if (copia && copia.preguntas) mostrar(copia);
+
+    /* Si tarda, un aviso discreto (sin tarjeta) para no dejar la pantalla en blanco */
+    setTimeout(function () {
+      if (!mostrada && !app.innerHTML) {
+        app.className = 'con-estado';
+        app.innerHTML = '<p class="resp-cargando">Cargando la encuesta…</p>';
+      }
+    }, 2500);
+
+    /* Formulario empezado: no se reemplaza con la versión nueva */
+    document.addEventListener('input', function () { tocado = true; }, true);
+    document.addEventListener('change', function () { tocado = true; }, true);
+
+    try {
+      db = await abrirBase();
+      if (!persistente) guardarPend([]);   // sin almacenamiento, lo de antes no se puede contar
+
+      /* 2) Versión actual desde Firestore (con tiempo límite) */
       if (!id) {
-        var cs = await db.collection(ENC.COL_COD).doc(codigo).get();
+        var cs = await conLimite(db.collection(ENC.COL_COD).doc(codigo).get(), 9000);
         if (!cs.exists || !cs.data().encuestaId) {
           estado('alert', 'Esta encuesta ya no está disponible', 'Revisa que el enlace esté completo o pide que te lo reenvíen.');
           return;
         }
         id = cs.data().encuestaId;
+        guardarLocal(CACHE_COD + codigo, id);
       }
-      var snap = await db.collection(ENC.COL).doc(id).get();
-      if (!snap.exists) { estado('alert', 'Esta encuesta ya no está disponible', 'Puede que la hayan eliminado.'); return; }
-      enc = snap.data();
-      document.title = (enc.titulo || 'Encuesta') + ' — Redes Con Rostro';
-      /* Sin almacenamiento persistente, lo pendiente de visitas anteriores
-         ya no existe: no se cuenta. */
-      if (!persistente) guardarPend([]);
-      pintarRed();
-      vigilarPendientes();
-      if (enc.estado === 'cerrada' && !previa) {
-        estado('clock', enc.titulo || 'Encuesta', 'Esta encuesta ya no recibe respuestas.');
+      var snap = await conLimite(db.collection(ENC.COL).doc(id).get(), 9000);
+      if (!snap.exists) {
+        try { localStorage.removeItem(CACHE_ENC + id); } catch (e) {}
+        if (!tocado) estado('alert', 'Esta encuesta ya no está disponible', 'Puede que la hayan eliminado.');
         return;
       }
-      if (!ENC.soloPreguntas(enc.preguntas).length) { estado('inbox', enc.titulo || 'Encuesta', 'Esta encuesta todavía no tiene preguntas.'); return; }
-      pintar();
+      var nueva = snap.data();
+      guardarLocal(CACHE_ENC + id, nueva);
+      pintarRed();
+      vigilarPendientes();
+      /* 3) Si ya se mostraba la copia y cambió, se actualiza solo si la
+         persona todavía no empezó a responder */
+      if (!mostrada) mostrar(nueva);
+      else if (!tocado && JSON.stringify(nueva) !== JSON.stringify(enc)) mostrar(nueva);
     } catch (e) {
       console.error('responder-encuesta:', e);
-      estado('alert', 'No se pudo abrir la encuesta',
-        navigator.onLine ? 'Revisa tu conexión o pide que te reenvíen el enlace.'
-          : 'Sin conexión: para usarla sin internet, primero ábrela una vez con conexión.');
+      errorAbrir();
     }
   })();
 })();
