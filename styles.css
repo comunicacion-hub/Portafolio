@@ -2046,6 +2046,11 @@ textarea.rg-campo{resize:vertical;min-height:92px;line-height:1.45;}
 }
 
 /* Estados: cargando, gracias, guardada sin conexión, errores */
+/* Cargando: sin tarjeta, centrado en la pantalla */
+.resp-cargando{
+  min-height:72vh;min-height:72dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  font-size:13.5px;color:var(--g-gris);
+}
 .resp-estado{margin-top:7vh;text-align:center;padding:30px 22px 26px;border-radius:22px;color:var(--g-gris);}
 .resp-estado .spinner{margin:0 auto 14px;}
 .resp-estado-ico{
