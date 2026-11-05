@@ -36,6 +36,10 @@ window.ICONS = {
     '<path d="M9 2.5h6v3H9z"/>' +
     '<path d="M8.5 11l1.2 1.2 2.1-2.2M14 11h2M8.5 16.5l1.2 1.2 2.1-2.2M14 16.5h2"/>',
 
+  barChart:
+    '<path d="M4 20h16"/><rect x="5.5" y="11" width="3.2" height="6.5" rx="1"/>' +
+    '<rect x="10.4" y="5" width="3.2" height="12.5" rx="1"/><rect x="15.3" y="8.5" width="3.2" height="9" rx="1"/>',
+
   /* ── Acciones ─────────────────────────────────────────────────────── */
   plus:        '<path d="M12 5v14M5 12h14"/>',
   x:           '<path d="M18 6L6 18M6 6l12 12"/>',

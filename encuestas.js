@@ -157,15 +157,25 @@ var ENC = {
     ENC.cargar();
   },
 
-  cargar: async function () {
-    try {
-      /* Cada persona ve las encuestas que creó; el Admin ve todas. */
+  /* Lee las encuestas una sola vez (la usan Encuestas y Resultados).
+     Cada persona ve las encuestas que creó; el Admin ve todas. */
+  asegurarDatos: function () {
+    if (ENC.cargado) return Promise.resolve();
+    if (!ENC._leyendo) {
       var q = RCR.db.collection(ENC.COL);
       if (!RCR.esAdmin()) q = q.where('creadoPor', '==', RCR.user.correo);
-      var snap = await q.get();
-      ENC.datos = snap.docs.map(function (d) { return Object.assign({ _docId: d.id }, d.data()); });
-      ENC.ordenar();
-      ENC.cargado = true;
+      ENC._leyendo = q.get().then(function (snap) {
+        ENC.datos = snap.docs.map(function (d) { return Object.assign({ _docId: d.id }, d.data()); });
+        ENC.ordenar();
+        ENC.cargado = true;
+      }).finally(function () { ENC._leyendo = null; });
+    }
+    return ENC._leyendo;
+  },
+
+  cargar: async function () {
+    try {
+      await ENC.asegurarDatos();
     } catch (e) {
       console.error('ENC.cargar:', e);
       var list = document.getElementById('enc-list');
@@ -239,6 +249,9 @@ var ENC = {
         '<div class="card-icobar" onclick="event.stopPropagation();">' +
           '<button class="btn-ico" title="Compartir enlace" aria-label="Compartir enlace" onclick="ENC.compartir(\'' + id + '\')">' + ico('link', 17) + '</button>' +
           '<button class="btn-ico" title="Vista previa" aria-label="Vista previa" onclick="ENC.previa(\'' + id + '\')">' + ico('eye', 17) + '</button>' +
+          (window.RES && RCR.puedeVerSeccion('encuestas', 'resultados-encuesta')
+            ? '<button class="btn-ico" title="Ver resultados" aria-label="Ver resultados" onclick="RES.abrir(\'' + id + '\')">' + ico('barChart', 17) + '</button>'
+            : '') +
           (editable ?
           '<button class="btn-ico" title="Editar" aria-label="Editar" onclick="ENC.abrirForm(\'' + id + '\')">' + ico('edit', 16) + '</button>' +
           '<button class="btn-ico" title="Duplicar" aria-label="Duplicar" onclick="ENC.duplicar(\'' + id + '\')">' + ico('copy', 16) + '</button>' +
