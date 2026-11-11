@@ -35,7 +35,15 @@ service cloud.firestore {
       allow read: if esDominio() && semaforo.matches('Sem.*foro');
       allow create: if esDominio() && semaforo.matches('Sem.*foro');
       allow delete: if esDominio() && semaforo.matches('Sem.*foro');
-      allow update: if esAdmin() && semaforo.matches('Sem.*foro');
+      /* Cada persona edita solo sus propios registros (los estados y el
+         comentario); el mes, el nombre, el correo y la fecha no cambian. */
+      allow update: if esDominio() && semaforo.matches('Sem.*foro') && (
+        esAdmin() || (
+          resource.data.get('Correo', '').lower() == miCorreo().lower() &&
+          !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['Colaborador', 'Correo', 'Mes', 'Fecha'])
+        )
+      );
     }
     /* Curriculum: cada persona lee y escribe solo su propio documento */
     match /Curriculums/{correo} {
