@@ -167,6 +167,19 @@ var SEM = {
     var mm   = String(hoy.getMonth() + 1).padStart(2, '0');
     var fecha = dd + '/' + mm + '/' + hoy.getFullYear();
 
+    // Opciones de mes: mes actual y los 11 meses anteriores.
+    // Se marca cuáles ya tienen registro para avisar al colaborador.
+    var registrados = SEM.datos.map(function (r) { return SEM.fmtMes(r.Mes); });
+    var opcMes = '';
+    for (var i = 0; i < 12; i++) {
+      var d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+      var etq = SEM.MESES[d.getMonth()] + ' ' + d.getFullYear();
+      var ya  = registrados.indexOf(etq) !== -1;
+      opcMes += '<option value="' + RCR.esc(etq) + '"' + (ya ? ' disabled' : '') + '>' +
+                  RCR.esc(etq) + (ya ? ' (ya registrado)' : '') +
+                '</option>';
+    }
+
     var bloques = SEM.CAMPOS.map(function (c) {
       var opts = SEM.OPCIONES.map(function (o) {
         return '<button type="button" class="sema-opt" data-campo="' + c.key + '"' +
@@ -184,11 +197,14 @@ var SEM = {
 
     RCR.modal({
       id: 'm-sem',
-      titulo: 'Registro de ' + mes,
+      titulo: 'Nuevo registro',
       sub: RCR.esc(RCR.user.nombre),
       cuerpo:
-        '<input type="hidden" id="sem-mes" value="' + RCR.esc(mes) + '">' +
         '<input type="hidden" id="sem-fecha" value="' + RCR.esc(fecha) + '">' +
+        '<div class="form-grp">' +
+          '<label class="form-lbl" for="sem-mes">Mes del registro</label>' +
+          '<select class="form-inp" id="sem-mes">' + opcMes + '</select>' +
+        '</div>' +
         '<div class="form-grp">' +
           '<label class="form-lbl">Fecha del registro</label>' +
           '<div class="form-static">' + RCR.esc(fecha) + '</div>' +
