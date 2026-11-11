@@ -90,17 +90,19 @@
       <button class="ws-switch" id="ws-switch" aria-haspopup="menu" aria-expanded="false"
               aria-label="Cambiar de perfil" onclick="RCR.toggleWorkspaceMenu()">
         <h1 id="topbar-titulo"><span class="tb-app">mi redes con rostro</span><span class="tb-sec" id="topbar-seccion"></span></h1>
-        <span class="ws-chev" aria-hidden="true">▾</span>
+        <span class="ws-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </button>
       <div class="ws-menu" id="ws-menu" role="menu"></div>
     </div>
     <div class="topbar-right">
+      <!-- Acciones de la sección activa (ej. Editar / Eliminar en Semáforo), junto al + -->
+      <div class="topbar-acciones" id="topbar-acciones"></div>
       <button class="btn-add topbar-add hidden" id="topbar-add" aria-label="Agregar" title="Agregar" onclick="RCR.crearActivo()"></button>
       <div style="position:relative;">
       <button class="user-avatar-wrap" id="user-avatar" aria-label="Menú de usuario"
               aria-expanded="false" onclick="RCR.toggleMenu()">
         <span class="user-avatar-ini" id="user-avatar-ini">?</span>
-        <span class="user-avatar-chev">▾</span>
+        <span class="user-avatar-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </button>
       <div class="user-menu" id="user-menu" role="menu">
         <div class="user-menu-head">
@@ -451,6 +453,12 @@ RCR.ir = function (id) {
 
   /* Ocultar la vista actual */
   document.querySelectorAll('#view > .vista').forEach(function (v) { v.classList.add('hidden'); });
+
+  /* La sección nueva queda activa antes de pintarse, para que pueda poner
+     sus propias acciones en el topbar; las de la sección anterior se quitan. */
+  RCR.activo = id;
+  var acciones = document.getElementById('topbar-acciones');
+  if (acciones) acciones.innerHTML = '';
 
   /* Crear la vista la primera vez */
   var vista = document.getElementById('vista-' + id);

@@ -186,11 +186,11 @@ var SEM = {
 
     list.innerHTML =
       '<div class="semx">' +
-        SEM.htmlCabecera(sel) +
         SEM.htmlCuerpo(sel) +
         SEM.htmlDock(mapa, hoy) +
       '</div>';
 
+    SEM.pintarAcciones(sel);
     if (sel) SEM.animarAnillos(SEM.estadosDe(sel));
   },
 
@@ -199,24 +199,19 @@ var SEM = {
     return SEM.CAMPOS.map(function (c) { return (r && r[c.label]) || ''; });
   },
 
-  htmlCabecera: function (sel) {
-    var acciones = '';
-    if (sel && !SEM.editando) {
-      var id = RCR.esc(String(sel._docId || ''));
-      acciones =
-        '<div class="semx-cap">' +
-          '<button onclick="SEM.editar()">' + ico('edit', 17) + '<span>Editar</span></button>' +
-          '<button class="del" aria-label="Eliminar registro de ' + RCR.esc(SEM.etiqueta(sel)) + '"' +
-            ' title="Eliminar" onclick="SEM.pedirBorrar(\'' + id + '\')">' + ico('trash', 17) + '</button>' +
-        '</div>';
-    }
-    return '<div class="semx-head">' +
-             '<div>' +
-               '<div class="semx-eyebrow">Tu bienestar mes a mes</div>' +
-               '<h2 class="semx-title">Semáforo</h2>' +
-             '</div>' +
-             acciones +
-           '</div>';
+  /* Editar y Eliminar van en el topbar, junto al +. Solo se muestran con un
+     registro abierto y fuera del modo edición (ahí mandan Cancelar/Guardar). */
+  pintarAcciones: function (sel) {
+    var slot = document.getElementById('topbar-acciones');
+    if (!slot || RCR.activo !== 'semaforo') return;
+    if (!sel || SEM.editando) { slot.innerHTML = ''; return; }
+    var id  = RCR.esc(String(sel._docId || ''));
+    var etq = RCR.esc(SEM.etiqueta(sel));
+    slot.innerHTML =
+      '<button class="btn-add topbar-add" title="Editar ' + etq + '" aria-label="Editar registro de ' + etq + '"' +
+        ' onclick="SEM.editar()">' + ico('edit', 18, 2.2) + '</button>' +
+      '<button class="btn-add topbar-add del" title="Eliminar ' + etq + '" aria-label="Eliminar registro de ' + etq + '"' +
+        ' onclick="SEM.pedirBorrar(\'' + id + '\')">' + ico('trash', 18, 2.2) + '</button>';
   },
 
   htmlCuerpo: function (sel) {

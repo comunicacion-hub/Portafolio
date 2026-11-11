@@ -164,7 +164,9 @@ html,body{
   -webkit-tap-highlight-color:transparent;transition:background .15s;
 }
 .ws-switch:hover{background:var(--surface);}
-.ws-chev{font-size:11px;color:var(--text-muted);line-height:1;flex-shrink:0;transition:transform .2s;}
+.ws-chev{display:flex;align-items:center;justify-content:center;width:18px;height:18px;color:var(--text-muted);flex-shrink:0;transition:transform .2s,color .2s;}
+.ws-chev svg{width:16px;height:16px;}
+.ws-switch:hover .ws-chev{color:var(--text);}
 .ws-switch[aria-expanded="true"] .ws-chev{transform:rotate(180deg);}
 .ws-menu{
   position:absolute;top:calc(100% + 8px);left:0;
@@ -197,7 +199,8 @@ html,body{
   color:var(--text);font-weight:700;font-size:13px;
   display:flex;align-items:center;justify-content:center;
 }
-.user-avatar-chev{font-size:11px;color:var(--text-muted);line-height:1;}
+.user-avatar-chev{display:flex;align-items:center;justify-content:center;width:18px;height:18px;color:var(--text-muted);}
+.user-avatar-chev svg{width:16px;height:16px;}
 
 /* Menú de usuario */
 .user-menu{
@@ -354,6 +357,14 @@ html,body{
 /* + en el topbar, junto al avatar */
 .topbar-right{display:flex;align-items:center;gap:10px;}
 .topbar-add{width:40px;height:40px;min-width:40px;}
+/* Acciones de la sección junto al + (ej. Editar / Eliminar del semáforo) */
+.topbar-acciones{display:flex;align-items:center;gap:10px;}
+.topbar-acciones:empty{display:none;}
+.btn-add.del{color:#be123c;}
+.btn-add.del:hover{background:#fff1f2;border-color:#fecdd3;}
+@media (max-width:720px){
+  .topbar-right,.topbar-acciones{gap:6px;}
+}
 
 /* ==========================================================================
    TARJETAS DE REGISTRO (patrón compartido)
@@ -507,25 +518,12 @@ html,body{
 .sem-coment-txt{font-size:13px;color:var(--text);white-space:pre-wrap;word-break:break-word;}
 /* ── Semáforo del colaborador: anillos + dock anual (semaforo.js) ── */
 .semx{display:flex;flex-direction:column;gap:20px;}
-.semx-glass,.semx-cap,.semx-dockbox{
+.semx-dockbox{
   background:rgba(255,255,255,.72);
   backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);
   border:1px solid var(--border);
   box-shadow:0 8px 28px rgba(20,30,60,.08), inset 0 1px 0 rgba(255,255,255,.8);
 }
-.semx-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;}
-.semx-eyebrow{font-size:13px;color:var(--text-muted);}
-.semx-title{font-size:28px;font-weight:600;color:var(--text);letter-spacing:-.4px;line-height:1.1;}
-.semx-cap{display:flex;gap:2px;padding:4px;border-radius:999px;}
-.semx-cap button{
-  height:38px;border:none;background:none;border-radius:999px;padding:0 14px;
-  display:inline-flex;align-items:center;gap:7px;cursor:pointer;
-  font-family:'Outfit',sans-serif;font-size:14px;font-weight:500;color:var(--text);
-  transition:background .15s,color .15s;-webkit-tap-highlight-color:transparent;
-}
-.semx-cap button svg{width:17px;height:17px;}
-.semx-cap button:hover{background:var(--white);}
-.semx-cap button.del{color:#be123c;padding:0 11px;}
 
 .semx-hero{display:grid;grid-template-columns:240px minmax(0,1fr);gap:28px;align-items:center;}
 .semx-rings{position:relative;width:240px;height:240px;margin:0 auto;}
@@ -590,14 +588,13 @@ button.semx-row:active{transform:scale(.99);}
 }
 .semx-empty svg{width:10px;height:10px;}
 .semx-empty.fut{border-style:dotted;}
-.semx-cap button:focus-visible,.semx-row:focus-visible,.semx-mo:focus-visible,.semx-yb:focus-visible{
+.semx-row:focus-visible,.semx-mo:focus-visible,.semx-yb:focus-visible{
   outline:2px solid var(--blue2);outline-offset:2px;
 }
 @media (max-width:860px){
   .semx-hero{grid-template-columns:minmax(0,1fr);gap:14px;}
 }
 @media (max-width:720px){
-  .semx-title{font-size:25px;}
   .semx-rings{width:210px;height:210px;}
   .semx-rings-c strong{font-size:15px;}
   .semx-row{padding:9px 10px;}
