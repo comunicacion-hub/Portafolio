@@ -278,13 +278,6 @@ html,body{
   .subvista-body{ margin-left:126px; }
   .subvista-body > *{ max-width:820px; margin-left:auto; margin-right:auto; }
 }
-/* Con espacio de sobra, el mismo hueco a la derecha: así el contenido queda
-   centrado en la ventana y no corrido a la derecha por el nav lateral.
-   1120px = 820 de contenido + 2×126 de huecos + 48 de padding. */
-@media (min-width:1120px){
-  .main,.subvista-body{ margin-right:126px; }
-}
-
 @media (max-width:720px){
   .bottom-nav{
     top:auto; left:16px; right:16px; bottom:calc(16px + var(--safe-bottom));
@@ -524,6 +517,20 @@ html,body{
 .sem-coment-txt{font-size:13px;color:var(--text);white-space:pre-wrap;word-break:break-word;}
 /* ── Semáforo del colaborador: anillos + dock anual (semaforo.js) ── */
 .semx{display:flex;flex-direction:column;gap:20px;}
+/* En computador el semáforo queda centrado también en alto, dentro del área
+   que va del borde inferior del topbar (82px) al final de la pantalla.
+   .main empieza el contenido en 104px y deja 60px abajo: el bloque ocupa
+   desde 104px hasta 22px antes del final (centro = mitad del área) y el
+   margen negativo devuelve esos 60px para que no aparezca scroll. */
+@media (min-width:721px){
+  .semx{
+    justify-content:center;
+    padding-block:24px;
+    margin-bottom:-60px;
+    min-height:calc(100vh - 126px - var(--safe-top));
+    min-height:calc(100dvh - 126px - var(--safe-top));
+  }
+}
 .semx-dockbox{
   background:rgba(255,255,255,.72);
   backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);
