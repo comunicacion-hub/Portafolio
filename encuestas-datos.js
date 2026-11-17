@@ -1,8 +1,9 @@
 /* ==========================================================================
    Mi RCR — Perfil "encuestas" · Datos (registros de cada respuesta)
    ──────────────────────────────────────────────────────────────────────────
-   · El mismo recuadro con menú desplegable de Resultados; la encuesta elegida
-     es compartida (RES.sel) y también la caché de respuestas (RES.cache).
+   · La encuesta se elige en el menú de la barra de arriba (el mismo de
+     Resultados); la encuesta elegida es compartida (RES.sel) y también la
+     caché de respuestas (RES.cache). Excel va en la barra, junto al menú.
    · Tabla con una fila por respuesta y una columna por pregunta, con búsqueda.
      Tocar una fila abre la ficha de esa respuesta (y permite eliminarla).
    · "Excel" descarga un .xlsx con dos hojas: Respuestas y Preguntas.
@@ -15,7 +16,7 @@ RCR.modulos['datos-encuesta'] = {
   workspace: 'encuestas',
   enNav: true,
   mount: function (root) { DAT.mount(root); },
-  onShow: function () { DAT.poblarSel(); DAT.cargar(false); }
+  onShow: function () { RES.pintarTopbar(); DAT.cargar(false); }
 };
 
 var DAT = {
@@ -31,31 +32,10 @@ var DAT = {
   /* ── Montaje ───────────────────────────────────────────────────────────── */
   mount: function (root) {
     root.innerHTML =
-      '<div class="section-header">' +
-        '<div>' +
-          '<div class="section-title">Datos</div>' +
-          '<div class="section-sub">Registros de cada respuesta</div>' +
-        '</div>' +
-        '<div class="dat-acciones">' +
-          '<button class="btn btn-glass dat-excel" id="dat-excel" title="Descargar en Excel" onclick="DAT.excel()" disabled>' +
-            ico('download', 15) + 'Excel</button>' +
-          '<button class="btn-ico" title="Actualizar" aria-label="Actualizar datos" onclick="DAT.cargar(true)">' + ico('refresh', 16) + '</button>' +
-        '</div>' +
-      '</div>' +
       '<div class="res-wrap dat-wrap">' +
-        '<div class="card res-picker">' +
-          '<label class="form-lbl" for="dat-sel">Encuesta</label>' +
-          '<div class="res-picker-fila">' +
-            '<select class="form-inp" id="dat-sel" onchange="DAT.onSel(this.value)" disabled>' +
-              '<option>Cargando…</option>' +
-            '</select>' +
-            '<button class="btn-ico hidden" id="dat-compartir" title="Compartir con personas" aria-label="Compartir con personas" ' +
-              'onclick="ENC.compartirPersonas(RES.sel)">' + ico('users', 17) + '</button>' +
-          '</div>' +
-        '</div>' +
-        '<input class="form-inp dat-buscar" id="dat-buscar" type="search" placeholder="Buscar en las respuestas…" ' +
+        '<input class="form-inp dat-buscar hidden" id="dat-buscar" type="search" placeholder="Buscar en las respuestas…" ' +
           'aria-label="Buscar en las respuestas" oninput="DAT.onBuscar(this.value)">' +
-        '<div id="dat-body">' + RCR.cargando('Cargando datos') + '</div>' +
+        '<div id="dat-body"></div>' +
       '</div>';
     DAT.iniciar();
   },
@@ -68,26 +48,12 @@ var DAT = {
       DAT.pintar(RCR.vacio('alert', 'No se pudieron cargar las encuestas', 'Revisa tu conexión y vuelve a intentar.'));
       return;
     }
-    DAT.poblarSel();
+    RES.pintarTopbar();
     DAT.cargar(false);
   },
 
-  /* ── Menú desplegable (comparte la encuesta elegida con Resultados) ────── */
-  poblarSel: function () {
-    var sel = document.getElementById('dat-sel');
-    if (!sel || !ENC.cargado) return;
-    var lista = ENC.datos;
-    if (!lista.some(function (e) { return e._docId === RES.sel; })) {
-      RES.sel = lista.length ? lista[0]._docId : '';
-    }
-    if (!lista.length) {
-      sel.innerHTML = '<option value="">No tienes encuestas</option>';
-      sel.disabled = true;
-      return;
-    }
-    sel.disabled = false;
-    sel.innerHTML = ENC.opcionesSelect(RES.sel);
-  },
+  /* Lo llaman Encuestas y Compartir cuando cambia la lista */
+  poblarSel: function () { RES.pintarTopbar(); },
 
   onSel: function (id) {
     RES.sel = id;
@@ -123,12 +89,15 @@ var DAT = {
   cargar: async function (forzar) {
     if (!ENC.cargado) return;
     DAT.botonExcel(false);
+    var buscar = document.getElementById('dat-buscar');
     if (!ENC.datos.length) {
+      if (buscar) buscar.classList.add('hidden');
       DAT.pintar(RCR.vacio('encuesta', 'Aún no tienes encuestas', 'Crea una en la sección Encuestas para ver aquí sus datos.'));
       return;
     }
     var id = RES.sel;
-    if (!id) return;
+    if (buscar) buscar.classList.toggle('hidden', !id);
+    if (!id) { DAT.pintar(RES.vacioElegir()); return; }
     if (!RES.cache[id] || forzar) DAT.pintar(RCR.cargando('Cargando respuestas'));
     try {
       await RES.leerRespuestas(id, forzar);
@@ -186,7 +155,6 @@ var DAT = {
   render: function () {
     var enc = RES.encuesta();
     var resps = RES.cache[RES.sel];
-    if (ENC.toggleCompartir) ENC.toggleCompartir('dat-compartir', enc);
     if (!enc || !resps) return;
     DAT.botonExcel(resps.length > 0);
 

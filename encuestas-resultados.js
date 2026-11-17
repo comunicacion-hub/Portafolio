@@ -1,13 +1,16 @@
 /* ==========================================================================
    Mi RCR — Perfil "encuestas" · Resultados (dashboard consolidado)
    ──────────────────────────────────────────────────────────────────────────
-   · Un recuadro con un menú desplegable para elegir la encuesta (las mismas
-     que la persona ve en Encuestas: las suyas y las compartidas con ella).
-   · Indicadores (respuestas, preguntas, última respuesta), respuestas por día
-     y un gráfico por pregunta. Las preguntas abiertas muestran sus textos.
+   · La encuesta se elige en la barra de arriba, junto al nombre (ícono de
+     encuestas → menú con mis encuestas y las compartidas). Al entrar no hay
+     ninguna elegida. Con una elegida aparece al lado el botón de compartir.
+     El mismo menú sirve en Datos (la encuesta elegida es compartida).
+   · El gráfico depende del tipo de pregunta: dona para Sí/No y opción única
+     de pocas opciones, barras para opción múltiple o muchas opciones,
+     columnas para la escala 1–5, línea para las respuestas por día.
    · Cada gráfico se descarga por separado como imagen PNG (se dibuja en un
      canvas a partir de los datos, no es una captura de pantalla).
-   Lee la colección "RespuestasEncuesta" (ver encuestas.js).
+   Lee las respuestas de Encuestas/{id}/Respuestas (ver encuestas.js).
    ========================================================================== */
 
 RCR.modulos['resultados-encuesta'] = {
@@ -17,42 +20,32 @@ RCR.modulos['resultados-encuesta'] = {
   workspace: 'encuestas',
   enNav: true,
   mount: function (root) { RES.mount(root); },
-  onShow: function () { RES.poblarSel(); RES.cargarRespuestas(false); }
+  onShow: function () { RES.pintarTopbar(); RES.cargarRespuestas(false); }
 };
 
 var RES = {
-  sel: '',
+  sel: '',          // al entrar no hay encuesta elegida
   cache: {},        // encuestaId -> [respuestas]
   expandir: {},     // preguntaId -> true (ver todas las respuestas abiertas)
   graficos: {},     // clave -> datos para dibujar el PNG
-  COLOR: '#506CFF', // un solo tono: cada gráfico es de una sola serie
+  COLOR: '#506CFF', // gráficos de una sola serie: índigo de la marca
+  /* Categórica (partes de un todo, en orden fijo). Validada: separación para
+     daltonismo y visión normal; aqua y amarillo llevan siempre su % al lado. */
+  CAT: ['#506cff', '#eb6834', '#1baf7a', '#eda100'],
+  MAX_DONA: 4,      // más opciones que esto → barras
   TEXTOS_VISIBLES: 5,
+  SECCIONES_SEL: ['resultados-encuesta', 'datos-encuesta'],
 
   /* ── Montaje ───────────────────────────────────────────────────────────── */
   mount: function (root) {
-    root.innerHTML =
-      '<div class="section-header">' +
-        '<div>' +
-          '<div class="section-title">Resultados</div>' +
-          '<div class="section-sub">Dashboard consolidado</div>' +
-        '</div>' +
-        '<button class="btn-ico" title="Actualizar" aria-label="Actualizar resultados" onclick="RES.cargarRespuestas(true)">' + ico('refresh', 16) + '</button>' +
-      '</div>' +
-      '<div class="res-wrap">' +
-        '<div class="card res-picker">' +
-          '<label class="form-lbl" for="res-sel">Encuesta</label>' +
-          '<div class="res-picker-fila">' +
-            '<select class="form-inp" id="res-sel" onchange="RES.onSel(this.value)" disabled>' +
-              '<option>Cargando…</option>' +
-            '</select>' +
-            '<button class="btn-ico hidden" id="res-compartir" title="Compartir con personas" aria-label="Compartir con personas" ' +
-              'onclick="ENC.compartirPersonas(RES.sel)">' + ico('users', 17) + '</button>' +
-          '</div>' +
-        '</div>' +
-        '<div id="res-body">' + RCR.cargando('Cargando resultados') + '</div>' +
-      '</div>';
+    root.innerHTML = '<div class="res-wrap"><div id="res-body"></div></div>';
     RES.iniciarTooltip(root);
     RES.iniciar();
+    if (!RES._resize) {
+      var t;
+      RES._resize = function () { clearTimeout(t); t = setTimeout(RES.dibujarSvgs, 150); };
+      window.addEventListener('resize', RES._resize);
+    }
   },
 
   iniciar: async function () {
@@ -63,7 +56,7 @@ var RES = {
       RES.pintar(RCR.vacio('alert', 'No se pudieron cargar las encuestas', 'Revisa tu conexión y vuelve a intentar.'));
       return;
     }
-    RES.poblarSel();
+    RES.pintarTopbar();
     RES.cargarRespuestas(false);
   },
 
@@ -73,30 +66,122 @@ var RES = {
     RCR.ir('resultados-encuesta');
   },
 
-  /* ── Menú desplegable de encuestas ─────────────────────────────────────── */
-  poblarSel: function () {
-    var sel = document.getElementById('res-sel');
-    if (!sel || !ENC.cargado) return;
-    var lista = ENC.datos;
-    if (!lista.some(function (e) { return e._docId === RES.sel; })) {
-      RES.sel = lista.length ? lista[0]._docId : '';
-    }
-    if (!lista.length) {
-      sel.innerHTML = '<option value="">No tienes encuestas</option>';
-      sel.disabled = true;
-      return;
-    }
-    sel.disabled = false;
-    sel.innerHTML = ENC.opcionesSelect(RES.sel);
-  },
-
-  onSel: function (id) {
-    RES.sel = id;
-    RES.cargarRespuestas(false);
-  },
+  /* Lo llaman Encuestas y Compartir cuando cambia la lista */
+  poblarSel: function () { RES.pintarTopbar(); },
 
   encuesta: function () {
     return ENC.datos.find(function (e) { return e._docId === RES.sel; }) || null;
+  },
+
+  /* ── Menú de encuestas en la barra de arriba ───────────────────────────── */
+  pintarTopbar: function () {
+    var slot = document.getElementById('topbar-acciones');
+    if (!slot || RES.SECCIONES_SEL.indexOf(RCR.activo) < 0) return;
+    RES.cerrarMenu();
+    if (!ENC.cargado) { slot.innerHTML = ''; return; }
+    if (RES.sel && !RES.encuesta()) RES.sel = '';
+    var e = RES.encuesta();
+    var tit = e ? (e.titulo || 'Sin título') : '';
+    var html =
+      '<div class="encsel">' +
+        '<button class="btn-add topbar-add encsel-btn' + (e ? ' con' : '') + '" id="encsel-btn" type="button" ' +
+          'aria-haspopup="menu" aria-expanded="false" title="' + ENC.attr(e ? 'Encuesta: ' + tit : 'Elegir encuesta') + '" ' +
+          'aria-label="' + ENC.attr(e ? 'Encuesta: ' + tit + '. Cambiar' : 'Elegir encuesta') + '" onclick="RES.toggleMenu(event)">' +
+          ico('encuesta', 19, 2.1) +
+          (e ? '<span class="encsel-tit">' + RCR.esc(tit) + '</span><span class="encsel-chev" aria-hidden="true">' + ico('chevronDown', 14, 2.6) + '</span>' : '') +
+        '</button>' +
+        '<div class="encsel-menu" id="encsel-menu" role="menu" hidden></div>' +
+      '</div>';
+    if (e && ENC.compartirPersonas && ENC.puedeEditarEnc(e)) {
+      html += '<button class="btn-add topbar-add" type="button" title="Compartir con personas" aria-label="Compartir con personas" ' +
+        'onclick="ENC.compartirPersonas(RES.sel)">' + ico('users', 18, 2.2) + '</button>';
+    }
+    if (e && RCR.activo === 'datos-encuesta') {
+      html += '<button class="btn-add topbar-add" id="dat-excel" type="button" title="Descargar en Excel" aria-label="Descargar en Excel" ' +
+        'onclick="DAT.excel()" disabled>' + ico('download', 18, 2.2) + '</button>';
+    }
+    slot.innerHTML = html;
+    if (RCR.activo === 'datos-encuesta' && window.DAT) DAT.botonExcel(!!(RES.cache[RES.sel] && RES.cache[RES.sel].length));
+  },
+
+  toggleMenu: function (ev) {
+    if (ev) ev.stopPropagation();
+    var m = document.getElementById('encsel-menu');
+    if (!m) return;
+    if (!m.hidden) { RES.cerrarMenu(); return; }
+    m.innerHTML = RES.menuHtml();
+    m.hidden = false;
+    var b = document.getElementById('encsel-btn');
+    if (b) b.setAttribute('aria-expanded', 'true');
+    RES._fuera = function (e) { if (!e.target.closest('.encsel')) RES.cerrarMenu(); };
+    RES._tecla = function (e) { if (e.key === 'Escape') { RES.cerrarMenu(); var bb = document.getElementById('encsel-btn'); if (bb) bb.focus(); } };
+    document.addEventListener('pointerdown', RES._fuera, true);
+    document.addEventListener('keydown', RES._tecla);
+    var on = m.querySelector('.encsel-it.on') || m.querySelector('.encsel-it');
+    if (on) on.focus({ preventScroll: true });
+  },
+
+  cerrarMenu: function () {
+    var m = document.getElementById('encsel-menu');
+    if (m) m.hidden = true;
+    var b = document.getElementById('encsel-btn');
+    if (b) b.setAttribute('aria-expanded', 'false');
+    if (RES._fuera) document.removeEventListener('pointerdown', RES._fuera, true);
+    if (RES._tecla) document.removeEventListener('keydown', RES._tecla);
+    RES._fuera = RES._tecla = null;
+  },
+
+  menuHtml: function () {
+    if (!ENC.datos.length) {
+      return '<div class="encsel-vacio">Todavía no tienes encuestas.<br>Créalas en la sección Encuestas.</div>';
+    }
+    var grupos = ENC.GRUPOS.map(function (g) {
+      return { g: g, items: ENC.datos.filter(function (e) { return ENC.grupo(e) === g.id; }) };
+    }).filter(function (x) { return x.items.length; });
+    var html = grupos.map(function (x) {
+      return '<div class="encsel-grupo">' + RCR.esc(x.g.titulo) + '</div>' +
+        x.items.map(function (e) {
+          var on = e._docId === RES.sel, n = ENC.conteos[e._docId];
+          var meta = [];
+          if (n != null) meta.push(n + (n === 1 ? ' respuesta' : ' respuestas'));
+          if (e.estado === 'cerrada') meta.push('Cerrada');
+          return '<button class="encsel-it' + (on ? ' on' : '') + '" type="button" role="menuitemradio" aria-checked="' + on + '" ' +
+            'onclick="RES.elegir(\'' + e._docId + '\')">' +
+            '<span class="encsel-it-txt"><span>' + RCR.esc(e.titulo || 'Sin título') + '</span>' +
+              (meta.length ? '<small>' + RCR.esc(meta.join(' · ')) + '</small>' : '') + '</span>' +
+            (on ? '<span class="encsel-check" aria-hidden="true">' + ico('check', 16, 2.6) + '</span>' : '') +
+          '</button>';
+        }).join('');
+    }).join('');
+    if (RES.sel) {
+      html += '<div class="encsel-sep"></div>' +
+        '<button class="encsel-it encsel-acc" type="button" role="menuitem" onclick="RES.actualizar()">' +
+          ico('refresh', 15, 2.2) + '<span>Actualizar respuestas</span></button>';
+    }
+    return html;
+  },
+
+  elegir: function (id) {
+    RES.sel = id;
+    RES.cerrarMenu();
+    RES.pintarTopbar();
+    if (RCR.activo === 'datos-encuesta' && window.DAT) DAT.onSel(id);
+    else RES.cargarRespuestas(false);
+  },
+
+  actualizar: function () {
+    RES.cerrarMenu();
+    if (RCR.activo === 'datos-encuesta' && window.DAT) DAT.cargar(true);
+    else RES.cargarRespuestas(true);
+  },
+
+  /* Pantalla vacía hasta elegir una encuesta */
+  vacioElegir: function () {
+    return '<div class="res-elige">' +
+      RCR.vacio('encuesta', 'Elige una encuesta',
+        'Toca el ícono de encuestas arriba, junto a tu nombre, para ver ' +
+        (RCR.activo === 'datos-encuesta' ? 'sus datos.' : 'sus resultados.')) +
+    '</div>';
   },
 
   /* ── Datos ─────────────────────────────────────────────────────────────── */
@@ -107,7 +192,7 @@ var RES = {
       return;
     }
     var id = RES.sel;
-    if (!id) return;
+    if (!id) { RES.pintar(RES.vacioElegir()); return; }
     if (RES.cache[id] && !forzar) { RES.render(); return; }
 
     RES.pintar(RCR.cargando('Cargando respuestas'));
@@ -268,22 +353,21 @@ var RES = {
   render: function () {
     var enc = RES.encuesta();
     var resps = RES.cache[RES.sel];
-    if (ENC.toggleCompartir) ENC.toggleCompartir('res-compartir', enc);
     if (!enc || !resps) return;
     RES.graficos = {};
 
     var total = resps.length;
     var ultima = total ? RES.ms(resps[0].enviado) : 0;
     var html =
-      '<div class="res-kpis">' +
-        RES.kpi(total, total === 1 ? 'Respuesta' : 'Respuestas') +
-        RES.kpi(ENC.soloPreguntas(enc.preguntas).length, 'Preguntas') +
-        RES.kpi(ultima ? RES.fmtDia(ultima) : '—', 'Última respuesta') +
+      '<div class="res-resumen">' +
+        RES.stat(total, total === 1 ? 'respuesta' : 'respuestas') +
+        RES.stat(ENC.soloPreguntas(enc.preguntas).length, 'preguntas') +
+        RES.stat(ultima ? RES.fmtDia(ultima) : '—', 'última respuesta') +
       '</div>';
 
     if (!total) {
       html +=
-        '<div class="card">' +
+        '<div class="card res-card">' +
           RCR.vacio('inbox', 'Todavía no hay respuestas',
             enc.estado === 'cerrada' ? 'La encuesta está cerrada.' : 'Comparte el enlace para empezar a recibirlas.') +
           (enc.estado !== 'cerrada'
@@ -297,43 +381,128 @@ var RES = {
     html += RES.tarjetaDias(enc, resps);
     RES.resumir(enc, resps).forEach(function (s) { html += RES.tarjetaPregunta(enc, s); });
     RES.pintar(html);
+    RES.dibujarSvgs();
   },
 
-  kpi: function (valor, label) {
-    return '<div class="res-kpi"><strong>' + RCR.esc(valor) + '</strong><span>' + RCR.esc(label) + '</span></div>';
+  stat: function (valor, label) {
+    return '<div class="res-stat"><strong>' + RCR.esc(valor) + '</strong><span>' + RCR.esc(label) + '</span></div>';
   },
+
+  /* Se mantiene para las cifras de las preguntas de número */
+  kpi: function (valor, label) { return RES.stat(valor, label); },
 
   botonImagen: function (clave) {
-    return '<button class="btn-ico res-dl" title="Descargar imagen" aria-label="Descargar gráfico como imagen" ' +
-      'onclick="RES.png(\'' + clave + '\')">' + ico('download', 16) + '</button>';
+    return '<button class="res-dl" type="button" title="Descargar imagen" aria-label="Descargar gráfico como imagen" ' +
+      'onclick="RES.png(\'' + clave + '\')">' + ico('download', 15, 2.2) + '</button>';
   },
 
+  cabeza: function (n, titulo, nota, clave) {
+    return '<div class="res-card-head">' +
+      '<div class="res-card-tit">' +
+        (n ? '<span class="res-q-n">P' + n + '</span>' : '') +
+        '<h3>' + RCR.esc(titulo) + '</h3>' +
+        (nota ? '<small>' + RCR.esc(nota) + '</small>' : '') +
+      '</div>' +
+      (clave ? RES.botonImagen(clave) : '') +
+    '</div>';
+  },
+
+  /* Respuestas por día: línea (tendencia en el tiempo); con 1–2 días, columnas */
   tarjetaDias: function (enc, resps) {
     var pd = RES.porDia(resps);
     if (!pd.dias.length) return '';
     var max = Math.max.apply(null, pd.dias.map(function (d) { return d.n; })) || 1;
     var titulo = 'Respuestas por día';
-    var sub = pd.recortado ? 'Últimos 30 días con actividad' : (pd.dias.length === 1 ? RES.fmtDia(pd.dias[0].ms, true) : 'Desde la primera respuesta');
-    RES.graficos.dias = { tipo: 'columnas', titulo: titulo, sub: sub, dias: pd.dias, encuesta: enc.titulo };
-
-    var cols = pd.dias.map(function (d) {
-      var h = d.n ? Math.max(4, Math.round(d.n / max * 100)) : 0;
-      var tip = RES.fmtDia(d.ms) + ': ' + d.n + (d.n === 1 ? ' respuesta' : ' respuestas');
-      return '<div class="res-col" data-tip="' + ENC.attr(tip) + '" aria-label="' + ENC.attr(tip) + '">' +
-               '<div class="res-col-fill" style="height:' + h + '%"></div></div>';
-    }).join('');
+    var sub = (pd.recortado ? 'Últimos 30 días con actividad' : (pd.dias.length === 1 ? RES.fmtDia(pd.dias[0].ms, true) : 'Desde la primera respuesta')) +
+      ' · máximo ' + max + ' en un día';
+    var linea = pd.dias.length >= 3;
+    RES.graficos.dias = { tipo: linea ? 'linea' : 'columnas', titulo: titulo, sub: sub, dias: pd.dias, encuesta: enc.titulo };
     var primero = pd.dias[0], ultimo = pd.dias[pd.dias.length - 1];
+    var eje = '<div class="res-cols-eje"><span>' + RES.fmtDia(primero.ms) + '</span>' +
+      (pd.dias.length > 1 ? '<span>' + RES.fmtDia(ultimo.ms) + '</span>' : '') + '</div>';
 
-    return '' +
-      '<div class="card res-card">' +
-        '<div class="res-card-head">' +
-          '<div class="res-card-tit"><h3>' + titulo + '</h3><small>' + RCR.esc(sub) + ' · máximo ' + max + ' en un día</small></div>' +
-          RES.botonImagen('dias') +
-        '</div>' +
-        '<div class="res-cols" role="img" aria-label="' + ENC.attr(titulo) + '">' + cols + '</div>' +
-        '<div class="res-cols-eje"><span>' + RES.fmtDia(primero.ms) + '</span>' +
-          (pd.dias.length > 1 ? '<span>' + RES.fmtDia(ultimo.ms) + '</span>' : '') + '</div>' +
-      '</div>';
+    var cuerpo;
+    if (linea) {
+      cuerpo = '<div class="res-linea" data-svg="dias" role="img" aria-label="' + ENC.attr(titulo + ': ' + sub) + '"></div>';
+    } else {
+      cuerpo = '<div class="res-cols" role="img" aria-label="' + ENC.attr(titulo) + '">' + pd.dias.map(function (d) {
+        var h = d.n ? Math.max(4, Math.round(d.n / max * 100)) : 0;
+        var tip = RES.fmtDia(d.ms) + ': ' + d.n + (d.n === 1 ? ' respuesta' : ' respuestas');
+        return '<div class="res-col" data-tip="' + ENC.attr(tip) + '"><div class="res-col-fill" style="height:' + h + '%"></div></div>';
+      }).join('') + '</div>';
+    }
+    return '<div class="card res-card">' + RES.cabeza(0, titulo, sub, 'dias') + cuerpo + eje + '</div>';
+  },
+
+  /* Línea con área suave; cada día tiene una zona para el cursor que muestra
+     una guía vertical, el punto y el valor (tooltip). Se dibuja al ancho real. */
+  svgLinea: function (g, W) {
+    var H = 150, pl = 6, pr = 6, pt = 14, pb = 4;
+    var d = g.dias, n = d.length;
+    var max = Math.max.apply(null, d.map(function (x) { return x.n; })) || 1;
+    var paso = (W - pl - pr) / Math.max(1, n - 1);
+    var X = function (i) { return pl + i * paso; };
+    var Y = function (v) { return pt + (1 - v / max) * (H - pt - pb); };
+    var pts = d.map(function (x, i) { return X(i).toFixed(1) + ',' + Y(x.n).toFixed(1); });
+    var area = 'M' + X(0).toFixed(1) + ',' + (H - pb) + ' L' + pts.join(' L') + ' L' + X(n - 1).toFixed(1) + ',' + (H - pb) + ' Z';
+    var yMax = Y(max).toFixed(1);
+    return '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true">' +
+      '<line class="res-guia-max" x1="0" x2="' + W + '" y1="' + yMax + '" y2="' + yMax + '"/>' +
+      '<line class="res-base" x1="0" x2="' + W + '" y1="' + (H - pb + .5) + '" y2="' + (H - pb + .5) + '"/>' +
+      '<path class="res-area" d="' + area + '"/>' +
+      '<polyline class="res-trazo" points="' + pts.join(' ') + '"/>' +
+      d.map(function (x, i) {
+        var tip = RES.fmtDia(x.ms) + ': ' + x.n + (x.n === 1 ? ' respuesta' : ' respuestas');
+        var x0 = Math.max(0, X(i) - paso / 2), w = Math.min(W, X(i) + paso / 2) - x0;
+        return '<g class="res-pt" data-tip="' + ENC.attr(tip) + '">' +
+          '<rect x="' + x0.toFixed(1) + '" y="0" width="' + Math.max(8, w).toFixed(1) + '" height="' + H + '" fill="transparent"/>' +
+          '<line class="res-guia" x1="' + X(i).toFixed(1) + '" x2="' + X(i).toFixed(1) + '" y1="' + pt + '" y2="' + (H - pb) + '"/>' +
+          '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(x.n).toFixed(1) + '" r="4"/>' +
+        '</g>';
+      }).join('') +
+    '</svg>';
+  },
+
+  dibujarSvgs: function () {
+    document.querySelectorAll('#res-body [data-svg]').forEach(function (el) {
+      var g = RES.graficos[el.getAttribute('data-svg')];
+      var W = el.clientWidth;
+      if (!g || !W) return;
+      if (g.tipo === 'linea') el.innerHTML = RES.svgLinea(g, W);
+    });
+  },
+
+  /* Dona: anillo con un hueco de 2 px entre partes; el % de la parte principal
+     al centro y una leyenda con nombre, % y cantidad (los colores claros
+     nunca van sin su número al lado). */
+  donaHtml: function (filas, centro) {
+    var tot = filas.reduce(function (a, f) { return a + f.n; }, 0) || 1;
+    var R = 56, C = 2 * Math.PI * R, acum = 0, conPartes = filas.filter(function (f) { return f.n; }).length;
+    var arcos = filas.map(function (f, k) {
+      if (!f.n) return '';
+      var largo = f.n / tot * C, hueco = conPartes > 1 ? Math.min(2, largo / 2) : 0;
+      var tip = f.label + ': ' + f.n + (f.n === 1 ? ' respuesta' : ' respuestas') + ' (' + f.pct + '%)';
+      var s = '<circle class="res-arco" r="' + R + '" cx="70" cy="70" stroke="' + RES.CAT[k % RES.CAT.length] + '" ' +
+        'stroke-dasharray="' + (largo - hueco).toFixed(2) + ' ' + C.toFixed(2) + '" stroke-dashoffset="' + (-acum).toFixed(2) + '" ' +
+        'data-tip="' + ENC.attr(tip) + '"/>';
+      acum += largo;
+      return s;
+    }).join('');
+    var leyenda = filas.map(function (f, k) {
+      return '<li data-tip="' + ENC.attr(f.label + ': ' + f.n + (f.n === 1 ? ' respuesta' : ' respuestas')) + '">' +
+        '<i style="background:' + RES.CAT[k % RES.CAT.length] + '"></i>' +
+        '<span class="res-ley-lbl">' + RCR.esc(f.label) + '</span>' +
+        '<strong>' + f.pct + '%</strong><span class="res-ley-n">' + f.n + '</span></li>';
+    }).join('');
+    return '<div class="res-dona">' +
+      '<div class="res-dona-graf">' +
+        '<svg viewBox="0 0 140 140" width="140" height="140" aria-hidden="true">' +
+          '<circle class="res-dona-pista" r="' + R + '" cx="70" cy="70"/>' + arcos +
+        '</svg>' +
+        '<div class="res-dona-c"><strong>' + centro.pct + '%</strong><span>' + RCR.esc(centro.label) + '</span></div>' +
+      '</div>' +
+      '<ul class="res-ley">' + leyenda + '</ul>' +
+    '</div>';
   },
 
   notaPregunta: function (enc, s) {
@@ -351,41 +520,53 @@ var RES = {
     return partes.join(' · ');
   },
 
+  /* Porcentajes enteros que suman exactamente 100 (método del mayor resto),
+     para las partes de un todo (dona) */
+  cien: function (filas) {
+    var tot = filas.reduce(function (a, f) { return a + f.n; }, 0);
+    if (!tot) return filas.map(function (f) { return Object.assign({}, f, { pct: 0 }); });
+    var base = filas.map(function (f, i) {
+      var exacto = f.n / tot * 100;
+      return { i: i, piso: Math.floor(exacto), resto: exacto - Math.floor(exacto) };
+    });
+    var falta = 100 - base.reduce(function (a, b) { return a + b.piso; }, 0);
+    base.slice().sort(function (a, b) { return b.resto - a.resto; }).slice(0, falta)
+      .forEach(function (b) { b.piso++; });
+    return filas.map(function (f, i) { return Object.assign({}, f, { pct: base[i].piso }); });
+  },
+
+  /* Qué forma lleva cada pregunta cerrada */
+  formaDe: function (s) {
+    if (s.q.tipo === 'escala') return 'escala';
+    if (s.q.tipo === 'sino') return 'dona';
+    if (s.q.tipo === 'unica' && s.filas.length <= RES.MAX_DONA) return 'dona';
+    return 'barras';
+  },
+
   tarjetaPregunta: function (enc, s) {
     var q = s.q, clave = 'q_' + q.id;
-    var cabeza = function (conBoton) {
-      return '<div class="res-card-head">' +
-        '<div class="res-card-tit">' +
-          '<div class="res-q-meta">Pregunta ' + s.n + ' · ' + RCR.esc(ENC.tipoLabel(q.tipo)) + '</div>' +
-          '<h3>' + RCR.esc(q.texto) + '</h3>' +
-          '<small>' + RCR.esc(RES.notaPregunta(enc, s)) + '</small>' +
-        '</div>' +
-        (conBoton ? RES.botonImagen(clave) : '') +
-      '</div>';
+    var nota = RES.notaPregunta(enc, s);
+    var card = function (conImagen, cuerpo) {
+      return '<div class="card res-card">' + RES.cabeza(s.n, q.texto, nota, conImagen ? clave : '') + cuerpo + '</div>';
     };
 
-    if (!s.respondieron) {
-      return '<div class="card res-card">' + cabeza(false) +
-        '<div class="res-sin">Nadie respondió esta pregunta todavía.</div></div>';
-    }
+    if (!s.respondieron) return card(false, '<div class="res-sin">Nadie respondió esta pregunta todavía.</div>');
 
-    /* Número: el promedio destacado y tres datos de apoyo */
+    /* Número: el promedio destacado; mínimo, mediana y máximo en una línea */
     if (s.numeros) {
-      return '<div class="card res-card">' + cabeza(false) +
+      return card(false,
         '<div class="res-hero"><strong>' + RCR.esc(s.numeros.promedio) + '</strong><span>promedio</span></div>' +
-        '<div class="res-num-fila">' +
-          RES.kpi(s.numeros.min, 'Mínimo') + RES.kpi(s.numeros.mediana, 'Mediana') + RES.kpi(s.numeros.max, 'Máximo') +
-        '</div>' +
-      '</div>';
+        '<div class="res-num-linea">' +
+          '<span>Mínimo <b>' + RCR.esc(s.numeros.min) + '</b></span>' +
+          '<span>Mediana <b>' + RCR.esc(s.numeros.mediana) + '</b></span>' +
+          '<span>Máximo <b>' + RCR.esc(s.numeros.max) + '</b></span>' +
+        '</div>');
     }
 
     /* Cuadrícula: una barra 100% apilada por fila, con leyenda arriba */
     if (s.grid) {
       var g = s.grid, nc = g.cols.length;
-      RES.graficos[clave] = {
-        tipo: 'apiladas', titulo: 'P' + s.n + '. ' + q.texto, sub: RES.notaPregunta(enc, s),
-        grid: g, encuesta: enc.titulo
-      };
+      RES.graficos[clave] = { tipo: 'apiladas', titulo: 'P' + s.n + '. ' + q.texto, sub: nota, grid: g, encuesta: enc.titulo };
       var leyenda = '<div class="res-leyenda">' + g.cols.map(function (c, k) {
         return '<span><i style="background:' + ENC.colorColumna(k, nc).fondo + '"></i>' + RCR.esc(c) + '</span>';
       }).join('') + '</div>';
@@ -403,8 +584,7 @@ var RES = {
           '<div class="res-apil-n">' + f.n + '</div>' +
         '</div>';
       }).join('');
-      return '<div class="card res-card">' + cabeza(true) + leyenda +
-        '<div class="res-apil">' + filas + '</div></div>';
+      return card(true, leyenda + '<div class="res-apil">' + filas + '</div>');
     }
 
     /* Fotos: galería; al tocar una se ve en grande */
@@ -412,54 +592,72 @@ var RES = {
       var todasF = !!RES.expandir[q.id], LIM = 12;
       var visF = todasF ? s.fotos : s.fotos.slice(0, LIM);
       RES.fotos[q.id] = s.fotos;
-      return '<div class="card res-card">' + cabeza(false) +
+      return card(false,
         '<div class="res-galeria">' + visF.map(function (f, k) {
           return '<button type="button" class="res-foto" onclick="RES.verFoto(\'' + q.id + '\',' + k + ')" ' +
             'aria-label="Ver foto ' + (k + 1) + '"><img src="' + f.v + '" alt="" loading="lazy"></button>';
         }).join('') + '</div>' +
         (s.fotos.length > LIM
-          ? '<button class="rep-add res-mas" onclick="RES.verTodas(\'' + q.id + '\')">' +
+          ? '<button class="res-mas" onclick="RES.verTodas(\'' + q.id + '\')">' +
               (todasF ? 'Ver menos' : 'Ver todas (' + s.fotos.length + ')') + '</button>'
-          : '') +
-      '</div>';
+          : ''));
     }
 
     /* Preguntas abiertas: lista de respuestas (no es un gráfico) */
     if (s.textos) {
       var todas = !!RES.expandir[q.id];
       var vis = todas ? s.textos : s.textos.slice(0, RES.TEXTOS_VISIBLES);
-      return '<div class="card res-card">' + cabeza(false) +
+      return card(false,
         '<ul class="res-textos">' + vis.map(function (t) {
           return '<li><p>' + RCR.esc(t.v) + '</p>' + (t.ms ? '<small>' + RES.fmtDia(t.ms, true) + '</small>' : '') + '</li>';
         }).join('') + '</ul>' +
         (s.textos.length > RES.TEXTOS_VISIBLES
-          ? '<button class="rep-add res-mas" onclick="RES.verTodas(\'' + q.id + '\')">' +
+          ? '<button class="res-mas" onclick="RES.verTodas(\'' + q.id + '\')">' +
               (todas ? 'Ver menos' : 'Ver todas (' + s.textos.length + ')') + '</button>'
-          : '') +
-      '</div>';
+          : ''));
     }
 
-    /* Preguntas cerradas: barras horizontales */
-    RES.graficos[clave] = {
-      tipo: 'barras', titulo: 'P' + s.n + '. ' + q.texto, sub: RES.notaPregunta(enc, s),
-      filas: s.filas, promedio: s.promedio, encuesta: enc.titulo
-    };
+    var forma = RES.formaDe(s);
+    var base = { titulo: 'P' + s.n + '. ' + q.texto, sub: nota, filas: s.filas, promedio: s.promedio, encuesta: enc.titulo };
+
+    /* Sí / No y opción única de pocas opciones: dona (los % suman 100) */
+    if (forma === 'dona') {
+      var partes = RES.cien(s.filas);
+      var principal = q.tipo === 'sino'
+        ? (partes.find(function (f) { return f.label === 'Sí'; }) || partes[0])
+        : partes.reduce(function (a, f) { return f.n > a.n ? f : a; }, partes[0]);
+      RES.graficos[clave] = Object.assign({ tipo: 'dona', centro: principal }, base, { filas: partes });
+      return card(true, RES.donaHtml(partes, principal));
+    }
+
+    /* Escala 1–5: promedio y una columna por valor (orden natural) */
+    if (forma === 'escala') {
+      RES.graficos[clave] = Object.assign({ tipo: 'escala' }, base);
+      var maxE = Math.max.apply(null, s.filas.map(function (f) { return f.n; })) || 1;
+      return card(true,
+        (s.promedio != null ? '<div class="res-hero"><strong>' + s.promedio + '</strong><span>promedio de 5</span></div>' : '') +
+        '<div class="res-escala">' + s.filas.map(function (f) {
+          var tip = f.label + ': ' + f.n + (f.n === 1 ? ' respuesta' : ' respuestas') + ' (' + f.pct + '%)';
+          return '<div class="res-esc-col" data-tip="' + ENC.attr(tip) + '">' +
+            '<span class="res-esc-pct">' + (f.n ? f.pct + '%' : '') + '</span>' +
+            '<div class="res-esc-pista"><div class="res-esc-fill" style="height:' + (f.n ? Math.max(3, f.n / maxE * 100) : 0) + '%"></div></div>' +
+            '<span class="res-esc-lbl">' + RCR.esc(f.label) + '</span>' +
+          '</div>';
+        }).join('') + '</div>' +
+        '<div class="res-escala-ext"><span>Bajo</span><span>Alto</span></div>');
+    }
+
+    /* Opción múltiple o muchas opciones: barras horizontales */
+    RES.graficos[clave] = Object.assign({ tipo: 'barras' }, base);
     var max = Math.max.apply(null, s.filas.map(function (f) { return f.n; })) || 1;
-
-    var hero = s.promedio != null
-      ? '<div class="res-hero"><strong>' + s.promedio + '</strong><span>promedio de 5</span></div>'
-      : '';
-
-    var barras = '<div class="res-barras">' + s.filas.map(function (f) {
+    return card(true, '<div class="res-barras">' + s.filas.map(function (f) {
       var tip = f.label + ': ' + f.n + (f.n === 1 ? ' respuesta' : ' respuestas') + ' (' + f.pct + '%)';
       return '<div class="res-barra" data-tip="' + ENC.attr(tip) + '">' +
           '<div class="res-barra-lbl">' + RCR.esc(f.label) + '</div>' +
           '<div class="res-barra-pista"><div class="res-barra-fill" style="width:' + (f.n ? Math.max(1.5, f.n / max * 100) : 0) + '%"></div></div>' +
           '<div class="res-barra-val"><strong>' + f.pct + '%</strong><span>' + f.n + '</span></div>' +
         '</div>';
-    }).join('') + '</div>';
-
-    return '<div class="card res-card">' + cabeza(true) + hero + barras + '</div>';
+    }).join('') + '</div>');
   },
 
   fotos: {},
@@ -526,8 +724,11 @@ var RES = {
       }
     } catch (e) { /* sin la fuente se usa la del sistema */ }
 
-    var canvas = g.tipo === 'columnas' ? RES.dibujarColumnas(g)
-      : (g.tipo === 'apiladas' ? RES.dibujarApiladas(g) : RES.dibujarBarras(g));
+    var dibujar = {
+      columnas: RES.dibujarColumnas, apiladas: RES.dibujarApiladas, dona: RES.dibujarDona,
+      escala: RES.dibujarEscala, linea: RES.dibujarLinea
+    }[g.tipo] || RES.dibujarBarras;
+    var canvas = dibujar(g);
     canvas.toBlob(function (blob) {
       if (!blob) { RCR.toast('No se pudo crear la imagen'); return; }
       var a = document.createElement('a');
@@ -747,6 +948,131 @@ var RES = {
     if (ri) ctx.arcTo(x, y, x + ri, y, ri); else ctx.lineTo(x, y);
     ctx.closePath();
     ctx.fill();
+  },
+
+  /* Dona con leyenda a la derecha (nombre, % y cantidad) */
+  dibujarDona: function (g) {
+    var F = g.filas, n = F.length, FILA = 40;
+    var alto = Math.max(260, n * FILA + 20);
+    var L = RES.lienzo(g, alto, 0);
+    var ctx = L.ctx, y = L.y, M = L.M, W = L.W;
+    var cx = M + 125, cy = y + alto / 2, R = 115, ancho = 42;
+    var tot = F.reduce(function (a, f) { return a + f.n; }, 0) || 1;
+    var con = F.filter(function (f) { return f.n; }).length;
+    var ang = -Math.PI / 2, HUECO = con > 1 ? 0.03 : 0;
+    ctx.lineWidth = ancho;
+    ctx.strokeStyle = '#eef1f6';
+    ctx.beginPath(); ctx.arc(cx, cy, R - ancho / 2, 0, Math.PI * 2); ctx.stroke();
+    F.forEach(function (f, k) {
+      if (!f.n) return;
+      var barrido = f.n / tot * Math.PI * 2;
+      ctx.strokeStyle = RES.CAT[k % RES.CAT.length];
+      ctx.beginPath();
+      ctx.arc(cx, cy, R - ancho / 2, ang + HUECO / 2, ang + barrido - HUECO / 2);
+      ctx.stroke();
+      ang += barrido;
+    });
+    /* Centro: % de la parte principal */
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#002343'; ctx.font = RES.F(700, 40);
+    ctx.fillText(g.centro.pct + '%', cx, cy - 8);
+    ctx.fillStyle = '#777777'; ctx.font = RES.F(500, 15);
+    ctx.fillText(RES.lineas(ctx, g.centro.label, 130, 1)[0], cx, cy + 24);
+    /* Leyenda */
+    var lx = M + 290, ly = cy - (n * FILA) / 2;
+    ctx.textAlign = 'left';
+    F.forEach(function (f, k) {
+      var yy = ly + k * FILA + FILA / 2;
+      ctx.fillStyle = RES.CAT[k % RES.CAT.length];
+      RES.redondo(ctx, lx, yy - 8, 16, 16, 4);
+      ctx.fillStyle = '#333333'; ctx.font = RES.F(500, 16);
+      ctx.fillText(RES.lineas(ctx, f.label, W - M - lx - 150, 1)[0], lx + 28, yy);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#333333'; ctx.font = RES.F(700, 16);
+      ctx.fillText(f.pct + '%', W - M - 48, yy);
+      ctx.fillStyle = '#777777'; ctx.font = RES.F(500, 15);
+      ctx.fillText(String(f.n), W - M, yy);
+      ctx.textAlign = 'left';
+    });
+    return L.c;
+  },
+
+  /* Escala 1–5: promedio y una columna por valor, con su % encima */
+  dibujarEscala: function (g) {
+    var ALTO = 220, conHero = g.promedio != null;
+    var L = RES.lienzo(g, ALTO + 40, conHero ? 70 : 0);
+    var ctx = L.ctx, y = L.y, M = L.M, W = L.W;
+    if (conHero) {
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = '#002343'; ctx.font = RES.F(700, 44);
+      ctx.fillText(g.promedio, M, y - 4);
+      var w = ctx.measureText(g.promedio).width;
+      ctx.fillStyle = '#777777'; ctx.font = RES.F(500, 16);
+      ctx.fillText('promedio de 5', M + w + 12, y + 22);
+      y += 70;
+    }
+    var n = g.filas.length, paso = (W - M * 2) / n, colW = Math.min(90, paso * 0.56);
+    var max = Math.max.apply(null, g.filas.map(function (f) { return f.n; })) || 1;
+    var base = y + ALTO;
+    ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(M, base + 0.5); ctx.lineTo(W - M, base + 0.5); ctx.stroke();
+    g.filas.forEach(function (f, i) {
+      var cxx = M + paso * i + paso / 2, x = cxx - colW / 2;
+      var h = f.n ? Math.max(4, f.n / max * (ALTO - 30)) : 0;
+      if (h) {
+        var top = base - h, r = Math.min(6, colW / 2);
+        ctx.fillStyle = RES.COLOR;
+        ctx.beginPath();
+        ctx.moveTo(x, base); ctx.lineTo(x, top + r); ctx.arcTo(x, top, x + r, top, r);
+        ctx.lineTo(x + colW - r, top); ctx.arcTo(x + colW, top, x + colW, top + r, r);
+        ctx.lineTo(x + colW, base); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#333333'; ctx.font = RES.F(700, 15); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText(f.pct + '%', cxx, top - 6);
+      }
+      ctx.fillStyle = '#555555'; ctx.font = RES.F(600, 16); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(f.label, cxx, base + 10);
+    });
+    ctx.textAlign = 'left';
+    return L.c;
+  },
+
+  /* Respuestas por día: línea con área y punto en cada día */
+  dibujarLinea: function (g) {
+    var ALTO = 260;
+    var L = RES.lienzo(g, ALTO + 34, 0);
+    var ctx = L.ctx, y = L.y, M = L.M, W = L.W;
+    var d = g.dias, n = d.length, base = y + ALTO;
+    var max = Math.max.apply(null, d.map(function (x) { return x.n; })) || 1;
+    var X = function (i) { return M + i * (W - M * 2) / Math.max(1, n - 1); };
+    var Y = function (v) { return y + 20 + (1 - v / max) * (ALTO - 20); };
+    ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(M, base + 0.5); ctx.lineTo(W - M, base + 0.5); ctx.stroke();
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(M, Y(max) + 0.5); ctx.lineTo(W - M, Y(max) + 0.5); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#777777'; ctx.font = RES.F(500, 13); ctx.textBaseline = 'bottom';
+    ctx.fillText('Máximo: ' + max, M, Y(max) - 6);
+    /* Área */
+    ctx.beginPath(); ctx.moveTo(X(0), base);
+    d.forEach(function (x, i) { ctx.lineTo(X(i), Y(x.n)); });
+    ctx.lineTo(X(n - 1), base); ctx.closePath();
+    ctx.fillStyle = 'rgba(80,108,255,.12)'; ctx.fill();
+    /* Línea */
+    ctx.beginPath();
+    d.forEach(function (x, i) { if (i) ctx.lineTo(X(i), Y(x.n)); else ctx.moveTo(X(i), Y(x.n)); });
+    ctx.strokeStyle = RES.COLOR; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.stroke();
+    /* Puntos con anillo blanco */
+    d.forEach(function (x, i) {
+      ctx.beginPath(); ctx.arc(X(i), Y(x.n), 5, 0, Math.PI * 2);
+      ctx.fillStyle = RES.COLOR; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+    });
+    ctx.fillStyle = '#777777'; ctx.font = RES.F(500, 13); ctx.textBaseline = 'top';
+    ctx.fillText(RES.fmtDia(d[0].ms, true), M, base + 10);
+    ctx.textAlign = 'right';
+    ctx.fillText(RES.fmtDia(d[n - 1].ms, true), W - M, base + 10);
+    ctx.textAlign = 'left';
+    return L.c;
   },
 
   dibujarColumnas: function (g) {
