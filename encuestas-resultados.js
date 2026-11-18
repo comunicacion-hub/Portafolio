@@ -145,18 +145,20 @@ var RES = {
           var meta = [];
           if (n != null) meta.push(n + (n === 1 ? ' respuesta' : ' respuestas'));
           if (e.estado === 'cerrada') meta.push('Cerrada');
+          /* Como un menú de macOS: la marca de la elegida va a la izquierda */
           return '<button class="encsel-it' + (on ? ' on' : '') + '" type="button" role="menuitemradio" aria-checked="' + on + '" ' +
             'onclick="RES.elegir(\'' + e._docId + '\')">' +
+            '<span class="encsel-check" aria-hidden="true">' + (on ? ico('check', 14, 2.8) : '') + '</span>' +
             '<span class="encsel-it-txt"><span>' + RCR.esc(e.titulo || 'Sin título') + '</span>' +
               (meta.length ? '<small>' + RCR.esc(meta.join(' · ')) + '</small>' : '') + '</span>' +
-            (on ? '<span class="encsel-check" aria-hidden="true">' + ico('check', 16, 2.6) + '</span>' : '') +
           '</button>';
         }).join('');
     }).join('');
     if (RES.sel) {
       html += '<div class="encsel-sep"></div>' +
         '<button class="encsel-it encsel-acc" type="button" role="menuitem" onclick="RES.actualizar()">' +
-          ico('refresh', 15, 2.2) + '<span>Actualizar respuestas</span></button>';
+          '<span class="encsel-check" aria-hidden="true">' + ico('refresh', 14, 2.4) + '</span>' +
+          '<span class="encsel-it-txt"><span>Actualizar respuestas</span></span></button>';
     }
     return html;
   },
@@ -385,7 +387,7 @@ var RES = {
   },
 
   stat: function (valor, label) {
-    return '<div class="res-stat"><strong>' + RCR.esc(valor) + '</strong><span>' + RCR.esc(label) + '</span></div>';
+    return '<div class="res-stat"><span>' + RCR.esc(label) + '</span><strong>' + RCR.esc(valor) + '</strong></div>';
   },
 
   /* Se mantiene para las cifras de las preguntas de número */
@@ -492,7 +494,7 @@ var RES = {
       return '<li data-tip="' + ENC.attr(f.label + ': ' + f.n + (f.n === 1 ? ' respuesta' : ' respuestas')) + '">' +
         '<i style="background:' + RES.CAT[k % RES.CAT.length] + '"></i>' +
         '<span class="res-ley-lbl">' + RCR.esc(f.label) + '</span>' +
-        '<strong>' + f.pct + '%</strong><span class="res-ley-n">' + f.n + '</span></li>';
+        '<span class="res-num-pct">' + f.pct + '%</span><span class="res-num-n">' + f.n + '</span></li>';
     }).join('');
     return '<div class="res-dona">' +
       '<div class="res-dona-graf">' +
@@ -581,7 +583,7 @@ var RES = {
         return '<div class="res-apil-fila">' +
           '<div class="res-apil-lbl">' + RCR.esc(f.label) + '</div>' +
           '<div class="res-apil-barra">' + (f.n ? segs : '<div class="res-apil-vacia">Sin respuestas</div>') + '</div>' +
-          '<div class="res-apil-n">' + f.n + '</div>' +
+          '<div class="res-num-n">' + f.n + '</div>' +
         '</div>';
       }).join('');
       return card(true, leyenda + '<div class="res-apil">' + filas + '</div>');
@@ -655,7 +657,7 @@ var RES = {
       return '<div class="res-barra" data-tip="' + ENC.attr(tip) + '">' +
           '<div class="res-barra-lbl">' + RCR.esc(f.label) + '</div>' +
           '<div class="res-barra-pista"><div class="res-barra-fill" style="width:' + (f.n ? Math.max(1.5, f.n / max * 100) : 0) + '%"></div></div>' +
-          '<div class="res-barra-val"><strong>' + f.pct + '%</strong><span>' + f.n + '</span></div>' +
+          '<div class="res-num-pct">' + f.pct + '%</div><div class="res-num-n">' + f.n + '</div>' +
         '</div>';
     }).join('') + '</div>');
   },

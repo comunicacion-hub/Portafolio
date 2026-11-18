@@ -64,7 +64,11 @@ ENC.nombreDe = function (correo) {
 };
 
 /* ==========================================================================
-   VENTANA "COMPARTIR CON PERSONAS"
+   VENTANA "COMPARTIR CON PERSONAS" (hoja estilo iOS / macOS)
+   · Campo de búsqueda con sugerencias de las personas registradas.
+   · Permiso con un control segmentado (Lector / Editor).
+   · Lista agrupada de quienes tienen acceso: el rol se cambia en un menú y
+     se quita con el botón rojo.
    ========================================================================== */
 ENC.compartirPersonas = function (id) {
   var e = ENC.datos.find(function (x) { return x._docId === id; });
@@ -77,47 +81,122 @@ ENC.compartirPersonas = function (id) {
     lista: lista,
     original: lista.map(function (x) { return x.correo; }),
     nuevos: [],
+    rolNuevo: 'lector',
     guardando: false
   };
 
   RCR.modal({
     id: 'm-enc-sh',
     persistente: true,
-    titulo: 'Compartir «' + (e.titulo || 'Encuesta') + '»',
-    sub: 'Las personas que agregues verán la encuesta, sus resultados y sus datos en su perfil.',
+    titulo: 'Compartir',
+    sub: RCR.esc(e.titulo || 'Encuesta'),
     cuerpo:
       '<div id="enc-sh-paso1">' +
-        '<div class="form-grp">' +
-          '<label class="form-lbl" for="enc-sh-correo">Agregar personas</label>' +
-          '<div class="enc-sh-add">' +
-            '<input class="form-inp" id="enc-sh-correo" list="enc-sh-usuarios" autocomplete="off" ' +
-              'placeholder="Nombre o correo" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ENC.shAgregar();}">' +
-            '<select class="form-inp" id="enc-sh-rol" aria-label="Permiso">' +
-              '<option value="lector">Lector</option><option value="editor">Editor</option>' +
-            '</select>' +
-            '<button class="btn btn-primary" type="button" onclick="ENC.shAgregar()">Agregar</button>' +
+        '<div class="sh-agregar">' +
+          '<div class="sh-campo">' +
+            '<span class="sh-campo-ico" aria-hidden="true">' + ico('search', 16, 2.2) + '</span>' +
+            '<input id="enc-sh-correo" autocomplete="off" spellcheck="false" placeholder="Nombre o correo" ' +
+              'aria-label="Agregar persona por nombre o correo" aria-controls="enc-sh-sug" ' +
+              'oninput="ENC.shSugerir()" onfocus="ENC.shSugerir()" onblur="ENC.shCerrarSug()" ' +
+              'onkeydown="ENC.shTecla(event)">' +
           '</div>' +
-          '<datalist id="enc-sh-usuarios"></datalist>' +
-          '<div class="form-help"><strong>Lector:</strong> ve la encuesta, sus resultados y sus datos. ' +
-            '<strong>Editor:</strong> además puede editarla y compartirla.</div>' +
+          '<div class="sh-seg" role="radiogroup" aria-label="Permiso para la persona que agregas">' +
+            '<button type="button" role="radio" aria-checked="true" class="on" data-rol="lector" onclick="ENC.shRolNuevo(\'lector\')">Lector</button>' +
+            '<button type="button" role="radio" aria-checked="false" data-rol="editor" onclick="ENC.shRolNuevo(\'editor\')">Editor</button>' +
+          '</div>' +
+          '<button class="btn btn-primary sh-btn-agregar" type="button" onclick="ENC.shAgregar()">' + ico('plus', 15, 2.6) + 'Agregar</button>' +
+          '<div class="sh-sug" id="enc-sh-sug" role="listbox" hidden></div>' +
         '</div>' +
-        '<div class="form-lbl">Personas con acceso</div>' +
-        '<div id="enc-sh-lista"></div>' +
+        '<p class="sh-nota"><b>Lector</b> ve la encuesta, sus resultados y sus datos. <b>Editor</b> además puede editarla y compartirla.</p>' +
+        '<div class="sh-titulo">Personas con acceso</div>' +
+        '<div class="sh-lista" id="enc-sh-lista"></div>' +
       '</div>',
     acciones:
       '<button class="btn btn-glass" onclick="RCR.cerrarModal(\'m-enc-sh\')">Cancelar</button>' +
       '<button class="btn btn-primary" id="enc-sh-guardar" onclick="ENC.shGuardar()">Guardar</button>'
   });
+  var ov = document.getElementById('m-enc-sh');
+  if (ov) ov.classList.add('hoja-ios');
   ENC.shRender();
 
-  ENC.cargarUsuarios().then(function (us) {
-    var dl = document.getElementById('enc-sh-usuarios');
-    if (!dl || !us) return;
-    dl.innerHTML = us.filter(function (u) { return u.correo !== RCR.user.correo; }).map(function (u) {
-      return '<option value="' + ENC.attr(u.correo) + '">' + RCR.esc(u.nombre) + '</option>';
-    }).join('');
-    ENC.shRender();   // con los nombres oficiales
+  ENC.cargarUsuarios().then(function () { ENC.shRender(); });   // con los nombres oficiales
+};
+
+ENC.shRolNuevo = function (rol) {
+  if (!ENC.sh) return;
+  ENC.sh.rolNuevo = rol === 'editor' ? 'editor' : 'lector';
+  document.querySelectorAll('#m-enc-sh .sh-seg button').forEach(function (b) {
+    var on = b.getAttribute('data-rol') === ENC.sh.rolNuevo;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-checked', String(on));
   });
+};
+
+/* Personas sugeridas mientras se escribe (no la propia, ni quien creó la
+   encuesta, ni quien ya tiene acceso) */
+ENC.shCandidatos = function (texto) {
+  var v = String(texto || '').trim().toLowerCase();
+  if (!v || !ENC.usuarios || !ENC.sh) return [];
+  var e = ENC.datos.find(function (x) { return x._docId === ENC.sh.id; }) || {};
+  var ya = ENC.sh.lista.map(function (p) { return p.correo; }).concat([RCR.user.correo, e.creadoPor]);
+  return ENC.usuarios.filter(function (u) {
+    return ya.indexOf(u.correo) < 0 && (u.nombre.toLowerCase().indexOf(v) >= 0 || u.correo.indexOf(v) >= 0);
+  }).slice(0, 5);
+};
+
+ENC.shSugerir = function () {
+  var box = document.getElementById('enc-sh-sug');
+  var inp = document.getElementById('enc-sh-correo');
+  if (!box || !inp) return;
+  var cs = ENC.shCandidatos(inp.value);
+  ENC.sh.sugIdx = 0;
+  if (!cs.length) { box.hidden = true; box.innerHTML = ''; return; }
+  box.innerHTML = cs.map(function (u, k) {
+    return '<button type="button" role="option" class="sh-sug-it' + (k === 0 ? ' on' : '') + '" ' +
+      'onmousedown="event.preventDefault()" onclick="ENC.shElegirSug(\'' + ENC.attr(u.correo) + '\')">' +
+      '<span class="sh-ava">' + RCR.esc(RCR.iniciales(u.nombre)) + '</span>' +
+      '<span class="sh-info"><strong>' + RCR.esc(u.nombre) + '</strong><small>' + RCR.esc(u.correo) + '</small></span>' +
+    '</button>';
+  }).join('');
+  box.hidden = false;
+};
+
+ENC.shCerrarSug = function () {
+  setTimeout(function () {
+    var box = document.getElementById('enc-sh-sug');
+    if (box) box.hidden = true;
+  }, 120);
+};
+
+ENC.shElegirSug = function (correo) {
+  var inp = document.getElementById('enc-sh-correo');
+  if (inp) inp.value = correo;
+  ENC.shAgregar();
+};
+
+/* Flechas para moverse por las sugerencias, Enter para agregar, Esc para cerrar */
+ENC.shTecla = function (ev) {
+  var box = document.getElementById('enc-sh-sug');
+  var its = box && !box.hidden ? box.querySelectorAll('.sh-sug-it') : [];
+  if ((ev.key === 'ArrowDown' || ev.key === 'ArrowUp') && its.length) {
+    ev.preventDefault();
+    var k = (ENC.sh.sugIdx || 0) + (ev.key === 'ArrowDown' ? 1 : -1);
+    ENC.sh.sugIdx = (k + its.length) % its.length;
+    its.forEach(function (b, i) { b.classList.toggle('on', i === ENC.sh.sugIdx); });
+    return;
+  }
+  if (ev.key === 'Escape' && its.length) { ev.preventDefault(); ev.stopPropagation(); box.hidden = true; return; }
+  if (ev.key !== 'Enter') return;
+  ev.preventDefault();
+  var inp = document.getElementById('enc-sh-correo');
+  var v = String(inp.value || '').trim().toLowerCase();
+  var exacto = (ENC.usuarios || []).some(function (u) { return u.correo === v || u.nombre.toLowerCase() === v; });
+  if (!exacto && its.length) {
+    var cs = ENC.shCandidatos(inp.value);
+    var u = cs[ENC.sh.sugIdx || 0];
+    if (u) inp.value = u.correo;
+  }
+  ENC.shAgregar();
 };
 
 ENC.shRender = function () {
@@ -125,34 +204,35 @@ ENC.shRender = function () {
   if (!box || !ENC.sh) return;
   var e = ENC.datos.find(function (x) { return x._docId === ENC.sh.id; }) || {};
   var fila = function (correo, nombre, derecha, nuevo) {
-    return '<div class="enc-sh-fila">' +
-      '<div class="enc-sh-ava">' + RCR.esc(RCR.iniciales(nombre || correo)) + '</div>' +
-      '<div class="enc-sh-info"><strong><span class="enc-sh-nom">' + RCR.esc(nombre || correo) + '</span>' +
-        (correo === RCR.user.correo ? '<span class="enc-sh-tu">(tú)</span>' : '') +
-        (nuevo ? '<span class="enc-sh-nuevo">Nuevo</span>' : '') + '</strong>' +
-        '<small>' + RCR.esc(correo) + '</small></div>' +
+    return '<div class="sh-fila">' +
+      '<span class="sh-ava">' + RCR.esc(RCR.iniciales(nombre || correo)) + '</span>' +
+      '<span class="sh-info"><strong><span class="sh-nom">' + RCR.esc(nombre || correo) + '</span>' +
+        (correo === RCR.user.correo ? '<span class="sh-tu">(tú)</span>' : '') +
+        (nuevo ? '<span class="sh-nuevo">Nuevo</span>' : '') + '</strong>' +
+        '<small>' + RCR.esc(correo) + '</small></span>' +
       derecha +
     '</div>';
   };
 
-  var html = fila(e.creadoPor || '', e.creadoPorNombre || e.creadoPor, '<span class="enc-sh-fijo">Propietario</span>', false);
+  var html = fila(e.creadoPor || '', e.creadoPorNombre || e.creadoPor, '<span class="sh-fijo">Propietario</span>', false);
   html += ENC.sh.lista.map(function (p, i) {
     var esNuevo = ENC.sh.original.indexOf(p.correo) < 0;
-    return fila(p.correo, p.nombre || ENC.nombreDe(p.correo),
-      '<select class="form-inp enc-sh-sel" aria-label="Permiso de ' + ENC.attr(p.nombre || p.correo) + '" onchange="ENC.shRol(' + i + ',this.value)">' +
+    var nom = p.nombre || ENC.nombreDe(p.correo);
+    return fila(p.correo, nom,
+      '<label class="sh-rol"><select aria-label="Permiso de ' + ENC.attr(nom) + '" onchange="ENC.shRol(' + i + ',this.value)">' +
         '<option value="lector"' + (p.rol !== 'editor' ? ' selected' : '') + '>Lector</option>' +
         '<option value="editor"' + (p.rol === 'editor' ? ' selected' : '') + '>Editor</option>' +
-      '</select>' +
-      '<button class="btn-ico danger" type="button" title="Quitar acceso" aria-label="Quitar acceso a ' + ENC.attr(p.nombre || p.correo) + '" ' +
-        'onclick="ENC.shQuitar(' + i + ')">' + ico('x', 15) + '</button>', esNuevo);
+      '</select><span class="sh-rol-chev" aria-hidden="true">' + ico('chevronDown', 13, 2.6) + '</span></label>' +
+      '<button class="sh-quitar" type="button" title="Quitar acceso" aria-label="Quitar acceso a ' + ENC.attr(nom) + '" ' +
+        'onclick="ENC.shQuitar(' + i + ')"><span aria-hidden="true"></span></button>', esNuevo);
   }).join('');
-  if (!ENC.sh.lista.length) html += '<div class="enc-sh-vacio">Todavía no la compartiste con nadie.</div>';
+  if (!ENC.sh.lista.length) html += '<div class="sh-vacio">Todavía no la compartiste con nadie.</div>';
   box.innerHTML = html;
 };
 
 ENC.shAgregar = function () {
   var inp = document.getElementById('enc-sh-correo');
-  var rol = (document.getElementById('enc-sh-rol') || {}).value === 'editor' ? 'editor' : 'lector';
+  var rol = (ENC.sh && ENC.sh.rolNuevo) === 'editor' ? 'editor' : 'lector';
   var v = String((inp && inp.value) || '').trim();
   if (!v) { RCR.toast('Escribe un nombre o un correo'); return; }
 
@@ -178,6 +258,8 @@ ENC.shAgregar = function () {
     fecha: new Date().toISOString()
   });
   inp.value = '';
+  var box = document.getElementById('enc-sh-sug');
+  if (box) box.hidden = true;
   inp.focus();
   ENC.shRender();
 };
@@ -279,13 +361,13 @@ ENC.shGuardar = async function () {
   var modal = document.getElementById('m-enc-sh');
   if (!modal) return;
   modal.querySelector('.modal-body').innerHTML =
-    '<div class="enc-sh-listo">' +
-      '<div class="resp-estado-ico">' + ico('check', 26) + '</div>' +
+    '<div class="sh-listo">' +
+      '<div class="sh-listo-ico">' + ico('check', 26, 2.6) + '</div>' +
       '<h3>Encuesta compartida</h3>' +
       '<p>' + RCR.esc(nombres.length === 1 ? nombres[0] : nombres.slice(0, -1).join(', ') + ' y ' + nombres[nombres.length - 1]) +
         (nombres.length === 1 ? ' ya la ve' : ' ya la ven') + ' en «Compartidas conmigo»' +
         (avisoFallo ? '.' : ' y ' + (nombres.length === 1 ? 'tiene' : 'tienen') + ' un aviso en la campana de Mi RCR.') + '</p>' +
-      '<p class="enc-sh-gm">¿Les avisas también por Gmail? Se abrirá un correo ya escrito; solo tienes que enviarlo.</p>' +
+      '<p class="sh-gm">¿Les avisas también por Gmail? Se abrirá un correo ya escrito; solo tienes que enviarlo.</p>' +
     '</div>';
   modal.querySelector('.modal-footer').innerHTML =
     '<button class="btn btn-glass" onclick="RCR.cerrarModal(\'m-enc-sh\')">Ahora no</button>' +
