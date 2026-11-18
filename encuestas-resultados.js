@@ -89,18 +89,18 @@ var RES = {
         '<button class="btn-add topbar-add encsel-btn' + (e ? ' con' : '') + '" id="encsel-btn" type="button" ' +
           'aria-haspopup="menu" aria-expanded="false" title="' + ENC.attr(e ? 'Encuesta: ' + tit : 'Elegir encuesta') + '" ' +
           'aria-label="' + ENC.attr(e ? 'Encuesta: ' + tit + '. Cambiar' : 'Elegir encuesta') + '" onclick="RES.toggleMenu(event)">' +
-          ico('encuesta', 19, 2.1) +
+          ico('encuesta', 19, 1.75) +
           (e ? '<span class="encsel-tit">' + RCR.esc(tit) + '</span><span class="encsel-chev" aria-hidden="true">' + ico('chevronDown', 14, 2.6) + '</span>' : '') +
         '</button>' +
         '<div class="encsel-menu" id="encsel-menu" role="menu" hidden></div>' +
       '</div>';
     if (e && ENC.compartirPersonas && ENC.puedeEditarEnc(e)) {
       html += '<button class="btn-add topbar-add" type="button" title="Compartir con personas" aria-label="Compartir con personas" ' +
-        'onclick="ENC.compartirPersonas(RES.sel)">' + ico('users', 18, 2.2) + '</button>';
+        'onclick="ENC.compartirPersonas(RES.sel)">' + ico('users', 18, 1.75) + '</button>';
     }
     if (e && RCR.activo === 'datos-encuesta') {
       html += '<button class="btn-add topbar-add" id="dat-excel" type="button" title="Descargar en Excel" aria-label="Descargar en Excel" ' +
-        'onclick="DAT.excel()" disabled>' + ico('download', 18, 2.2) + '</button>';
+        'onclick="DAT.excel()" disabled>' + ico('download', 18, 1.75) + '</button>';
     }
     slot.innerHTML = html;
     if (busca) DAT.buscaListo();

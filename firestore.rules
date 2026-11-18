@@ -89,9 +89,10 @@ service cloud.firestore {
 
       /* Respuestas: cualquiera puede enviar una (sin sesión) si la encuesta
          está abierta y con el formato exacto; las leen solo quienes ven la
-         encuesta y las borran quienes la pueden editar. Nadie las modifica.
-         La segunda condición de "create" permite que quien edita la encuesta
-         mueva aquí las respuestas del formato antiguo. */
+         encuesta y las borran o corrigen quienes la pueden editar (al
+         corregir solo cambian "respuestas" y la marca "editado"; la fecha de
+         envío no se toca). La segunda condición de "create" permite que quien
+         edita la encuesta mueva aquí las respuestas del formato antiguo. */
       match /Respuestas/{rid} {
         allow create: if (request.resource.data.keys().hasOnly(['respuestas', 'enviado'])
                           && request.resource.data.respuestas is map
@@ -100,7 +101,10 @@ service cloud.firestore {
                       || puedeEditarEnc(encuesta(id));
         allow read: if puedeVerEnc(encuesta(id));
         allow delete: if puedeEditarEnc(encuesta(id));
-        allow update: if false;
+        allow update: if puedeEditarEnc(encuesta(id))
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['respuestas', 'editado'])
+                      && request.resource.data.respuestas is map
+                      && request.resource.data.editado.por == miCorreo();
       }
     }
 

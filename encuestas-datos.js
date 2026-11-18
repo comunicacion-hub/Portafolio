@@ -89,7 +89,7 @@ var DAT = {
       '<div class="dat-busca-gota">' +
         '<button class="dat-busca-ico" id="dat-busca-btn" type="button" title="Buscar" ' +
           'aria-label="Buscar en las respuestas" aria-expanded="false" aria-controls="dat-buscar" ' +
-          'onclick="DAT.abrirBusca()">' + ico('search', 18, 2.3) + '</button>' +
+          'onclick="DAT.abrirBusca()">' + ico('search', 18, 1.75) + '</button>' +
         '<input id="dat-buscar" type="search" enterkeyhint="search" autocomplete="off" spellcheck="false" tabindex="-1" ' +
           'placeholder="Buscar en las respuestas" aria-label="Buscar en las respuestas" value="' + ENC.attr(DAT.q) + '" ' +
           'oninput="DAT.onBuscar(this.value)" onkeydown="DAT.teclaBusca(event)" onblur="DAT.blurBusca()">' +
@@ -346,41 +346,380 @@ var DAT = {
       RES.nombreArchivo((RES.encuesta() || {}).titulo, 'respuesta ' + n + ' P' + pn));
   },
 
-  /* ── Ficha de una respuesta ────────────────────────────────────────────── */
+  /* ==========================================================================
+     FICHA DE UNA RESPUESTA (hoja estilo iOS / macOS)
+     · Ver: lista agrupada por secciones, una fila por pregunta.
+     · Editar: cada respuesta se corrige con el control de su tipo. Las
+       preguntas que dejan de aplicar por una condición no se guardan.
+     ========================================================================== */
+  ficha: null,      // { rid, n, modo: 'ver'|'editar', vals, original, sucio, guardando }
+
+  respuesta: function (rid) {
+    return (RES.cache[RES.sel] || []).find(function (r) { return r._docId === rid; }) || null;
+  },
+
   abrirFicha: function (rid) {
     var enc = RES.encuesta(), resps = RES.cache[RES.sel] || [];
     var i = resps.findIndex(function (r) { return r._docId === rid; });
     if (!enc || i < 0) return;
-    var r = resps[i], resp = r.respuestas || {}, n = resps.length - i;
-
-    var cuerpo = ENC.soloPreguntas(enc.preguntas).map(function (q, k) {
-      var v = resp[q.id];
-      return '<div class="dat-ficha-item">' +
-        '<div class="dat-ficha-q">P' + (k + 1) + '. ' + RCR.esc(q.texto) + '</div>' +
-        (RES.vacio(v)
-          ? '<div class="dat-ficha-v vacio">Sin respuesta</div>'
-          : ENC.esImagen(v)
-            ? '<button type="button" class="dat-ficha-img" title="Ver en grande" ' +
-                'onclick="DAT.verFoto(\'' + rid + '\',\'' + q.id + '\',' + n + ',' + (k + 1) + ')"><img src="' + v + '" alt="Imagen adjunta"></button>'
-            : q.tipo === 'cuadricula'
-              ? '<ul class="dat-ficha-grid">' + (q.filas || []).map(function (f) {
-                  return '<li><span>' + RCR.esc(f.t) + '</span><strong>' + RCR.esc(v[f.id] != null ? v[f.id] : '—') + '</strong></li>';
-                }).join('') + '</ul>'
-              : '<div class="dat-ficha-v">' + RCR.esc(ENC.fmtValor(v)) + '</div>') +
-      '</div>';
-    }).join('');
-
+    DAT.ficha = { rid: rid, n: resps.length - i, modo: 'ver' };
     RCR.modal({
       id: 'm-dat-ficha',
-      titulo: 'Respuesta #' + n,
-      sub: RCR.esc(DAT.fmtFechaHora(RES.ms(r.enviado)) || 'Sin fecha'),
-      cuerpo: cuerpo,
-      acciones:
-        (ENC.puedeEditarEnc(enc)
-          ? '<button class="btn btn-glass dat-borrar" onclick="DAT.pedirBorrar(\'' + rid + '\')">' + ico('trash', 15) + 'Eliminar</button>'
-          : '') +
-        '<button class="btn btn-primary" onclick="RCR.cerrarModal(\'m-dat-ficha\')">Cerrar</button>'
+      titulo: 'Respuesta #' + DAT.ficha.n,
+      sub: ' ',
+      cuerpo: '',
+      acciones: ' ',
+      onCerrar: DAT.cerrarFicha
     });
+    var ov = document.getElementById('m-dat-ficha');
+    if (ov) ov.classList.add('hoja-ios', 'hoja-ficha');
+    DAT.pintarFicha();
+
+    /* Esc mientras se edita: vuelve a la vista (o avisa si hay cambios) */
+    if (!DAT._escFicha) {
+      DAT._escFicha = function (e) {
+        var f = DAT.ficha;
+        if (e.key !== 'Escape' || !f || f.modo !== 'editar' || !document.getElementById('m-dat-ficha')) return;
+        e.stopPropagation(); e.preventDefault();
+        if (f.sucio) RCR.toast('Guarda o cancela los cambios');
+        else DAT.cancelarEdicion();
+      };
+      window.addEventListener('keydown', DAT._escFicha, true);
+    }
+  },
+
+  cerrarFicha: function () {
+    var f = DAT.ficha;
+    if (f && f.modo === 'editar' && f.sucio) { RCR.toast('Guarda o cancela los cambios'); return; }
+    DAT.ficha = null;
+    RCR.cerrarModal('m-dat-ficha');
+  },
+
+  pintarFicha: function () {
+    var f = DAT.ficha, ov = document.getElementById('m-dat-ficha');
+    var enc = RES.encuesta(), r = f && DAT.respuesta(f.rid);
+    if (!ov || !enc || !r) return;
+    var editar = f.modo === 'editar';
+    ov.classList.toggle('editando', editar);
+    ov.querySelector('.modal-header h2').textContent = (editar ? 'Editar respuesta #' : 'Respuesta #') + f.n;
+    var sub = DAT.fmtFechaHora(RES.ms(r.enviado)) || 'Sin fecha';
+    if (r.editado) sub += ' · Editada' + (r.editado.nombre ? ' por ' + r.editado.nombre : '');
+    ov.querySelector('.modal-header p').textContent = sub;
+    var body = ov.querySelector('.modal-body');
+    body.innerHTML = DAT.fichaCuerpo(enc, r, editar);
+    body.scrollTop = 0;
+    ov.querySelector('.modal-footer').innerHTML = DAT.fichaPie(enc, r, editar);
+  },
+
+  /* Grupos como en Ajustes de iOS: un título por sección y sus filas */
+  fichaCuerpo: function (enc, r, editar) {
+    var vals = editar ? DAT.ficha.vals : (r.respuestas || {});
+    var vis = ENC.visibles(enc.preguntas, vals);
+    var grupos = [], g = { titulo: '', filas: [] }, k = 0, ns = 0;
+    (enc.preguntas || []).forEach(function (q) {
+      if (ENC.esSeccion(q)) {
+        ns++;
+        if (g.filas.length) grupos.push(g);
+        g = { titulo: (q.texto || '').trim() || 'Sección ' + ns, filas: [] };
+        return;
+      }
+      g.filas.push(DAT.fichaFila(q, k++, vals[q.id], vis[q.id] !== false, editar, r));
+    });
+    if (g.filas.length) grupos.push(g);
+    return grupos.map(function (x) {
+      return (x.titulo ? '<div class="fi-sec">' + RCR.esc(x.titulo) + '</div>' : '') +
+        '<div class="fi-grupo">' + x.filas.join('') + '</div>';
+    }).join('');
+  },
+
+  fichaFila: function (q, k, v, visible, editar, r) {
+    return '<div class="fi-fila' + (visible ? '' : ' no-aplica') + '" id="fi-f-' + k + '">' +
+      '<div class="fi-q"><span class="fi-n">P' + (k + 1) + '</span><span>' + RCR.esc(q.texto || 'Pregunta sin texto') + '</span></div>' +
+      (editar
+        ? '<div class="fi-c" id="fi-c-' + k + '">' + DAT.control(q, k) + '</div>' +
+          '<div class="fi-nota">No aplica con las respuestas anteriores</div>'
+        : DAT.valorHtml(q, k, v, visible, r)) +
+    '</div>';
+  },
+
+  /* Valor en modo ver */
+  valorHtml: function (q, k, v, visible, r) {
+    if (RES.vacio(v)) return '<div class="fi-v vacio">' + (visible ? 'Sin respuesta' : 'No aplica') + '</div>';
+    if (ENC.esImagen(v)) {
+      return '<button type="button" class="fi-img" title="Ver en grande" aria-label="Ver la imagen en grande" ' +
+        'onclick="DAT.verFoto(\'' + r._docId + '\',\'' + q.id + '\',' + DAT.ficha.n + ',' + (k + 1) + ')"><img src="' + v + '" alt="Imagen adjunta"></button>';
+    }
+    if (q.tipo === 'cuadricula' && typeof v === 'object' && !Array.isArray(v)) {
+      return '<div class="fi-sub">' + (q.filas || []).map(function (f) {
+        return '<div class="fi-sub-fila"><span>' + RCR.esc(f.t) + '</span><strong>' + RCR.esc(v[f.id] != null ? v[f.id] : '—') + '</strong></div>';
+      }).join('') + '</div>';
+    }
+    if (q.tipo === 'multiple' && Array.isArray(v)) {
+      return '<div class="fi-chips">' + v.map(function (o) { return '<span class="fi-chip">' + RCR.esc(o) + '</span>'; }).join('') + '</div>';
+    }
+    if (q.tipo === 'escala' && isFinite(Number(v))) {
+      var x = Number(v), pts = '';
+      for (var i = 1; i <= 5; i++) pts += '<i' + (i <= x ? ' class="on"' : '') + '></i>';
+      return '<div class="fi-escala"><span class="fi-puntos" aria-hidden="true">' + pts + '</span>' +
+        '<strong>' + x + '</strong><small>de 5</small></div>';
+    }
+    return '<div class="fi-v">' + RCR.esc(ENC.fmtValor(v)) + '</div>';
+  },
+
+  fichaPie: function (enc, r, editar) {
+    if (editar) {
+      return '<button class="btn btn-glass" type="button" onclick="DAT.cancelarEdicion()">Cancelar</button>' +
+        '<button class="btn btn-primary" type="button" id="fi-guardar" onclick="DAT.guardarEdicion()">Guardar</button>';
+    }
+    if (!ENC.puedeEditarEnc(enc)) {
+      return '<button class="btn btn-glass" type="button" onclick="DAT.cerrarFicha()">Cerrar</button>';
+    }
+    return '<button class="btn btn-glass fi-borrar" type="button" onclick="DAT.pedirBorrar(\'' + r._docId + '\')">' +
+        ico('trash', 16, 1.9) + 'Eliminar</button>' +
+      (r._legado
+        ? '<button class="btn btn-glass" type="button" onclick="DAT.cerrarFicha()">Cerrar</button>'
+        : '<button class="btn btn-primary" type="button" onclick="DAT.editarFicha()">' + ico('edit', 16, 1.9) + 'Editar</button>');
+  },
+
+  /* ── Edición ───────────────────────────────────────────────────────────── */
+  editarFicha: function () {
+    var f = DAT.ficha, enc = RES.encuesta(), r = f && DAT.respuesta(f.rid);
+    if (!r || !enc) return;
+    if (!ENC.puedeEditarEnc(enc)) { RCR.toast('Solo el propietario o un editor puede editar respuestas'); return; }
+    f.vals = JSON.parse(JSON.stringify(r.respuestas || {}));
+    f.original = JSON.parse(JSON.stringify(r.respuestas || {}));
+    f.sucio = false;
+    f.modo = 'editar';
+    DAT.pintarFicha();
+  },
+
+  cancelarEdicion: function () {
+    var f = DAT.ficha;
+    if (!f) return;
+    f.modo = 'ver'; f.vals = f.original = null; f.sucio = false;
+    DAT.pintarFicha();
+  },
+
+  edPregunta: function (k) {
+    return ENC.soloPreguntas((RES.encuesta() || {}).preguntas)[k] || null;
+  },
+
+  /* Opciones de un control (y la respuesta guardada si ya no es una opción,
+     para no perderla sin querer) */
+  edOpciones: function (q, v) {
+    var ops = ENC.valoresDe(q).slice();
+    if (q.tipo === 'unica' && v != null && v !== '' && ops.indexOf(String(v)) < 0) ops.push(String(v));
+    if (q.tipo === 'multiple' && Array.isArray(v)) v.forEach(function (o) { if (ops.indexOf(o) < 0) ops.push(o); });
+    return ops;
+  },
+
+  /* Control de cada tipo de pregunta */
+  control: function (q, k) {
+    var v = DAT.ficha.vals[q.id], t = q.tipo;
+    var lbl = ' aria-label="' + ENC.attr('P' + (k + 1) + '. ' + (q.texto || '')) + '"';
+    if (t === 'corto') {
+      return '<input class="fi-inp" type="text"' + lbl + ' value="' + ENC.attr(v == null ? '' : v) + '" oninput="DAT.edTxt(' + k + ',this.value)">';
+    }
+    if (t === 'largo') {
+      return '<textarea class="fi-inp" rows="3"' + lbl + ' oninput="DAT.edTxt(' + k + ',this.value)">' + RCR.esc(v == null ? '' : v) + '</textarea>';
+    }
+    if (t === 'numero') {
+      return '<input class="fi-inp fi-num" type="text" inputmode="decimal"' + lbl + ' value="' +
+        ENC.attr(v == null ? '' : String(v).replace('.', ',')) + '" oninput="DAT.edTxt(' + k + ',this.value)">';
+    }
+    if (t === 'sino' || t === 'escala') {
+      return '<div class="fi-seg' + (t === 'escala' ? ' escala' : '') + '" role="radiogroup"' + lbl + '>' +
+        DAT.edOpciones(q, v).map(function (op, j) {
+          var on = v != null && String(v) === op;
+          return '<button type="button" role="radio" aria-checked="' + on + '"' + (on ? ' class="on"' : '') +
+            ' onclick="DAT.edOp(' + k + ',' + j + ')">' + RCR.esc(op) + '</button>';
+        }).join('') + '</div>';
+    }
+    if (t === 'unica' || t === 'multiple') {
+      var max = ENC.maxValido(q);
+      return '<div class="fi-chips edit" role="' + (t === 'unica' ? 'radiogroup' : 'group') + '"' + lbl + '>' +
+        DAT.edOpciones(q, v).map(function (op, j) {
+          var on = t === 'multiple' ? (Array.isArray(v) && v.indexOf(op) >= 0) : (v != null && String(v) === op);
+          return '<button type="button" class="fi-chip' + (on ? ' on' : '') + '" role="' + (t === 'unica' ? 'radio' : 'checkbox') + '" ' +
+            'aria-checked="' + on + '" onclick="DAT.edOp(' + k + ',' + j + ')">' +
+            (on ? ico('check', 13, 2.6) : '') + '<span>' + RCR.esc(op) + '</span></button>';
+        }).join('') + '</div>' +
+        (t === 'multiple' ? '<div class="fi-ayuda">' + (max ? 'Elige hasta ' + max : 'Puedes elegir varias') + '</div>' : '');
+    }
+    if (t === 'cuadricula') {
+      var g = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+      return '<div class="fi-sub">' + (q.filas || []).map(function (f, fi) {
+        return '<div class="fi-sub-fila"><span>' + RCR.esc(f.t) + '</span>' +
+          '<label class="fi-pop"><select aria-label="' + ENC.attr(f.t) + '" onchange="DAT.edGrid(' + k + ',' + fi + ',this.value)">' +
+            '<option value="">—</option>' +
+            (q.columnas || []).map(function (c) {
+              return '<option value="' + ENC.attr(c) + '"' + (g[f.id] === c ? ' selected' : '') + '>' + RCR.esc(c) + '</option>';
+            }).join('') +
+          '</select><span class="fi-pop-chev" aria-hidden="true">' + ico('chevronDown', 12, 2.4) + '</span></label></div>';
+      }).join('') + '</div>';
+    }
+    if (t === 'imagen') {
+      var antes = DAT.ficha.original[q.id];
+      if (ENC.esImagen(v)) {
+        return '<div class="fi-img-ed"><span class="fi-img"><img src="' + v + '" alt="Imagen adjunta"></span>' +
+          '<button type="button" class="fi-link rojo" onclick="DAT.edImagen(' + k + ',false)">Quitar imagen</button></div>';
+      }
+      return ENC.esImagen(antes)
+        ? '<div class="fi-img-ed"><span class="fi-v vacio">Imagen quitada</span>' +
+            '<button type="button" class="fi-link" onclick="DAT.edImagen(' + k + ',true)">Deshacer</button></div>'
+        : '<div class="fi-v vacio">Sin imagen</div>';
+    }
+    return '<div class="fi-v">' + RCR.esc(ENC.fmtValor(v)) + '</div>';
+  },
+
+  edTxt: function (k, val) {
+    var q = DAT.edPregunta(k);
+    if (!q || !DAT.ficha) return;
+    DAT.ficha.vals[q.id] = val;
+    DAT.ficha.sucio = true;
+  },
+
+  /* Sí/No, escala y opción única: tocar la elegida otra vez la borra.
+     Opción múltiple: respeta el máximo que se puede elegir. */
+  edOp: function (k, j) {
+    var q = DAT.edPregunta(k), f = DAT.ficha;
+    if (!q || !f) return;
+    var v = f.vals[q.id], ops = DAT.edOpciones(q, v), op = ops[j];
+    if (op == null) return;
+    if (q.tipo === 'multiple') {
+      var arr = Array.isArray(v) ? v.slice() : [];
+      var i = arr.indexOf(op);
+      if (i >= 0) arr.splice(i, 1);
+      else {
+        var max = ENC.maxValido(q);
+        if (max && arr.length >= max) { RCR.toast('Se pueden elegir hasta ' + max); return; }
+        arr.push(op);
+      }
+      arr.sort(function (a, b) { return ops.indexOf(a) - ops.indexOf(b); });
+      f.vals[q.id] = arr;
+    } else {
+      f.vals[q.id] = (v != null && String(v) === op) ? null : (q.tipo === 'escala' ? Number(op) : op);
+    }
+    f.sucio = true;
+    DAT.edRepintar(k);
+    DAT.edVisibles();
+  },
+
+  edGrid: function (k, fi, val) {
+    var q = DAT.edPregunta(k), f = DAT.ficha;
+    var fila = q && (q.filas || [])[fi];
+    if (!fila || !f) return;
+    var actual = f.vals[q.id];
+    var g = Object.assign({}, (actual && typeof actual === 'object' && !Array.isArray(actual)) ? actual : {});
+    if (val) g[fila.id] = val; else delete g[fila.id];
+    f.vals[q.id] = g;
+    f.sucio = true;
+  },
+
+  edImagen: function (k, conservar) {
+    var q = DAT.edPregunta(k), f = DAT.ficha;
+    if (!q || !f) return;
+    f.vals[q.id] = conservar ? f.original[q.id] : null;
+    f.sucio = true;
+    DAT.edRepintar(k);
+  },
+
+  edRepintar: function (k) {
+    var q = DAT.edPregunta(k), el = document.getElementById('fi-c-' + k);
+    if (q && el) el.innerHTML = DAT.control(q, k);
+  },
+
+  /* Al cambiar una respuesta, otras preguntas pueden dejar de aplicar */
+  edVisibles: function () {
+    var enc = RES.encuesta();
+    if (!enc || !DAT.ficha) return;
+    var vis = ENC.visibles(enc.preguntas, DAT.ficha.vals);
+    ENC.soloPreguntas(enc.preguntas).forEach(function (q, k) {
+      var el = document.getElementById('fi-f-' + k);
+      if (el) el.classList.toggle('no-aplica', vis[q.id] === false);
+    });
+  },
+
+  /* Texto canónico (claves ordenadas) para saber si algo cambió */
+  canon: function (v) {
+    if (Array.isArray(v)) return '[' + v.map(DAT.canon).join(',') + ']';
+    if (v && typeof v === 'object') {
+      return '{' + Object.keys(v).sort().map(function (key) { return JSON.stringify(key) + ':' + DAT.canon(v[key]); }).join(',') + '}';
+    }
+    return JSON.stringify(v);
+  },
+
+  guardarEdicion: async function () {
+    var f = DAT.ficha;
+    if (!f || f.modo !== 'editar' || f.guardando) return;
+    var enc = RES.encuesta(), encId = RES.sel, r = DAT.respuesta(f.rid);
+    if (!enc || !r) return;
+    if (!ENC.puedeEditarEnc(enc)) { RCR.toast('Solo el propietario o un editor puede editar respuestas'); return; }
+
+    var ps = ENC.soloPreguntas(enc.preguntas), vis = ENC.visibles(enc.preguntas, f.vals);
+    var ids = {}, out = {};
+    ps.forEach(function (q) { ids[q.id] = true; });
+    /* Se conservan las respuestas de preguntas que ya no están en la encuesta */
+    Object.keys(r.respuestas || {}).forEach(function (id) { if (!ids[id]) out[id] = r.respuestas[id]; });
+
+    for (var k = 0; k < ps.length; k++) {
+      var q = ps[k], v = f.vals[q.id];
+      if (vis[q.id] === false) continue;
+      if (q.tipo === 'corto' || q.tipo === 'largo') {
+        v = String(v == null ? '' : v).trim();
+        if (!v) continue;
+      } else if (q.tipo === 'numero') {
+        var s = String(v == null ? '' : v).trim().replace(',', '.');
+        if (!s) continue;
+        if (!isFinite(Number(s))) {
+          RCR.toast('P' + (k + 1) + ': escribe un número');
+          var inp = document.querySelector('#fi-c-' + k + ' input');
+          if (inp) inp.focus();
+          return;
+        }
+        v = Number(s);
+      } else if (q.tipo === 'multiple') {
+        if (!Array.isArray(v) || !v.length) continue;
+      } else if (q.tipo === 'cuadricula') {
+        if (!v || typeof v !== 'object' || !Object.keys(v).length) continue;
+      } else if (q.tipo === 'imagen') {
+        if (!ENC.esImagen(v)) continue;
+      } else if (v == null || v === '') {
+        continue;
+      }
+      out[q.id] = v;
+    }
+
+    if (DAT.canon(out) === DAT.canon(r.respuestas || {})) {
+      DAT.cancelarEdicion();
+      RCR.toast('No hubo cambios');
+      return;
+    }
+
+    f.guardando = true;
+    var btn = document.getElementById('fi-guardar');
+    if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+    var editado = { por: RCR.user.correo, nombre: RCR.user.nombre || '' };
+    try {
+      await ENC.refResp(encId).doc(f.rid).update({
+        respuestas: out,
+        editado: Object.assign({ fecha: firebase.firestore.FieldValue.serverTimestamp() }, editado)
+      });
+      r.respuestas = out;
+      r.editado = Object.assign({ fecha: new Date() }, editado);
+      f.guardando = false;
+      f.modo = 'ver'; f.vals = f.original = null; f.sucio = false;
+      if (DAT.ficha === f) DAT.pintarFicha();
+      DAT.render(true);
+      RCR.toast('Respuesta actualizada');
+    } catch (e) {
+      console.error('DAT.guardarEdicion:', e);
+      f.guardando = false;
+      RCR.toast(e && e.code === 'permission-denied'
+        ? 'No tienes permiso para editar esta respuesta'
+        : 'No se pudo guardar. Revisa tu conexión.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+    }
   },
 
   pedirBorrar: function (rid) {
@@ -388,6 +727,7 @@ var DAT = {
     var resps = RES.cache[RES.sel] || [];
     var i = resps.findIndex(function (r) { return r._docId === rid; });
     DAT.pendienteBorrar = rid;
+    DAT.ficha = null;
     RCR.cerrarModal('m-dat-ficha');
     RCR.confirmar({
       titulo: '¿Eliminar la respuesta?',
@@ -445,7 +785,7 @@ var DAT = {
       console.error('DAT.excel:', e);
       RCR.toast('No se pudo crear el Excel. Revisa tu conexión.');
     }
-    if (btn) { btn.disabled = false; btn.innerHTML = ico('download', 15) + 'Excel'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = ico('download', 18, 1.75); }
     DAT.exportando = false;
   },
 

@@ -2387,6 +2387,9 @@ textarea.rg-campo{resize:vertical;min-height:92px;line-height:1.45;}
 .encsel-tit{min-width:0;font-family:'Outfit',sans-serif;font-size:13.5px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .encsel-chev{display:flex;color:#8a8f99;flex-shrink:0;}
 .topbar-acciones .btn-add:disabled{opacity:.4;pointer-events:none;}
+/* Íconos de la barra de arriba: trazo fino, como en macOS / iOS */
+.topbar-acciones .btn-add svg,.topbar-add svg,.dat-busca-ico svg{stroke-width:1.75;}
+.ws-chev svg,.user-avatar-chev svg,.encsel-chev svg{stroke-width:2;}
 @media (max-width:720px){
   .encsel-btn.con{width:40px;max-width:none;padding:0;border-radius:50%;box-shadow:inset 0 0 0 2px var(--blue2);}
   .encsel-btn.con .encsel-tit,.encsel-btn.con .encsel-chev{display:none;}
@@ -2753,21 +2756,98 @@ a.btn{text-decoration:none;}
 }
 .dat-mas:hover{background:rgba(80,108,255,.18);}
 
-.dat-ficha-item{padding:12px 0;border-bottom:1px solid var(--border);}
-.dat-ficha-item:first-child{padding-top:0;}
-.dat-ficha-item:last-child{border-bottom:none;}
-.dat-ficha-q{font-size:12.5px;font-weight:700;color:var(--text-muted);margin-bottom:4px;line-height:1.35;}
-.dat-ficha-v{font-size:14.5px;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere;}
-.dat-ficha-v.vacio{color:#b8c0cc;font-style:italic;}
-.dat-ficha-grid{list-style:none;display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;}
-.dat-ficha-grid li{display:flex;justify-content:space-between;gap:12px;padding:9px 12px;font-size:14px;border-bottom:1px solid var(--border);}
-.dat-ficha-grid li:last-child{border-bottom:none;}
-.dat-ficha-grid strong{font-weight:600;text-align:right;}
 .dat-img{padding-top:6px !important;padding-bottom:6px !important;}
 .dat-img img{display:block;width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--border);}
-.dat-ficha-img{display:block;padding:0;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;cursor:zoom-in;background:var(--surface);max-width:260px;}
-.dat-ficha-img img{display:block;width:100%;max-height:220px;object-fit:cover;}
-.dat-borrar:hover{border-color:var(--pink);color:var(--pink);}
+
+/* ── Ficha de una respuesta: hoja de iOS con lista agrupada ─────────────────
+   Fondo gris de iOS, grupos blancos por sección y separadores desde el texto.
+   La respuesta queda alineada con el texto de la pregunta (después de "P1"). */
+.hoja-ios.hoja-ficha .modal{max-width:600px;background:rgba(242,242,247,.99);}
+.hoja-ios.hoja-ficha .modal-body{padding:6px 24px 12px;}
+.fi-sec{margin:20px 16px 7px;font-size:12px;font-weight:600;letter-spacing:.1px;color:#8a8f99;}
+.fi-sec:first-child{margin-top:8px;}
+.fi-grupo{border-radius:14px;background:#fff;box-shadow:0 0 0 .5px rgba(15,23,42,.07),0 1px 2px rgba(15,23,42,.03);overflow:hidden;}
+.fi-grupo + .fi-grupo{margin-top:14px;}
+.fi-fila{position:relative;padding:12px 16px 13px;}
+.fi-fila + .fi-fila::before{content:'';position:absolute;top:0;left:16px;right:0;height:1px;background:rgba(60,60,67,.10);}
+.fi-fila > :not(.fi-q){margin-left:32px;}
+.fi-q{display:flex;align-items:baseline;gap:8px;font-size:12.5px;font-weight:500;line-height:1.4;color:#6e6e73;}
+.fi-n{flex:none;min-width:24px;font-size:11px;font-weight:700;color:var(--blue2);font-variant-numeric:tabular-nums;}
+.fi-v{margin-top:4px;font-size:15px;line-height:1.45;color:#1d1d1f;white-space:pre-line;overflow-wrap:anywhere;}
+.fi-v.vacio{color:#aeb3bb;}
+.no-aplica .fi-q,.no-aplica .fi-n{color:#aeb3bb;}
+
+.fi-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;}
+.fi-chip{
+  display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;
+  background:rgba(118,118,128,.12);font-family:'Outfit',sans-serif;font-size:13.5px;font-weight:500;line-height:1.35;color:#1d1d1f;
+}
+.fi-escala{display:flex;align-items:center;gap:8px;margin-top:6px;}
+.fi-puntos{display:flex;gap:4px;}
+.fi-puntos i{width:8px;height:8px;border-radius:50%;background:rgba(118,118,128,.22);}
+.fi-puntos i.on{background:var(--blue2);}
+.fi-escala strong{font-size:15px;font-weight:600;color:#1d1d1f;}
+.fi-escala small{font-size:12.5px;color:#8a8f99;}
+.fi-sub{margin-top:8px;border-radius:10px;background:rgba(118,118,128,.07);overflow:hidden;}
+.fi-sub-fila{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:38px;padding:6px 12px;font-size:13.5px;}
+.fi-sub-fila + .fi-sub-fila::before{content:'';position:absolute;top:0;left:12px;right:0;height:1px;background:rgba(60,60,67,.09);}
+.fi-sub-fila > span{min-width:0;color:#3a3a3c;}
+.fi-sub-fila strong{font-weight:600;color:#1d1d1f;text-align:right;}
+.fi-img{
+  display:block;width:120px;height:120px;margin-top:8px;padding:0;border:none;border-radius:12px;overflow:hidden;
+  cursor:zoom-in;background:rgba(118,118,128,.1);box-shadow:0 0 0 .5px rgba(15,23,42,.1);
+}
+.fi-img img{display:block;width:100%;height:100%;object-fit:cover;}
+
+/* Modo editar: controles de iOS dentro de cada fila */
+.fi-c{margin-top:8px;}
+.fi-nota{display:none;margin-top:4px;font-size:12.5px;color:#aeb3bb;}
+.no-aplica .fi-c{display:none;}
+.no-aplica .fi-nota{display:block;}
+.fi-inp{
+  display:block;width:100%;min-height:38px;padding:8px 12px;border:none;border-radius:10px;outline:none;
+  background:rgba(118,118,128,.10);font-family:'Outfit',sans-serif;font-size:15px;line-height:1.4;color:#1d1d1f;
+  resize:vertical;transition:background .15s,box-shadow .15s;
+}
+.fi-inp:focus{background:#fff;box-shadow:0 0 0 3px rgba(80,108,255,.22);}
+textarea.fi-inp{min-height:78px;}
+.fi-num{max-width:160px;font-variant-numeric:tabular-nums;}
+.fi-seg{display:inline-flex;gap:2px;padding:3px;border-radius:10px;background:rgba(118,118,128,.12);}
+.fi-seg button{
+  min-width:60px;height:32px;padding:0 14px;border:none;border-radius:8px;background:transparent;cursor:pointer;
+  font-family:'Outfit',sans-serif;font-size:14px;font-weight:500;color:#3a3a3c;
+  transition:background .18s,box-shadow .18s,color .18s;
+}
+.fi-seg.escala button{min-width:44px;padding:0;}
+.fi-seg button.on{background:#fff;color:#1d1d1f;font-weight:600;box-shadow:0 2px 6px rgba(15,23,42,.12),0 0 0 .5px rgba(15,23,42,.06);}
+.fi-seg button:focus-visible,.fi-chips.edit .fi-chip:focus-visible{outline:2px solid var(--blue2);outline-offset:1px;}
+.fi-chips.edit .fi-chip{border:none;cursor:pointer;padding:6px 12px;text-align:left;transition:background .15s,color .15s;}
+.fi-chips.edit .fi-chip:hover{background:rgba(118,118,128,.2);}
+.fi-chips.edit .fi-chip.on{background:var(--blue2);color:#fff;}
+.fi-chip svg{flex:none;}
+.fi-ayuda{margin-top:6px;font-size:12px;color:#8a8f99;}
+.fi-pop{
+  position:relative;display:inline-flex;align-items:center;flex-shrink:0;border-radius:8px;background:#fff;
+  box-shadow:0 0 0 .5px rgba(15,23,42,.12),0 1px 2px rgba(15,23,42,.06);
+}
+.fi-pop select{
+  -webkit-appearance:none;appearance:none;max-width:190px;padding:5px 26px 5px 10px;border:none;outline:none;
+  background:transparent;cursor:pointer;font-family:'Outfit',sans-serif;font-size:13px;font-weight:500;color:#1d1d1f;text-overflow:ellipsis;
+}
+.fi-pop select:focus-visible{outline:2px solid var(--blue2);outline-offset:1px;border-radius:8px;}
+.fi-pop-chev{position:absolute;right:8px;display:flex;color:#8a8f99;pointer-events:none;}
+.fi-img-ed{display:flex;align-items:flex-end;gap:14px;}
+.fi-img-ed .fi-img{cursor:default;}
+.fi-img-ed .fi-v{margin:0;}
+.fi-link{padding:4px 0;border:none;background:none;cursor:pointer;font-family:'Outfit',sans-serif;font-size:13.5px;font-weight:600;color:var(--blue2);}
+.fi-link.rojo{color:#ff3b30;}
+
+@media (max-width:560px){
+  .hoja-ios.hoja-ficha .modal-body{padding:4px 18px 10px;}
+  .fi-fila{padding:11px 14px 12px;}
+  .fi-fila + .fi-fila::before{left:14px;}
+  .fi-inp{font-size:16px;}      /* 16px: iOS no hace zoom al escribir */
+}
 
 @media (max-width:560px){
   .dat-tabla th,.dat-tabla td{padding:10px 12px;max-width:200px;}
@@ -2819,6 +2899,9 @@ a.btn{text-decoration:none;}
 .hoja-ios .btn{border-radius:12px;padding:12px 18px;font-size:14.5px;}
 .hoja-ios .btn-glass{background:rgba(118,118,128,.12);border:none;color:#1d1d1f;}
 .hoja-ios .btn-glass:hover{background:rgba(118,118,128,.2);color:#1d1d1f;}
+/* Acción destructiva en rojo de iOS */
+.hoja-ios .fi-borrar,.hoja-ios .fi-borrar:hover{color:#ff3b30;}
+.hoja-ios .fi-borrar:hover{background:rgba(255,59,48,.10);}
 
 /* Agregar: campo de búsqueda, control segmentado y botón */
 .sh-agregar{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;}
