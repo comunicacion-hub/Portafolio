@@ -82,7 +82,9 @@ var RES = {
     if (RES.sel && !RES.encuesta()) RES.sel = '';
     var e = RES.encuesta();
     var tit = e ? (e.titulo || 'Sin título') : '';
-    var html =
+    /* En Datos, la lupa va primero: al tocarla se estira como una gota */
+    var busca = e && RCR.activo === 'datos-encuesta' && window.DAT;
+    var html = (busca ? DAT.buscaHtml() : '') +
       '<div class="encsel">' +
         '<button class="btn-add topbar-add encsel-btn' + (e ? ' con' : '') + '" id="encsel-btn" type="button" ' +
           'aria-haspopup="menu" aria-expanded="false" title="' + ENC.attr(e ? 'Encuesta: ' + tit : 'Elegir encuesta') + '" ' +
@@ -101,6 +103,7 @@ var RES = {
         'onclick="DAT.excel()" disabled>' + ico('download', 18, 2.2) + '</button>';
     }
     slot.innerHTML = html;
+    if (busca) DAT.buscaListo();
     if (RCR.activo === 'datos-encuesta' && window.DAT) DAT.botonExcel(!!(RES.cache[RES.sel] && RES.cache[RES.sel].length));
   },
 
@@ -159,6 +162,14 @@ var RES = {
         '<button class="encsel-it encsel-acc" type="button" role="menuitem" onclick="RES.actualizar()">' +
           '<span class="encsel-check" aria-hidden="true">' + ico('refresh', 14, 2.4) + '</span>' +
           '<span class="encsel-it-txt"><span>Actualizar respuestas</span></span></button>';
+      /* En el celular el botón de Excel de la barra se oculta: va aquí */
+      var resps = RES.cache[RES.sel];
+      if (RCR.activo === 'datos-encuesta' && window.DAT && resps && resps.length) {
+        html += '<button class="encsel-it encsel-acc encsel-solo-movil" type="button" role="menuitem" ' +
+            'onclick="RES.cerrarMenu();DAT.excel()">' +
+          '<span class="encsel-check" aria-hidden="true">' + ico('download', 14, 2.4) + '</span>' +
+          '<span class="encsel-it-txt"><span>Descargar en Excel</span></span></button>';
+      }
     }
     return html;
   },

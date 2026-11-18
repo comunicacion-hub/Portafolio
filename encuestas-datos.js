@@ -31,12 +31,7 @@ var DAT = {
 
   /* ── Montaje ───────────────────────────────────────────────────────────── */
   mount: function (root) {
-    root.innerHTML =
-      '<div class="res-wrap dat-wrap">' +
-        '<input class="form-inp dat-buscar hidden" id="dat-buscar" type="search" placeholder="Buscar en las respuestas…" ' +
-          'aria-label="Buscar en las respuestas" oninput="DAT.onBuscar(this.value)">' +
-        '<div id="dat-body"></div>' +
-      '</div>';
+    root.innerHTML = '<div class="res-wrap dat-wrap"><div id="dat-body"></div></div>';
     DAT.iniciar();
   },
 
@@ -58,21 +53,140 @@ var DAT = {
   onSel: function (id) {
     RES.sel = id;
     DAT.mostrar = DAT.PAGINA;
-    DAT.filtro = '';
-    var b = document.getElementById('dat-buscar');
-    if (b) b.value = '';
+    DAT.q = DAT.filtro = '';
+    var w = document.getElementById('dat-busca');
+    if (w) {
+      w.classList.remove('abierta', 'activa');
+      var inp = document.getElementById('dat-buscar');
+      if (inp) inp.value = '';
+      DAT.tabBusca(false);
+    }
     DAT.cargar(false);
   },
 
   onBuscar: function (v) {
-    DAT.filtro = String(v || '').trim().toLowerCase();
+    DAT.q = String(v || '');
+    DAT.filtro = DAT.q.trim().toLowerCase();
     DAT.mostrar = DAT.PAGINA;
     DAT.render();
   },
 
   verMas: function () {
     DAT.mostrar += DAT.PAGINA;
-    DAT.render();
+    DAT.render(true);
+  },
+
+  /* Al acercarse al final de la tabla se cargan más filas solas */
+  alScroll: function (el) {
+    if (DAT._hayMas && el.scrollTop + el.clientHeight >= el.scrollHeight - 160) DAT.verMas();
+  },
+
+  /* ── Buscador en la barra de arriba: una lupa que se estira como gota ──── */
+  q: '',          // el texto tal como se escribió (DAT.filtro es para comparar)
+
+  buscaHtml: function () {
+    return '<div class="dat-busca" id="dat-busca">' +
+      '<div class="dat-busca-gota">' +
+        '<button class="dat-busca-ico" id="dat-busca-btn" type="button" title="Buscar" ' +
+          'aria-label="Buscar en las respuestas" aria-expanded="false" aria-controls="dat-buscar" ' +
+          'onclick="DAT.abrirBusca()">' + ico('search', 18, 2.3) + '</button>' +
+        '<input id="dat-buscar" type="search" enterkeyhint="search" autocomplete="off" spellcheck="false" tabindex="-1" ' +
+          'placeholder="Buscar en las respuestas" aria-label="Buscar en las respuestas" value="' + ENC.attr(DAT.q) + '" ' +
+          'oninput="DAT.onBuscar(this.value)" onkeydown="DAT.teclaBusca(event)" onblur="DAT.blurBusca()">' +
+        '<button class="dat-busca-x" type="button" tabindex="-1" title="Cerrar búsqueda" aria-label="Cerrar búsqueda" ' +
+          'onmousedown="event.preventDefault()" onclick="DAT.cerrarBusca(true)">' + ico('x', 12, 3) + '</button>' +
+      '</div>' +
+    '</div>';
+  },
+
+  /* Tras pintar la barra: si había una búsqueda, se conserva */
+  buscaListo: function () {
+    var w = document.getElementById('dat-busca');
+    if (!w) return;
+    DAT.medirBusca();
+    if (DAT.filtro && !w.classList.contains('cubre')) DAT.abrirBusca(true);
+    else w.classList.toggle('activa', !!DAT.filtro);
+  },
+
+  /* Hasta dónde se estira: si hay espacio libre a la izquierda (computadora),
+     crece hacia allá; si no (celular), cubre toda la barra de arriba. */
+  medirBusca: function () {
+    var w = document.getElementById('dat-busca');
+    var tb = w && w.closest('.topbar');
+    if (!tb) return;
+    var r = w.getBoundingClientRect(), t = tb.getBoundingClientRect();
+    var h1 = document.getElementById('topbar-titulo');
+    var finTitulo = h1 ? h1.getBoundingClientRect().left + h1.scrollWidth + 36 : t.left;
+    var libre = r.right - finTitulo;
+    var cubre = libre < 260, m = 8;
+    var ancho = cubre ? t.width - 2 * m : Math.min(340, libre);
+    var der = cubre ? -(t.right - m - r.right) : 0;
+    w.style.setProperty('--gota-w', Math.round(ancho) + 'px');
+    w.style.setProperty('--gota-r', Math.round(der) + 'px');
+    w.classList.toggle('cubre', cubre);
+  },
+
+  tabBusca: function (abierta) {
+    var b = document.getElementById('dat-busca-btn');
+    var w = document.getElementById('dat-busca');
+    if (b) { b.setAttribute('aria-expanded', String(abierta)); b.tabIndex = abierta ? -1 : 0; }
+    if (w) w.querySelectorAll('input,.dat-busca-x').forEach(function (el) { el.tabIndex = abierta ? 0 : -1; });
+  },
+
+  abrirBusca: function (quieto) {
+    var w = document.getElementById('dat-busca');
+    var inp = document.getElementById('dat-buscar');
+    if (!w || !inp) return;
+    if (w.classList.contains('abierta')) { inp.focus(); return; }
+    DAT.medirBusca();
+    if (quieto) w.classList.add('sin-anim');
+    w.classList.remove('activa');
+    w.classList.add('abierta');
+    DAT.tabBusca(true);
+    if (quieto) { void w.offsetWidth; w.classList.remove('sin-anim'); return; }
+    inp.focus({ preventScroll: true });
+    try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
+    if (!DAT._rsz) {
+      DAT._rsz = function () {
+        var x = document.getElementById('dat-busca');
+        if (x && x.classList.contains('abierta')) DAT.medirBusca();
+      };
+      window.addEventListener('resize', DAT._rsz);
+    }
+  },
+
+  /* limpiar = true (X o Esc): borra la búsqueda. Si no, solo se recoge y,
+     si queda un filtro puesto, la lupa se queda en índigo. */
+  cerrarBusca: function (limpiar) {
+    var w = document.getElementById('dat-busca');
+    var inp = document.getElementById('dat-buscar');
+    if (limpiar && DAT.q) {
+      if (inp) inp.value = '';
+      DAT.onBuscar('');
+    }
+    if (!w) return;
+    w.classList.remove('abierta');
+    w.classList.toggle('activa', !!DAT.filtro);
+    DAT.tabBusca(false);
+    if (limpiar) {
+      var b = document.getElementById('dat-busca-btn');
+      if (b) b.focus({ preventScroll: true });
+    }
+  },
+
+  teclaBusca: function (ev) {
+    if (ev.key === 'Escape') { ev.preventDefault(); DAT.cerrarBusca(true); }
+    else if (ev.key === 'Enter') { ev.preventDefault(); ev.target.blur(); }   // cierra el teclado del celular
+  },
+
+  /* Al salir del campo: vacío → se recoge; con texto → sigue abierto en la
+     computadora y se recoge en el celular (para ver la barra de nuevo) */
+  blurBusca: function () {
+    setTimeout(function () {
+      var w = document.getElementById('dat-busca');
+      if (!w || !w.classList.contains('abierta') || w.contains(document.activeElement)) return;
+      if (!DAT.filtro || w.classList.contains('cubre')) DAT.cerrarBusca(false);
+    }, 150);
   },
 
   /* ── Datos ─────────────────────────────────────────────────────────────── */
@@ -89,14 +203,11 @@ var DAT = {
   cargar: async function (forzar) {
     if (!ENC.cargado) return;
     DAT.botonExcel(false);
-    var buscar = document.getElementById('dat-buscar');
     if (!ENC.datos.length) {
-      if (buscar) buscar.classList.add('hidden');
       DAT.pintar(RCR.vacio('encuesta', 'Aún no tienes encuestas', 'Crea una en la sección Encuestas para ver aquí sus datos.'));
       return;
     }
     var id = RES.sel;
-    if (buscar) buscar.classList.toggle('hidden', !id);
     if (!id) { DAT.pintar(RES.vacioElegir()); return; }
     if (!RES.cache[id] || forzar) DAT.pintar(RCR.cargando('Cargando respuestas'));
     try {
@@ -152,11 +263,15 @@ var DAT = {
     });
   },
 
-  render: function () {
+  /* mantener = true: conserva dónde estaba el scroll de la tabla (Mostrar más) */
+  render: function (mantener) {
     var enc = RES.encuesta();
     var resps = RES.cache[RES.sel];
     if (!enc || !resps) return;
     DAT.botonExcel(resps.length > 0);
+    DAT._hayMas = false;
+    var sc0 = mantener && document.querySelector('#dat-body .dat-scroll');
+    var pos = sc0 ? [sc0.scrollTop, sc0.scrollLeft] : null;
 
     if (!resps.length) {
       DAT.pintar('<div class="card">' + RCR.vacio('inbox', 'Todavía no hay respuestas',
@@ -198,17 +313,28 @@ var DAT = {
       '</tr>';
     }).join('');
 
+    /* Si faltan filas, un pie dentro de la tabla (se cargan solas al bajar) */
+    var faltan = filas.length - vis.length;
+    DAT._hayMas = faltan > 0;
+    var tfoot = faltan > 0
+      ? '<tfoot><tr><td class="dat-pie" colspan="' + (cols.length + 2) + '"><div class="dat-pie-in">' +
+          'Se muestran ' + vis.length + ' de ' + filas.length +
+          '<button class="dat-mas" type="button" onclick="DAT.verMas()">Mostrar más</button>' +
+        '</div></td></tr></tfoot>'
+      : '';
+
     DAT.pintar(
       '<div class="dat-resumen">' + RCR.esc(resumen) + '<span>Toca una fila para ver la respuesta completa</span></div>' +
       '<div class="card dat-card">' +
-        '<div class="dat-scroll" tabindex="0" aria-label="Tabla de respuestas">' +
-          '<table class="dat-tabla"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>' +
+        '<div class="dat-scroll" tabindex="0" aria-label="Tabla de respuestas" onscroll="DAT.alScroll(this)">' +
+          '<table class="dat-tabla"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody>' + tfoot + '</table>' +
         '</div>' +
-      '</div>' +
-      (filas.length > vis.length
-        ? '<button class="rep-add dat-mas" onclick="DAT.verMas()">Mostrar más (' + (filas.length - vis.length) + ' restantes)</button>'
-        : '')
+      '</div>'
     );
+    if (pos) {
+      var sc = document.querySelector('#dat-body .dat-scroll');
+      if (sc) { sc.scrollTop = pos[0]; sc.scrollLeft = pos[1]; }
+    }
   },
 
   /* Foto de una respuesta en grande (con descarga) */
@@ -285,7 +411,7 @@ var DAT = {
         RES.cache[encId] = RES.cache[encId].filter(function (r) { return r._docId !== rid; });
         ENC.conteos[encId] = RES.cache[encId].length;
       }
-      DAT.render();
+      DAT.render(true);
       RCR.cerrarModal('m-confirm');
       RCR.toast('Respuesta eliminada');
     } catch (e) {
