@@ -22,7 +22,9 @@
      · Cada sección es un paso (tarjeta) con Atrás / Continuar.
      · Funciona sin conexión después de abrirla una vez con internet:
        la página queda guardada (sw-encuestas.js) y las respuestas esperan en
-       el teléfono hasta que vuelve la conexión (persistencia de Firestore). -->
+       el teléfono hasta que vuelve la conexión (persistencia de Firestore).
+     · Fotos: con Google Drive configurado (ENC.DRIVE_URL) suben a Drive;
+       ver "Fotos a Google Drive" más abajo. -->
 <div class="rg-fondo" aria-hidden="true"></div>
 <div class="resp-wrap">
   <!-- Aviso cuando no hay internet -->
@@ -65,7 +67,7 @@ RCR.esc = function (v) {
   var previa = params.get('previa') === '1';
   var app = document.getElementById('resp-app');
   var enc = null, db = null, enviando = false, persistente = false;
-  var fotos = {};          // { idPregunta: base64 JPEG } de las preguntas "Subir imagen"
+  var fotos = {};          // { idPregunta: { ver, hq?, mini? } } de las preguntas "Subir imagen"
   var pags = [];           // [{ sec: Sección|null, items: [Pregunta] }]
   var pagAct = 0;
 
@@ -97,7 +99,7 @@ RCR.esc = function (v) {
   function pintarFoto(qid) {
     var box = document.getElementById('rf-' + qid);
     if (!box) return;
-    var url = fotos[qid];
+    var url = fotos[qid] && fotos[qid].ver;
     var lbl = box.querySelector('.resp-subir');
     var prev = box.querySelector('.resp-foto-prev');
     if (prev) prev.remove();
@@ -114,8 +116,11 @@ RCR.esc = function (v) {
     var file = input.files && input.files[0];
     input.value = '';
     if (!file) return;
-    ENC.comprimirImagen(file, ENC.IMG_RESP).then(function (url) {
-      fotos[qid] = url;
+    /* Con Drive: la foto para Drive y una copia chica para la respuesta;
+       sin Drive: una sola, dentro de la respuesta (como antes) */
+    var tam = ENC.DRIVE_URL ? [ENC.IMG_DRIVE, ENC.IMG_MINI] : [ENC.IMG_RESP];
+    ENC.comprimirImagen(file, tam).then(function (u) {
+      fotos[qid] = u.length === 2 ? { ver: u[1], hq: u[0], mini: u[1] } : { ver: u[0] };
       pintarFoto(qid);
       limpiarError(document.getElementById('rq-' + qid));
       actualizar();
@@ -338,7 +343,7 @@ RCR.esc = function (v) {
         var el = form.elements[name];
         r[q.id] = el ? el.value.trim() : '';
       } else if (q.tipo === 'imagen') {
-        r[q.id] = fotos[q.id] || '';
+        r[q.id] = fotos[q.id] ? fotos[q.id].ver : '';
       } else if (q.tipo === 'cuadricula') {
         var g = {};
         (q.filas || []).forEach(function (f) {
@@ -453,10 +458,16 @@ RCR.esc = function (v) {
       return;
     }
 
-    /* Solo se guardan las preguntas visibles y respondidas */
-    var respuestas = {};
+    /* Solo se guardan las preguntas visibles y respondidas. Las fotos para
+       Drive van aparte (aDrive); en la respuesta queda su copia chica. */
+    var respuestas = {}, aDrive = {};
     ENC.soloPreguntas(enc.preguntas).forEach(function (q) {
-      if (st.vis[q.id] && !vacio(st.r[q.id])) {
+      if (!st.vis[q.id] || vacio(st.r[q.id])) return;
+      var f = q.tipo === 'imagen' ? fotos[q.id] : null;
+      if (f && f.hq) {
+        aDrive[q.id] = { hq: f.hq, mini: f.mini };
+        respuestas[q.id] = f.mini;                    // para medir el tamaño final
+      } else {
         respuestas[q.id] = q.tipo === 'numero' ? ENC.leerNumero(st.r[q.id]) : st.r[q.id];
       }
     });
@@ -471,30 +482,18 @@ RCR.esc = function (v) {
     var btn = document.getElementById('resp-enviar');
     btn.disabled = true; btn.innerHTML = '<span>Enviando…</span>';
 
-    /* La respuesta queda en la cola de Firestore (en el teléfono) aunque no
-       haya internet; se envía sola cuando vuelve la conexión. */
     var ref = db.collection(ENC.COL).doc(id).collection(ENC.SUB_RESP).doc();
-    var escritura = ref.set({ respuestas: respuestas, enviado: firebase.firestore.FieldValue.serverTimestamp() });
-    guardarPend(pendientes().concat([ref.id]));
-    escritura.then(function () {
-      guardarPend(pendientes().filter(function (x) { return x !== ref.id; }));
-      /* Si había quedado en cola y ya no falta ninguna, se avisa */
-      if (enCola[ref.id]) {
-        delete enCola[ref.id];
-        if (!Object.keys(enCola).length && !pendientes().length) toast('Listo: se enviaron las respuestas guardadas');
-      }
-    }, function (e) {
-      console.error('responder-encuesta:', e);
-      guardarPend(pendientes().filter(function (x) { return x !== ref.id; }));
-    });
-
     var espera = navigator.onLine ? 9000 : 700;
     try {
-      var res = await Promise.race([
-        escritura.then(function () { return 'ok'; }),
-        new Promise(function (ok) { setTimeout(function () { ok('cola'); }, espera); })
-      ]);
-      if (res === 'cola') enCola[ref.id] = true;
+      var res;
+      if (Object.keys(aDrive).length) {
+        Object.keys(aDrive).forEach(function (k) { delete respuestas[k]; });
+        res = await enviarConFotos({ rid: ref.id, enc: id, fecha: Date.now(), respuestas: respuestas, fotos: aDrive }, espera);
+      } else {
+        var escritura = guardarRespuesta(ref, respuestas, id);
+        res = await Promise.race([escritura.then(function () { return 'ok'; }), esperar(espera, 'cola')]);
+        if (res === 'cola') enCola[ref.id] = true;
+      }
       gracias(res);
     } catch (e) {
       toast('No se pudo enviar: la encuesta puede estar cerrada. Inténtalo de nuevo.');
@@ -504,6 +503,223 @@ RCR.esc = function (v) {
     enviando = false;
   }
 
+  /* Guarda una respuesta. Queda en la cola de Firestore (en el teléfono)
+     aunque no haya internet y se envía sola cuando vuelve la conexión. Las
+     de otra encuesta (cola de fotos) no entran en el contador de esta. */
+  function guardarRespuesta(ref, respuestas, encId) {
+    var propia = encId === id;
+    var escritura = ref.set({ respuestas: respuestas, enviado: firebase.firestore.FieldValue.serverTimestamp() });
+    if (propia) guardarPend(pendientes().concat([ref.id]));
+    escritura.then(function () {
+      if (propia) guardarPend(pendientes().filter(function (x) { return x !== ref.id; }));
+      /* Si había quedado en cola y ya no falta ninguna, se avisa */
+      if (enCola[ref.id]) {
+        delete enCola[ref.id];
+        avisarListo();
+      }
+    }, function (e) {
+      console.error('responder-encuesta:', e);
+      if (propia) guardarPend(pendientes().filter(function (x) { return x !== ref.id; }));
+    });
+    return escritura;
+  }
+  /* Se cuenta de nuevo lo que espera fotos (un momento después, cuando ya
+     salió de la cola) antes de decir que se envió todo */
+  function avisarListo() {
+    setTimeout(function () {
+      colaTodas().then(function (l) {
+        var n = l.filter(function (x) { return x.enc === id; }).length;
+        if (!n && !Object.keys(enCola).length && !pendientes().length) toast('Listo: se enviaron las respuestas guardadas');
+      });
+    }, 400);
+  }
+
+  /* ── Fotos a Google Drive ─────────────────────────────────────────────────
+     La respuesta con fotos espera en el teléfono (IndexedDB, base
+     "rcr-enc-fotos") hasta que sus fotos suben a Drive; recién entonces se
+     guarda en Firestore con { drive, mini, carpeta } en cada foto. Así
+     funciona también sin conexión: se envía sola cuando vuelve internet con
+     la página abierta, o la próxima vez que se abra.
+     · Cada foto sube una sola vez: lo que ya subió queda anotado.
+     · Si Drive rechaza una foto (encuesta cerrada, pregunta borrada…) o
+       falla 4 veces con conexión, la respuesta se guarda con la copia chica.
+     · Sin conexión, o si Drive no responde, se reintenta cada vez más
+       espaciado (30 s, 1 min, 2 min… hasta 10 min). */
+  var COLA_BD = 'rcr-enc-fotos';
+  var colaBD = null, colaMem = {}, colaN = 0, colaTotal = 0;
+  var subiendo = false, oyentes = {}, proximoIntento = 0, pausaCola = 30000;
+
+  function abrirCola() {
+    if (colaBD !== null) return Promise.resolve(colaBD);
+    return Promise.race([
+      new Promise(function (ok) {
+        try {
+          var rq = indexedDB.open(COLA_BD, 1);
+          rq.onupgradeneeded = function () { rq.result.createObjectStore('cola', { keyPath: 'rid' }); };
+          rq.onsuccess = function () { ok(rq.result); };
+          rq.onerror = rq.onblocked = function () { ok(false); };
+        } catch (e) { ok(false); }
+      }),
+      esperar(2500, false)                            // almacenamiento trabado: queda en memoria
+    ]).then(function (bd) { colaBD = bd || false; return colaBD; });
+  }
+  function colaOp(modo, fn) {
+    return abrirCola().then(function (bd) {
+      if (!bd) return null;
+      return Promise.race([new Promise(function (ok) {
+        try {
+          var tx = bd.transaction('cola', modo), rq = fn(tx.objectStore('cola'));
+          tx.oncomplete = function () { ok(rq.result === undefined ? true : rq.result); };
+          tx.onerror = tx.onabort = function () { ok(null); };
+        } catch (e) { ok(null); }
+      }), esperar(2500, null)]);
+    });
+  }
+  /* Si el teléfono no deja guardar, la respuesta queda en memoria (hay que
+     dejar la página abierta hasta que se envíe) */
+  function colaGuardar(item) {
+    return colaOp('readwrite', function (st) { return st.put(item); }).then(function (r) {
+      if (r === null) colaMem[item.rid] = item; else delete colaMem[item.rid];
+    });
+  }
+  function colaBorrar(rid) {
+    delete colaMem[rid];
+    return colaOp('readwrite', function (st) { return st.delete(rid); });
+  }
+  function colaTodas() {
+    if (!ENC.DRIVE_URL) return Promise.resolve([]);
+    return colaOp('readonly', function (st) { return st.getAll(); }).then(function (lista) {
+      var por = {};
+      (lista || []).forEach(function (x) { por[x.rid] = x; });
+      Object.keys(colaMem).forEach(function (k) { por[k] = colaMem[k]; });
+      return Object.keys(por).map(function (k) { return por[k]; })
+        .sort(function (a, b) { return a.fecha - b.fecha; });
+    });
+  }
+  function contarCola() {
+    if (!ENC.DRIVE_URL) return;
+    colaTodas().then(function (l) {
+      colaTotal = l.length;
+      colaN = l.filter(function (x) { return x.enc === id; }).length;
+      pintarRed();
+    });
+  }
+
+  /* Sube una foto. Sin red (o si tarda más de 3 min) lanza error; si Drive
+     contesta, devuelve lo que contestó. */
+  function subirFoto(item, qid) {
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var t = ctrl ? setTimeout(function () { ctrl.abort(); }, 180000) : null;
+    return fetch(ENC.DRIVE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // sin consulta previa (CORS)
+      body: JSON.stringify({ encuesta: item.enc, pregunta: qid, respuesta: item.rid, fecha: item.fecha, foto: item.fotos[qid].hq }),
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (r) {
+      clearTimeout(t);
+      if (!r.ok) return { ok: false, error: 'http ' + r.status };
+      return r.json().catch(function () { return { ok: false, error: 'respuesta' }; });
+    }, function (e) { clearTimeout(t); throw e; });
+  }
+
+  /* Sube las fotos que falten de una respuesta y la guarda en Firestore.
+     Devuelve { escritura } (envuelta: si se devolviera la promesa sola, el
+     await esperaría a que Firestore confirme, y sin conexión no termina). */
+  async function procesar(item, avance) {
+    var qids = Object.keys(item.fotos || {});
+    for (var i = 0; i < qids.length; i++) {
+      var f = item.fotos[qids[i]];
+      if (f.drive || f.error) continue;
+      if (avance) avance(i + 1, qids.length, item.rid);
+      var r = await subirFoto(item, qids[i]);
+      if (r && r.ok && ENC.esIdDrive(r.id)) {
+        f.drive = r.id;
+        f.carpeta = ENC.esIdDrive(r.carpeta) ? r.carpeta : '';
+      } else if ((r && r.permanente) || (f.fallas = (f.fallas || 0) + 1) >= 4) {
+        f.error = String((r && r.error) || 'drive');
+        console.warn('Foto no guardada en Drive (' + f.error + '): queda la copia chica');
+      } else {
+        await colaGuardar(item);
+        throw new Error('Drive: ' + ((r && r.error) || 'sin respuesta'));
+      }
+      delete f.hq;
+      await colaGuardar(item);
+    }
+    var resp = Object.assign({}, item.respuestas);
+    qids.forEach(function (q) {
+      var f = item.fotos[q];
+      resp[q] = f.drive ? { drive: f.drive, mini: f.mini, carpeta: f.carpeta || '' } : f.mini;
+    });
+    var ref = db.collection(ENC.COL).doc(item.enc).collection(ENC.SUB_RESP).doc(item.rid);
+    var escritura = guardarRespuesta(ref, resp, item.enc);
+    await colaBorrar(item.rid);
+    return { escritura: escritura };
+  }
+
+  function avisar(rid, v) { var f = oyentes[rid]; delete oyentes[rid]; if (f) f(v); }
+
+  /* Recorre la cola, de la más antigua a la más nueva. Se corta al primer
+     error (sin red o Drive no responde) y se reintenta más tarde. */
+  async function procesarCola(avance) {
+    if (subiendo || previa || !db || !ENC.DRIVE_URL) return;
+    subiendo = true;
+    var vistas = {}, falla = false;
+    try {
+      while (navigator.onLine) {
+        var item = (await colaTodas()).filter(function (x) { return !vistas[x.rid]; })[0];
+        if (!item) break;
+        vistas[item.rid] = true;
+        try {
+          avisar(item.rid, await procesar(item, avance));
+        } catch (e) {
+          console.warn('Fotos a Drive, se reintenta más tarde:', (e && e.message) || e);
+          falla = true;
+          break;
+        }
+      }
+    } finally {
+      subiendo = false;
+      if (falla || !navigator.onLine) {
+        proximoIntento = Date.now() + pausaCola;
+        pausaCola = Math.min(pausaCola * 2, 600000);
+      } else {
+        pausaCola = 30000;
+      }
+      /* Las que esperaban respuesta: si no alcanzaron a intentarse y no hubo
+         error, otra vuelta; si no, siguen en la cola */
+      var otraVuelta = false;
+      Object.keys(oyentes).forEach(function (rid) {
+        if (!vistas[rid] && !falla && navigator.onLine) otraVuelta = true;
+        else avisar(rid, 'cola');
+      });
+      contarCola();
+      if (otraVuelta) setTimeout(function () { procesarCola(avance); }, 0);
+    }
+  }
+
+  /* Respuesta con fotos: devuelve 'ok' si quedó registrada o 'cola' si
+     sigue esperando en el teléfono */
+  async function enviarConFotos(item, espera) {
+    await colaGuardar(item);
+    contarCola();
+    var btn = document.getElementById('resp-enviar');
+    var listo = new Promise(function (ok) { oyentes[item.rid] = ok; });
+    procesarCola(function (i, n, rid) {
+      if (rid === item.rid) btn.innerHTML = '<span>' + (n > 1 ? 'Subiendo fotos… ' + i + ' de ' + n : 'Subiendo la foto…') + '</span>';
+    });
+    var r = await Promise.race([listo, esperar(navigator.onLine ? 240000 : 700, 'cola')]);
+    if (!r || r === 'cola') { enCola[item.rid] = true; return 'cola'; }
+    btn.innerHTML = '<span>Enviando…</span>';
+    var res = await Promise.race([r.escritura.then(function () { return 'ok'; }), esperar(espera, 'cola')]);
+    if (res === 'cola') enCola[item.rid] = true;
+    return res;
+  }
+
+  /* Sigue intentando mientras la página está abierta */
+  setInterval(function () {
+    if (colaTotal && navigator.onLine && Date.now() >= proximoIntento) procesarCola();
+  }, 15000);
+
   function gracias(modo) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     /* "Llenar otra" no recarga la página: así funciona igual sin conexión */
@@ -512,8 +728,8 @@ RCR.esc = function (v) {
       estado('check', 'Vista previa completada', 'En el enlace real, aquí se habría guardado la respuesta.', otra, 'listo');
     } else if (modo === 'cola') {
       estado('clock', 'Respuesta guardada',
-        persistente
-          ? 'Se enviará automáticamente cuando haya conexión. Puedes llenar otra respuesta.'
+        persistente && colaBD !== false
+          ?'Se enviará automáticamente cuando haya conexión. Puedes llenar otra respuesta.'
           : 'Se enviará automáticamente cuando haya conexión. Deja esta página abierta hasta entonces.',
         otra, 'cola');
     } else {
@@ -539,7 +755,7 @@ RCR.esc = function (v) {
       document.getElementById('rg-aviso-ico').innerHTML = ico('alert', 16, 2.2);
       aviso.hidden = !sin || previa;
     }
-    var n = pendientes().length;
+    var n = pendientes().length + colaN;               // en Firestore + esperando sus fotos
     var cola = document.getElementById('rg-cola');
     if (!cola) return;
     cola.hidden = !n;
@@ -553,14 +769,16 @@ RCR.esc = function (v) {
     cola.setAttribute('aria-label', t);
   }
   document.getElementById('rg-cola').addEventListener('click', function () {
-    var n = pendientes().length;
+    var n = pendientes().length + colaN;
     toast(n + (n === 1 ? ' respuesta guardada' : ' respuestas guardadas') +
       (navigator.onLine ? ': se están enviando.' : ': se enviarán automáticamente cuando haya conexión.'));
   });
   window.addEventListener('online', function () {
     pintarRed();
-    toast(pendientes().length ? 'Volvió la conexión: enviando las respuestas guardadas…' : 'Volvió la conexión');
+    toast(pendientes().length + colaN ? 'Volvió la conexión: enviando las respuestas guardadas…' : 'Volvió la conexión');
     vigilarPendientes();
+    proximoIntento = 0; pausaCola = 30000;
+    procesarCola();
   });
   window.addEventListener('offline', function () { pintarRed(); });
 
@@ -669,6 +887,7 @@ RCR.esc = function (v) {
     try {
       db = await abrirBase();
       if (!persistente) guardarPend([]);   // sin almacenamiento, lo de antes no se puede contar
+      contarCola();                        // respuestas que esperan subir sus fotos
 
       /* 2) Versión actual desde Firestore (con tiempo límite) */
       if (!id) {
@@ -690,6 +909,7 @@ RCR.esc = function (v) {
       guardarLocal(CACHE_ENC + id, nueva);
       pintarRed();
       vigilarPendientes();
+      procesarCola();
       /* 3) Si ya se mostraba la copia y cambió, se actualiza solo si la
          persona todavía no empezó a responder */
       if (!mostrada) mostrar(nueva);

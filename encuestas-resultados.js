@@ -310,8 +310,12 @@ var RES = {
 
       /* Subir imagen: galería de fotos */
       if (q.tipo === 'imagen') {
-        s.fotos = resps.filter(function (r) { return ENC.esImagen((r.respuestas || {})[q.id]); })
-          .map(function (r) { return { v: r.respuestas[q.id], ms: RES.ms(r.enviado), rid: r._docId }; });
+        s.fotos = resps.filter(function (r) { return ENC.fotoSrc((r.respuestas || {})[q.id]); })
+          .map(function (r) {
+            var v = r.respuestas[q.id];
+            if (!s.carpeta && ENC.carpetaDrive(v)) s.carpeta = ENC.carpetaDrive(v);
+            return { v: ENC.fotoSrc(v), orig: v, ms: RES.ms(r.enviado), rid: r._docId };
+          });
         s.respondieron = s.fotos.length;
         return s;
       }
@@ -614,6 +618,9 @@ var RES = {
         (s.fotos.length > LIM
           ? '<button class="res-mas" onclick="RES.verTodas(\'' + q.id + '\')">' +
               (todasF ? 'Ver menos' : 'Ver todas (' + s.fotos.length + ')') + '</button>'
+          : '') +
+        (s.carpeta
+          ? '<a class="res-carpeta" href="' + s.carpeta + '" target="_blank" rel="noopener">' + ico('folder', 15) + 'Carpeta de fotos en Google Drive</a>'
           : ''));
     }
 
@@ -714,20 +721,34 @@ var RES = {
     var f = (RES.fotos[qid] || [])[k];
     if (!f || !ENC.esImagen(f.v)) return;
     RES.mostrarFoto(f.v, 'Foto ' + (k + 1) + ' de ' + RES.fotos[qid].length, f.ms ? RES.fmtDia(f.ms, true) : '',
-      RES.nombreArchivo((RES.encuesta() || {}).titulo, 'foto ' + (k + 1)));
+      RES.nombreArchivo((RES.encuesta() || {}).titulo, 'foto ' + (k + 1)), f.orig);
   },
 
-  mostrarFoto: function (url, titulo, sub, archivo) {
+  /* Foto en grande. Si está en Google Drive (orig = { drive, mini }) se
+     muestra la copia chica y, si el navegador tiene sesión de Google con
+     acceso a la carpeta, se cambia por la de Drive; el botón la abre allí. */
+  mostrarFoto: function (url, titulo, sub, archivo, orig) {
     if (!ENC.esImagen(url)) return;
+    var drive = ENC.fotoDrive(orig);
     RCR.modal({
       id: 'm-res-foto',
       titulo: titulo,
       sub: RCR.esc(sub || ''),
-      cuerpo: '<img class="res-foto-grande" src="' + url + '" alt="' + ENC.attr(titulo) + '">',
-      acciones:
-        '<a class="btn btn-glass" href="' + url + '" download="' + ENC.attr(archivo || 'foto') + '.jpg">' + ico('download', 15) + 'Descargar</a>' +
+      cuerpo: '<img class="res-foto-grande" id="res-foto-grande" src="' + url + '" alt="' + ENC.attr(titulo) + '">',
+      acciones: (drive
+        ? '<a class="btn btn-glass" href="' + drive + '" target="_blank" rel="noopener">' + ico('externalLink', 15) + 'Abrir en Google Drive</a>'
+        : '<a class="btn btn-glass" href="' + url + '" download="' + ENC.attr(archivo || 'foto') + '.jpg">' + ico('download', 15) + 'Descargar</a>') +
         '<button class="btn btn-primary" onclick="RCR.cerrarModal(\'m-res-foto\')">Cerrar</button>'
     });
+    if (drive) {
+      var grande = new Image();
+      grande.referrerPolicy = 'no-referrer';
+      grande.onload = function () {
+        var el = document.getElementById('res-foto-grande');
+        if (el && grande.naturalWidth > 64) el.src = grande.src;
+      };
+      grande.src = 'https://drive.google.com/thumbnail?id=' + orig.drive + '&sz=w1600';
+    }
   },
 
   verTodas: function (qid) {

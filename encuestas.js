@@ -140,8 +140,19 @@ var ENC = {
   /* Imágenes: se guardan como JPEG en base64 dentro del documento (como la
      foto del currículo). Firestore admite hasta 1 MB por documento. */
   IMG_APOYO: { lado: 1000, calidad: 0.72 },   // imagen que acompaña una pregunta
-  IMG_RESP:  { lado: 1000, calidad: 0.7 },    // foto que sube quien responde
+  IMG_RESP:  { lado: 1000, calidad: 0.7 },    // foto que sube quien responde (sin Drive)
   LIMITE_DOC: 950000,                         // margen bajo el 1 MB de Firestore
+
+  /* Fotos de quien responde en Google Drive (Apps Script de la cuenta dueña
+     de la carpeta; el código está en apps-script/fotos-drive.gs). Vacío =
+     como antes: la foto va dentro de la respuesta.
+     Con Drive, la respuesta guarda { drive, mini, carpeta }: el id del
+     archivo, una copia chica para verla en Mi RCR y la carpeta de la encuesta.
+     La foto se vuelve a dibujar en el teléfono: pesa menos para subirla con
+     datos móviles y no lleva la ubicación GPS que traen las fotos. */
+  DRIVE_URL: 'https://script.google.com/macros/s/AKfycbzu3DX-zuGn5e6X4NEx3Q4yd22Hf9UjKTaey2Dz0pQoqYr4sKbDkNLt99LGZPNlrj-D0g/exec',
+  IMG_DRIVE: { lado: 2048, calidad: 0.82 },   // la que se sube a Drive
+  IMG_MINI:  { lado: 640, calidad: 0.66 },    // la copia chica de la respuesta
 
   /* Tipos que pueden servir de condición para otra pregunta */
   RAMIFICAN: ['unica', 'multiple', 'sino', 'escala', 'estrellas'],
@@ -229,6 +240,7 @@ var ENC = {
   },
 
   fmtValor: function (v) {
+    if (ENC.fotoSrc(v)) return 'Imagen adjunta';
     if (Array.isArray(v)) return v.join(', ');
     if (v && typeof v === 'object') return Object.keys(v).map(function (k) { return v[k]; }).join('; ');
     if (ENC.esImagen(v)) return 'Imagen adjunta';
@@ -240,6 +252,21 @@ var ENC = {
      respuestas llegan de fuera: nunca se pinta un valor cualquiera en src). */
   esImagen: function (v) {
     return typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
+  },
+
+  /* Foto de una respuesta: base64 (dentro de la respuesta) o { drive, mini,
+     carpeta } (en Google Drive). fotoSrc da lo que se puede mostrar aquí. */
+  fotoSrc: function (v) {
+    if (ENC.esImagen(v)) return v;
+    if (v && typeof v === 'object' && ENC.esImagen(v.mini)) return v.mini;
+    return '';
+  },
+  esIdDrive: function (s) { return typeof s === 'string' && /^[A-Za-z0-9_-]{10,100}$/.test(s); },
+  fotoDrive: function (v) {
+    return v && typeof v === 'object' && ENC.esIdDrive(v.drive) ? 'https://drive.google.com/file/d/' + v.drive + '/view' : '';
+  },
+  carpetaDrive: function (v) {
+    return v && typeof v === 'object' && ENC.esIdDrive(v.carpeta) ? 'https://drive.google.com/drive/folders/' + v.carpeta : '';
   },
 
   /* Enlace seguro: solo http(s); se agrega https:// si falta. '' si no sirve. */
@@ -260,23 +287,28 @@ var ENC = {
     try { return new URL(en.url).hostname.replace(/^www\./, ''); } catch (e) { return en.url; }
   },
 
-  /* Lee un archivo de imagen y la reduce a JPEG (lado mayor = o.lado) */
+  /* Lee un archivo de imagen y la reduce a JPEG (lado mayor = o.lado).
+     Con una lista de tamaños devuelve una lista (se lee la foto una vez). */
   comprimirImagen: function (file, o) {
+    var lista = Array.isArray(o) ? o : [o];
     return new Promise(function (ok, mal) {
       if (!file || !/^image\//.test(file.type)) { mal(new Error('no-imagen')); return; }
       var url = URL.createObjectURL(file);
       var img = new Image();
       img.onload = function () {
-        var k = Math.min(1, o.lado / Math.max(img.width, img.height));
-        var cnv = document.createElement('canvas');
-        cnv.width = Math.max(1, Math.round(img.width * k));
-        cnv.height = Math.max(1, Math.round(img.height * k));
-        var cx = cnv.getContext('2d');
-        cx.fillStyle = '#fff';                       // PNG con transparencia → fondo blanco
-        cx.fillRect(0, 0, cnv.width, cnv.height);
-        cx.drawImage(img, 0, 0, cnv.width, cnv.height);
+        var out = lista.map(function (x) {
+          var k = Math.min(1, x.lado / Math.max(img.width, img.height));
+          var cnv = document.createElement('canvas');
+          cnv.width = Math.max(1, Math.round(img.width * k));
+          cnv.height = Math.max(1, Math.round(img.height * k));
+          var cx = cnv.getContext('2d');
+          cx.fillStyle = '#fff';                     // PNG con transparencia → fondo blanco
+          cx.fillRect(0, 0, cnv.width, cnv.height);
+          cx.drawImage(img, 0, 0, cnv.width, cnv.height);
+          return cnv.toDataURL('image/jpeg', x.calidad);
+        });
         URL.revokeObjectURL(url);
-        ok(cnv.toDataURL('image/jpeg', o.calidad));
+        ok(Array.isArray(o) ? out : out[0]);
       };
       img.onerror = function () { URL.revokeObjectURL(url); mal(new Error('no-se-pudo-leer')); };
       img.src = url;
@@ -975,7 +1007,8 @@ var ENC = {
         cuerpo = '<div class="eb-muestra"><div class="eb-linea eb-linea-num"><b>123</b>Respuesta con un número</div></div>';
       } else if (q.tipo === 'imagen') {
         cuerpo = '<div class="eb-muestra"><div class="eb-subir">' + ico('image', 20) +
-          '<span><strong>Subir una foto</strong>Quien responde podrá adjuntar una imagen o tomarla con el celular.</span></div></div>';
+          '<span><strong>Subir una foto</strong>Quien responde podrá adjuntar una imagen o tomarla con el celular.' +
+          (ENC.DRIVE_URL ? ' Se guarda en Google Drive, en una carpeta de esta encuesta.' : '') + '</span></div></div>';
       } else {
         cuerpo = '<div class="eb-muestra"><div class="eb-linea' + (q.tipo === 'largo' ? ' largo' : '') + '">' +
           (q.tipo === 'largo' ? 'Respuesta larga' : 'Respuesta corta') + '</div></div>';
