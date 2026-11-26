@@ -331,7 +331,7 @@ var RES = {
         return { label: o, n: cuenta[o], pct: RES.pct(cuenta[o], vals.length) };
       });
 
-      if (q.tipo === 'escala') {
+      if (q.tipo === 'escala' || q.tipo === 'estrellas') {
         var suma = 0, cnt = 0;
         vals.forEach(function (v) { var x = Number(v); if (isFinite(x)) { suma += x; cnt++; } });
         s.promedio = cnt ? (suma / cnt).toFixed(1).replace('.', ',') : null;
@@ -551,6 +551,7 @@ var RES = {
   /* Qué forma lleva cada pregunta cerrada */
   formaDe: function (s) {
     if (s.q.tipo === 'escala') return 'escala';
+    if (s.q.tipo === 'estrellas') return 'estrellas';
     if (s.q.tipo === 'sino') return 'dona';
     if (s.q.tipo === 'unica' && s.filas.length <= RES.MAX_DONA) return 'dona';
     return 'barras';
@@ -641,6 +642,39 @@ var RES = {
         : partes.reduce(function (a, f) { return f.n > a.n ? f : a; }, partes[0]);
       RES.graficos[clave] = Object.assign({ tipo: 'dona', centro: principal }, base, { filas: partes });
       return card(true, RES.donaHtml(partes, principal));
+    }
+
+    /* Estrellas: el promedio con sus estrellas (como las calificaciones de
+       una tienda de apps) y una barra por cantidad de estrellas, de 5 a 1.
+       El PNG usa las mismas barras con el promedio arriba. */
+    if (forma === 'estrellas') {
+      var filasE = s.filas.slice().reverse().map(function (f) {
+        return Object.assign({}, f, { estrellas: f.label, label: f.label + (f.label === '1' ? ' estrella' : ' estrellas') });
+      });
+      RES.graficos[clave] = Object.assign({ tipo: 'barras' }, base, { filas: filasE });
+      var maxS = Math.max.apply(null, filasE.map(function (f) { return f.n; })) || 1;
+      var prom = s.promedio != null ? Number(String(s.promedio).replace(',', '.')) : 0;
+      var estrella = '<svg class="estr llena" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">' +
+        '<path d="M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9z"/></svg>';
+      return card(true,
+        '<div class="res-estr-hero">' +
+          '<strong>' + (s.promedio != null ? s.promedio : '—') + '</strong>' +
+          '<div class="res-estr-info">' +
+            '<span class="res-estr-fila" role="img" aria-label="' + ENC.attr('Promedio: ' + s.promedio + ' de 5 estrellas') + '">' +
+              '<span class="res-estr-base">' + ENC.estrellasSvg(0, 20) + '</span>' +
+              '<span class="res-estr-tope" style="width:' + Math.max(0, Math.min(100, prom / 5 * 100)).toFixed(1) + '%">' + ENC.estrellasSvg(5, 20) + '</span>' +
+            '</span>' +
+            '<small>de 5 · ' + s.respondieron + (s.respondieron === 1 ? ' calificación' : ' calificaciones') + '</small>' +
+          '</div>' +
+        '</div>' +
+        '<div class="res-barras res-estr-barras">' + filasE.map(function (f) {
+          var tip = f.label + ': ' + f.n + (f.n === 1 ? ' respuesta' : ' respuestas') + ' (' + f.pct + '%)';
+          return '<div class="res-barra" data-tip="' + ENC.attr(tip) + '">' +
+              '<div class="res-barra-lbl res-estr-lbl">' + RCR.esc(f.estrellas) + estrella + '</div>' +
+              '<div class="res-barra-pista"><div class="res-barra-fill" style="width:' + (f.n ? Math.max(1.5, f.n / maxS * 100) : 0) + '%"></div></div>' +
+              '<div class="res-num-pct">' + f.pct + '%</div><div class="res-num-n">' + f.n + '</div>' +
+            '</div>';
+        }).join('') + '</div>');
     }
 
     /* Escala 1–5: promedio y una columna por valor (orden natural) */

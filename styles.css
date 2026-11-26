@@ -1884,6 +1884,15 @@ a:focus-visible,
 .eb-subir span{display:flex;flex-direction:column;gap:2px;font-size:12.5px;line-height:1.4;color:#6e6e73;}
 .eb-subir strong{font-size:14.5px;color:#1d1d1f;}
 
+/* Estrellas: vista previa en el constructor (contorno gris) */
+.eb-estrellas{display:flex;gap:8px;}
+.eb-estrellas svg{fill:none;stroke:#c7cbd3;stroke-width:1.6;stroke-linejoin:round;}
+.eb-estr-ext{justify-content:flex-start;}
+
+/* Estrellas pintadas en cualquier parte (resultados, datos): llenas en índigo */
+svg.estr{flex:none;fill:none;stroke:#c7cbd3;stroke-width:1.6;stroke-linejoin:round;}
+svg.estr.llena{fill:var(--blue2);stroke:var(--blue2);}
+
 /* Imagen y enlace de apoyo dentro de la tarjeta */
 .eb-ico.on{color:var(--blue2);background:rgba(80,108,255,.1);}
 .eb-apoyo-img{position:relative;margin:0 0 12px;border-radius:16px;overflow:hidden;border:1px solid var(--eb-sep);background:rgba(255,255,255,.5);}
@@ -2220,6 +2229,30 @@ textarea.rg-campo{resize:vertical;min-height:92px;line-height:1.45;}
 .resp-num input:focus-visible + span{outline:2px solid var(--g-acento);outline-offset:1px;}
 .resp-escala-ext{display:flex;justify-content:space-between;margin-top:6px;padding:0 6px;font-size:11.5px;color:var(--g-gris);}
 
+/* Estrellas: se pintan hasta la elegida; al pasar el cursor, una vista
+   previa más suave hasta la estrella que está debajo */
+.resp-estrellas{display:flex;gap:0;width:max-content;}
+.resp-estr{position:relative;display:flex;padding:4px 5px;border-radius:10px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.resp-estr input{position:absolute;opacity:0;pointer-events:none;}
+.resp-estr svg{
+  width:38px;height:38px;fill:transparent;stroke:#c3c8d2;stroke-width:1.5;stroke-linejoin:round;
+  transition:fill .15s,stroke .15s,transform .15s;
+}
+.resp-estr:active svg{transform:scale(.9);}
+.resp-estr input:focus-visible + svg{outline:2px solid var(--g-acento);outline-offset:3px;border-radius:6px;}
+.resp-estr input:checked + svg,
+.resp-estr:has(~ .resp-estr input:checked) svg{fill:var(--g-acento);stroke:var(--g-acento);}
+/* Con el cursor encima manda la vista previa: se pintan hasta la estrella
+   que está debajo. Solo con cursor (en el celular el "hover" se queda
+   pegado). Las clases van dobles para ganarle a la selección. */
+@media (hover:hover){
+  .resp-estrellas.resp-estrellas:hover .resp-estr.resp-estr svg{fill:transparent;stroke:#c3c8d2;}
+  .resp-estrellas.resp-estrellas:hover .resp-estr.resp-estr:hover svg,
+  .resp-estrellas.resp-estrellas:hover .resp-estr.resp-estr:has(~ .resp-estr:hover) svg{fill:var(--g-acento);stroke:var(--g-acento);}
+}
+.resp-estr input:checked + svg{transform:scale(1.06);}
+@media (max-width:380px){ .resp-estr{padding:4px 3px;} .resp-estr svg{width:34px;height:34px;} }
+
 /* Subir foto */
 .resp-subir{
   display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:14px;cursor:pointer;
@@ -2492,6 +2525,17 @@ textarea.rg-campo{resize:vertical;min-height:92px;line-height:1.45;}
 .res-hero{display:flex;align-items:baseline;gap:8px;margin-bottom:16px;}
 .res-hero strong{font-size:32px;font-weight:700;letter-spacing:-.6px;color:var(--text);line-height:1;}
 .res-hero span{font-size:13px;color:#8a8f99;}
+
+/* Estrellas: promedio grande, estrellas llenas en proporción y barras 5→1 */
+.res-estr-hero{display:flex;align-items:center;gap:14px;margin-bottom:12px;}
+.res-estr-hero strong{font-size:40px;font-weight:700;letter-spacing:-.8px;line-height:1;color:var(--text);}
+.res-estr-info{display:flex;flex-direction:column;gap:4px;}
+.res-estr-info small{font-size:12.5px;color:#8a8f99;}
+.res-estr-fila{position:relative;display:inline-flex;align-self:flex-start;width:max-content;}
+.res-estr-base,.res-estr-tope{display:flex;gap:2px;}
+.res-estr-tope{position:absolute;top:0;left:0;bottom:0;overflow:hidden;}
+.res-estr-barras .res-barra{grid-template-columns:44px minmax(0,1fr) var(--c-pct) var(--c-n);}
+.res-estr-lbl{display:inline-flex;align-items:center;gap:4px;font-weight:600;font-variant-numeric:tabular-nums;}
 .res-num-linea{
   display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-radius:14px;background:var(--g-relleno);
 }
@@ -2636,6 +2680,10 @@ a.btn{text-decoration:none;}
   .res-barra{grid-template-columns:minmax(0,1fr) var(--c-pct) var(--c-n);row-gap:6px;}
   .res-barra-lbl{grid-column:1 / -1;}
   .res-barra-pista{grid-column:1;}
+  /* Estrellas: la etiqueta es corta ("5 ★"), sigue en la misma fila */
+  .res-estr-barras .res-barra{grid-template-columns:38px minmax(0,1fr) var(--c-pct) var(--c-n);}
+  .res-estr-barras .res-barra-lbl,.res-estr-barras .res-barra-pista{grid-column:auto;}
+  .res-estr-hero strong{font-size:34px;}
   .res-apil-fila{grid-template-columns:minmax(0,1fr) var(--c-n);row-gap:6px;}
   .res-apil-lbl{grid-column:1 / -1;}
 }
@@ -2766,6 +2814,7 @@ a.btn{text-decoration:none;}
 .dat-tabla th.dat-n{z-index:3;background:var(--surface);}
 .dat-tabla th.dat-fecha,.dat-tabla td.dat-fecha{min-width:150px;color:var(--text-muted);}
 .dat-tabla td.dat-num{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;}
+.dat-estr-in{display:inline-flex;gap:1px;vertical-align:-2px;}
 .dat-tabla td.dat-vacio{color:#b8c0cc;}
 .dat-tabla tbody tr{cursor:pointer;transition:background .12s;}
 .dat-tabla tbody tr:hover td,.dat-tabla tbody tr:focus td{background:#f5f7ff;}
@@ -2815,6 +2864,20 @@ a.btn{text-decoration:none;}
 .fi-puntos i{width:8px;height:8px;border-radius:50%;background:rgba(118,118,128,.22);}
 .fi-puntos i.on{background:var(--blue2);}
 .fi-escala strong{font-size:15px;font-weight:600;color:#1d1d1f;}
+.fi-estr-fila{display:inline-flex;gap:2px;}
+/* Editar estrellas: cinco botones grandes; se pintan hasta la elegida */
+.fi-estrellas{display:flex;}
+.fi-estrellas button{
+  display:flex;padding:3px;border:none;border-radius:8px;background:none;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;transition:transform .12s;
+}
+.fi-estrellas button:active{transform:scale(.9);}
+.fi-estrellas button:focus-visible{outline:2px solid var(--blue2);outline-offset:0;}
+@media (hover:hover){
+  .fi-estrellas:hover button svg{fill:none;stroke:#c7cbd3;}
+  .fi-estrellas:hover button:hover svg,
+  .fi-estrellas:hover button:has(~ button:hover) svg{fill:var(--blue2);stroke:var(--blue2);}
+}
 .fi-escala small{font-size:12.5px;color:#8a8f99;}
 .fi-sub{margin-top:8px;border-radius:10px;background:rgba(118,118,128,.07);overflow:hidden;}
 .fi-sub-fila{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:38px;padding:6px 12px;font-size:13.5px;}

@@ -186,6 +186,16 @@ RCR.esc = function (v) {
         return '<label class="resp-num"><input type="radio" name="' + name + '" value="' + v + '"><span>' + v + '</span></label>';
       }).join('') + '</div>' +
       '<div class="resp-escala-ext"><span>Bajo</span><span>Alto</span></div>';
+    } else if (q.tipo === 'estrellas') {
+      /* Cinco estrellas: se pintan hasta la elegida (y al pasar el cursor) */
+      campo = '<div class="resp-estrellas" role="radiogroup" aria-label="' + a('Calificación de 1 a 5 estrellas') + '">' +
+        [1, 2, 3, 4, 5].map(function (v) {
+          return '<label class="resp-estr" title="' + v + (v === 1 ? ' estrella' : ' estrellas') + '">' +
+            '<input type="radio" name="' + name + '" value="' + v + '" aria-label="' + v + (v === 1 ? ' estrella' : ' estrellas') + '">' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9z"/></svg>' +
+          '</label>';
+        }).join('') +
+      '</div>';
     } else if (q.tipo === 'sino') {
       campo = '<div class="rg-seg resp-sino">' + ['Sí', 'No'].map(function (v) {
         return '<label class="resp-num"><input type="radio" name="' + name + '" value="' + v + '"><span>' + v + '</span></label>';
@@ -338,7 +348,7 @@ RCR.esc = function (v) {
           .map(function (x) { return x.value; });
       } else {
         var sel = form.querySelector('input[name="' + name + '"]:checked');
-        r[q.id] = sel ? (q.tipo === 'escala' ? Number(sel.value) : sel.value) : '';
+        r[q.id] = sel ? ((q.tipo === 'escala' || q.tipo === 'estrellas') ? Number(sel.value) : sel.value) : '';
       }
     });
     return r;

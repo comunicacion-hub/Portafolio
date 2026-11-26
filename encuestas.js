@@ -15,8 +15,8 @@
      (RespuestasEncuesta/{id}: formato antiguo, se mueve solo a la subcolección)
 
    Pregunta = { id, tipo, texto, requerida, opciones: [..], condicion: null | { pregunta, valor } }
-     tipo: corto | largo | unica | multiple | escala | sino | numero | imagen | cuadricula | seccion
-     valor guardado: texto, número (escala/numero), lista (multiple),
+     tipo: corto | largo | unica | multiple | escala | estrellas | sino | numero | imagen | cuadricula | seccion
+     valor guardado: texto, número (escala/estrellas/numero), lista (multiple),
      JPEG base64 (imagen), { idFila: columna } (cuadricula)
 
    Reglas de Firestore: ver firestore.rules (en la raíz del repositorio).
@@ -117,6 +117,7 @@ var ENC = {
     { id: 'unica',    label: 'Opción única' },
     { id: 'multiple', label: 'Opción múltiple' },
     { id: 'escala',   label: 'Escala 1 a 5' },
+    { id: 'estrellas', label: 'Estrellas' },
     { id: 'sino',     label: 'Sí / No' },
     { id: 'numero',   label: 'Número' },
     { id: 'imagen',   label: 'Subir imagen' },
@@ -143,7 +144,24 @@ var ENC = {
   LIMITE_DOC: 950000,                         // margen bajo el 1 MB de Firestore
 
   /* Tipos que pueden servir de condición para otra pregunta */
-  RAMIFICAN: ['unica', 'multiple', 'sino', 'escala'],
+  RAMIFICAN: ['unica', 'multiple', 'sino', 'escala', 'estrellas'],
+
+  /* Estrellas: de 1 a 5, se guardan como número */
+  ESTRELLAS: 5,
+  /* Fila de estrellas en SVG; "llenas" = cuántas van pintadas */
+  estrellasSvg: function (llenas, tam) {
+    var s = '';
+    for (var k = 1; k <= ENC.ESTRELLAS; k++) {
+      s += '<svg class="estr' + (k <= llenas ? ' llena' : '') + '" viewBox="0 0 24 24" width="' + (tam || 18) + '" height="' + (tam || 18) + '" aria-hidden="true">' +
+        '<path d="M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9z"/></svg>';
+    }
+    return s;
+  },
+  /* Texto de un valor para mostrarlo (en las condiciones, "3 estrellas") */
+  etiquetaValor: function (q, v) {
+    if (q && q.tipo === 'estrellas') return v + (String(v) === '1' ? ' estrella' : ' estrellas');
+    return String(v);
+  },
 
   /* ==========================================================================
      LÓGICA COMPARTIDA (también la usa la página pública)
@@ -162,7 +180,7 @@ var ENC = {
   valoresDe: function (q) {
     if (!q) return [];
     if (q.tipo === 'sino') return ['Sí', 'No'];
-    if (q.tipo === 'escala') return ['1', '2', '3', '4', '5'];
+    if (q.tipo === 'escala' || q.tipo === 'estrellas') return ['1', '2', '3', '4', '5'];
     if (q.tipo === 'unica' || q.tipo === 'multiple') {
       return (q.opciones || []).map(function (o) { return String(o).trim(); }).filter(Boolean);
     }
@@ -933,6 +951,9 @@ var ENC = {
         cuerpo = '<div class="eb-muestra"><div class="eb-escala">' +
           [1, 2, 3, 4, 5].map(function (v) { return '<span>' + v + '</span>'; }).join('') +
           '</div><div class="eb-escala-ext"><span>Bajo</span><span>Alto</span></div></div>';
+      } else if (q.tipo === 'estrellas') {
+        cuerpo = '<div class="eb-muestra"><div class="eb-estrellas">' + ENC.estrellasSvg(0, 28) + '</div>' +
+          '<div class="eb-escala-ext eb-estr-ext">Quien responde toca de 1 a 5 estrellas</div></div>';
       } else if (q.tipo === 'sino') {
         cuerpo = '<div class="eb-muestra"><div class="eb-sino"><span>Sí</span><span>No</span></div></div>';
       } else if (q.tipo === 'cuadricula') {
@@ -1244,7 +1265,7 @@ var ENC = {
     });
     if (!fuentes.length) {
       return (i > 0 && !sec)
-        ? '<div class="eb-fila nota">' + ico('branch', 14) + '<span>Para mostrar esta pregunta según una respuesta, antes agrega una de opción, escala o Sí/No.</span></div>'
+        ? '<div class="eb-fila nota">' + ico('branch', 14) + '<span>Para mostrar esta pregunta según una respuesta, antes agrega una de opción, escala, estrellas o Sí/No.</span></div>'
         : '';
     }
 
@@ -1271,7 +1292,7 @@ var ENC = {
           '<span class="eb-cond-op">' + (src && src.tipo === 'multiple' ? 'incluye' : 'es') + '</span>' +
           '<label class="eb-select"><select aria-label="Respuesta de la condición" onchange="ENC.setCondValor(' + i + ',this.value)">' +
             vals.map(function (v) {
-              return '<option value="' + ENC.attr(v) + '"' + (v === c.valor ? ' selected' : '') + '>' + RCR.esc(v) + '</option>';
+              return '<option value="' + ENC.attr(v) + '"' + (v === c.valor ? ' selected' : '') + '>' + RCR.esc(ENC.etiquetaValor(src, v)) + '</option>';
             }).join('') +
           '</select>' + chev + '</label>' +
         '</div>';

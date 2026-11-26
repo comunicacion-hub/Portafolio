@@ -308,6 +308,10 @@ var DAT = {
           if (RES.vacio(v)) return '<td class="dat-vacio">—</td>';
           if (ENC.esImagen(v)) return '<td class="dat-img"><img src="' + v + '" alt="Imagen adjunta" loading="lazy"></td>';
           var t = ENC.fmtValor(v);
+          if (q.tipo === 'estrellas' && isFinite(Number(v))) {
+            return '<td class="dat-estr" title="' + ENC.attr(ENC.etiquetaValor(q, v)) + '">' +
+              '<span class="dat-estr-in" role="img" aria-label="' + ENC.attr(ENC.etiquetaValor(q, v)) + '">' + ENC.estrellasSvg(Number(v), 13) + '</span></td>';
+          }
           return '<td' + (q.tipo === 'escala' || q.tipo === 'numero' ? ' class="dat-num"' : '') + ' title="' + ENC.attr(t) + '">' + RCR.esc(t) + '</td>';
         }).join('') +
       '</tr>';
@@ -463,6 +467,10 @@ var DAT = {
       return '<div class="fi-escala"><span class="fi-puntos" aria-hidden="true">' + pts + '</span>' +
         '<strong>' + x + '</strong><small>de 5</small></div>';
     }
+    if (q.tipo === 'estrellas' && isFinite(Number(v))) {
+      return '<div class="fi-escala fi-estr"><span class="fi-estr-fila" role="img" aria-label="' + ENC.attr(ENC.etiquetaValor(q, v)) + '">' +
+        ENC.estrellasSvg(Number(v), 18) + '</span><strong>' + Number(v) + '</strong><small>de 5</small></div>';
+    }
     return '<div class="fi-v">' + RCR.esc(ENC.fmtValor(v)) + '</div>';
   },
 
@@ -526,6 +534,18 @@ var DAT = {
     if (t === 'numero') {
       return '<input class="fi-inp fi-num" type="text" inputmode="decimal"' + lbl + ' value="' +
         ENC.attr(v == null ? '' : String(v).replace('.', ',')) + '" oninput="DAT.edTxt(' + k + ',this.value)">';
+    }
+    if (t === 'estrellas') {
+      /* Tocar una estrella la elige; tocar la elegida otra vez la borra */
+      var nv = Number(v) || 0;
+      return '<div class="fi-estrellas" role="radiogroup"' + lbl + '>' +
+        DAT.edOpciones(q, v).map(function (op, j) {
+          var on = nv === Number(op);
+          return '<button type="button" role="radio" aria-checked="' + on + '" aria-label="' + ENC.attr(ENC.etiquetaValor(q, op)) + '"' +
+            ' title="' + ENC.attr(ENC.etiquetaValor(q, op)) + '" onclick="DAT.edOp(' + k + ',' + j + ')">' +
+            '<svg class="estr' + (Number(op) <= nv ? ' llena' : '') + '" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">' +
+              '<path d="M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9z"/></svg></button>';
+        }).join('') + '</div>';
     }
     if (t === 'sino' || t === 'escala') {
       return '<div class="fi-seg' + (t === 'escala' ? ' escala' : '') + '" role="radiogroup"' + lbl + '>' +
@@ -598,7 +618,7 @@ var DAT = {
       arr.sort(function (a, b) { return ops.indexOf(a) - ops.indexOf(b); });
       f.vals[q.id] = arr;
     } else {
-      f.vals[q.id] = (v != null && String(v) === op) ? null : (q.tipo === 'escala' ? Number(op) : op);
+      f.vals[q.id] = (v != null && String(v) === op) ? null : ((q.tipo === 'escala' || q.tipo === 'estrellas') ? Number(op) : op);
     }
     f.sucio = true;
     DAT.edRepintar(k);
@@ -802,7 +822,7 @@ var DAT = {
       return [i + 1, ms ? new Date(ms) : ''].concat(colsX.map(function (col) {
         var q = col.q, v = col.val(resp);
         if (RES.vacio(v)) return '';
-        if (q.tipo === 'escala' || q.tipo === 'numero') { var x = Number(v); return isFinite(x) ? x : String(v); }
+        if (q.tipo === 'escala' || q.tipo === 'estrellas' || q.tipo === 'numero') { var x = Number(v); return isFinite(x) ? x : String(v); }
         if (ENC.esImagen(v)) return 'Imagen adjunta (ver en Mi RCR)';
         return Array.isArray(v) ? v.join('; ') : String(v);
       }));
