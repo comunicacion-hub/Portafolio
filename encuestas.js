@@ -156,9 +156,12 @@ var ENC = {
   IMG_DRIVE: { lado: 2048, calidad: 0.82 },   // la que se sube a Drive
   IMG_MINI:  { lado: 480, calidad: 0.62 },    // la copia chica de la respuesta
 
-  /* Cuántas fotos se pueden subir en una pregunta "Subir imagen" */
-  FOTOS_MAX: 10,
+  /* Cuántas fotos se pueden subir en una pregunta "Subir imagen". Con muchas,
+     las copias chicas de la respuesta se achican al enviar para que quepan
+     (Firestore admite 1 MB por respuesta); en Drive queda la foto completa. */
+  FOTOS_MAX: 30,
   FOTOS_DEF: 5,                               // si quien creó la encuesta no eligió
+  FOTOS_OPCIONES: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30],
   maxFotos: function (q) {
     var n = parseInt(q && q.maxFotos, 10);
     return n >= 1 && n <= ENC.FOTOS_MAX ? n : ENC.FOTOS_DEF;
@@ -1101,10 +1104,11 @@ var ENC = {
 
   /* ── Subir imagen: cuántas fotos se pueden subir ───────────────────────── */
   maxFotosHtml: function (q, i, chev) {
-    var n = ENC.maxFotos(q), ops = '';
-    for (var k = 1; k <= ENC.FOTOS_MAX; k++) {
+    var n = ENC.maxFotos(q), lista = ENC.FOTOS_OPCIONES.slice(), ops = '';
+    if (lista.indexOf(n) < 0) lista.push(n), lista.sort(function (a, b) { return a - b; });
+    lista.forEach(function (k) {
       ops += '<option value="' + k + '"' + (k === n ? ' selected' : '') + '>' + (k === 1 ? '1 foto' : 'Hasta ' + k + ' fotos') + '</option>';
-    }
+    });
     return '<div class="eb-fila"><span class="eb-fila-txt">Máximo de fotos</span>' +
       '<label class="eb-select"><select aria-label="Cuántas fotos se pueden subir" ' +
         'onchange="ENC.b.preguntas[' + i + '].maxFotos=Number(this.value)">' + ops + '</select>' + chev + '</label>' +

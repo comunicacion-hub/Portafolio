@@ -512,6 +512,16 @@ RCR.esc = function (v) {
         respuestas[q.id] = q.tipo === 'numero' ? ENC.leerNumero(st.r[q.id]) : st.r[q.id];
       }
     });
+    /* Con muchas fotos, sus copias chicas se achican hasta que la respuesta
+       quepa (en Drive queda igual la foto completa) */
+    if (aDrive.length && JSON.stringify(respuestas).length > ENC.LIMITE_DOC) {
+      var btnP = document.getElementById('resp-enviar');
+      enviando = true;
+      btnP.disabled = true; btnP.innerHTML = '<span>Preparando fotos…</span>';
+      try { await achicarMinis(aDrive, respuestas); } catch (e) { console.warn('achicar fotos:', e); }
+      enviando = false;
+      btnP.disabled = false; pintarProgreso();
+    }
     if (JSON.stringify(respuestas).length > ENC.LIMITE_DOC) {
       toast('Las fotos pesan demasiado. Quita alguna e inténtalo de nuevo.');
       return;
@@ -542,6 +552,23 @@ RCR.esc = function (v) {
       pintarProgreso();
     }
     enviando = false;
+  }
+
+  /* Copias chicas cada vez más chicas, de a un paso, hasta que la respuesta
+     quepa. Se hacen desde la foto grande (no desde la copia) para que se
+     sigan viendo bien en Datos. */
+  var MINIS_CHICAS = [{ lado: 360, calidad: 0.58 }, { lado: 280, calidad: 0.55 }, { lado: 200, calidad: 0.5 }];
+  async function achicarMinis(aDrive, respuestas) {
+    for (var k = 0; k < MINIS_CHICAS.length; k++) {
+      if (JSON.stringify(respuestas).length <= ENC.LIMITE_DOC) return;
+      for (var i = 0; i < aDrive.length; i++) {
+        var b = await (await fetch(aDrive[i].hq)).blob();
+        aDrive[i].mini = await ENC.comprimirImagen(b, MINIS_CHICAS[k]);
+      }
+      var porQ = {};
+      aDrive.forEach(function (f) { (porQ[f.q] = porQ[f.q] || []).push(f.mini); });
+      Object.keys(porQ).forEach(function (q) { respuestas[q] = porQ[q]; });
+    }
   }
 
   /* Guarda una respuesta. Queda en la cola de Firestore (en el teléfono)

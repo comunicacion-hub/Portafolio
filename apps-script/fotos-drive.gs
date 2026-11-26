@@ -38,7 +38,7 @@
    (así la URL no cambia).
 
    SEGURIDAD
-   · Solo acepta fotos JPEG de hasta 12 MB (máximo 20 por pregunta), para
+   · Solo acepta fotos JPEG de hasta 12 MB (máximo 50 por pregunta), para
      encuestas que existen, están abiertas y tienen esa pregunta de tipo
      "Subir imagen".
    · Las fotos quedan privadas en tu Drive: solo las ve quien tenga acceso a
@@ -49,7 +49,7 @@ var CARPETA_ID = '';                                  // opcional: carpeta donde
 var NOMBRE_RAIZ = 'Fotos de encuestas (Mi RCR)';      // si CARPETA_ID queda vacío
 var PROYECTO = 'redes-con-rostro';                    // proyecto de Firebase
 var MAX_BYTES = 12 * 1024 * 1024;
-var MAX_FOTOS = 20;                                   // por pregunta
+var MAX_FOTOS = 50;                                   // por pregunta (Mi RCR deja elegir hasta 30)
 
 function doPost(e) {
   try {
