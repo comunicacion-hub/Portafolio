@@ -315,13 +315,20 @@ var ENC = {
     } catch (e) { return ''; }
   },
 
-  /* Enlace para responder. Con código corto: …/e/?k7m2qx (los enlaces
-     largos con ?id= siguen funcionando). La vista previa usa el largo. */
+  /* Enlace para responder: https://encuestas.redesconrostro.org/k7m2qx
+     (repositorio comunicacion-hub/encuestas, que muestra esta misma página
+     a pantalla completa). Sin código: …/?id=. Los enlaces viejos
+     (…/e/?código y responder-encuesta.html?id=) siguen funcionando.
+     La vista previa abre la página aquí mismo. */
+  URL_ENLACES: 'https://encuestas.redesconrostro.org/',
   urlPublica: function (id, previa) {
-    var base = location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, '');
+    if (previa) {
+      var base = location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, '');
+      return base + 'responder-encuesta.html?id=' + encodeURIComponent(id) + '&previa=1';
+    }
     var e = (ENC.datos || []).find(function (x) { return x._docId === id; });
-    if (e && ENC.esCodigo(e.codigo) && !previa) return base + 'e/?' + e.codigo;
-    return base + 'responder-encuesta.html?id=' + encodeURIComponent(id) + (previa ? '&previa=1' : '');
+    if (e && ENC.esCodigo(e.codigo)) return ENC.URL_ENLACES + e.codigo;
+    return ENC.URL_ENLACES + '?id=' + encodeURIComponent(id);
   },
 
   /* ── Código corto del enlace: Codigos/{codigo} = { encuestaId, creadoPor } ── */

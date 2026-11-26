@@ -14,7 +14,10 @@
 <body class="resp-body">
 
 <!-- Página pública para responder una encuesta: sin login ni navegación.
-     Se abre con ?id=<encuesta> o con ?c=<código corto> (desde /e/?código).
+     Se abre con ?id=<encuesta> o con ?c=<código corto>. Los enlaces que se
+     comparten son encuestas.redesconrostro.org/<código>, que muestra esta
+     página dentro de un marco (repositorio comunicacion-hub/encuestas); los
+     viejos /e/?código siguen funcionando.
      Lee Encuestas/{id} y guarda la respuesta en Encuestas/{id}/Respuestas.
      · Cada sección es un paso (tarjeta) con Atrás / Continuar.
      · Funciona sin conexión después de abrirla una vez con internet:
@@ -608,6 +611,11 @@ RCR.esc = function (v) {
   function mostrar(datos) {
     enc = datos;
     document.title = (enc.titulo || 'Encuesta') + ' — Redes Con Rostro';
+    /* Abierta desde encuestas.redesconrostro.org (dentro de un marco):
+       le pasa el título para la pestaña del navegador */
+    if (window.parent !== window) {
+      try { window.parent.postMessage({ tipo: 'rcr-titulo', titulo: document.title }, '*'); } catch (e) { /* sin marco */ }
+    }
     mostrada = true;
     if (enc.estado === 'cerrada' && !previa) { estado('clock', enc.titulo || 'Encuesta', 'Esta encuesta ya no recibe respuestas.'); return; }
     if (!ENC.soloPreguntas(enc.preguntas).length) { estado('inbox', enc.titulo || 'Encuesta', 'Esta encuesta todavía no tiene preguntas.'); return; }
