@@ -460,9 +460,12 @@ RCR.esc = function (v) {
 
     /* Solo se guardan las preguntas visibles y respondidas. Las fotos para
        Drive van aparte (aDrive); en la respuesta queda su copia chica. */
-    var respuestas = {}, aDrive = {};
+    var respuestas = {}, aDrive = {}, etiqueta = '';
     ENC.soloPreguntas(enc.preguntas).forEach(function (q) {
       if (!st.vis[q.id] || vacio(st.r[q.id])) return;
+      /* Primera respuesta de texto corto (suele ser el nombre): va en el
+         nombre de la foto en Drive, para saber de quién es */
+      if (q.tipo === 'corto' && !etiqueta) etiqueta = String(st.r[q.id]).trim().slice(0, 60);
       var f = q.tipo === 'imagen' ? fotos[q.id] : null;
       if (f && f.hq) {
         aDrive[q.id] = { hq: f.hq, mini: f.mini };
@@ -488,7 +491,7 @@ RCR.esc = function (v) {
       var res;
       if (Object.keys(aDrive).length) {
         Object.keys(aDrive).forEach(function (k) { delete respuestas[k]; });
-        res = await enviarConFotos({ rid: ref.id, enc: id, fecha: Date.now(), respuestas: respuestas, fotos: aDrive }, espera);
+        res = await enviarConFotos({ rid: ref.id, enc: id, fecha: Date.now(), etiqueta: etiqueta, respuestas: respuestas, fotos: aDrive }, espera);
       } else {
         var escritura = guardarRespuesta(ref, respuestas, id);
         res = await Promise.race([escritura.then(function () { return 'ok'; }), esperar(espera, 'cola')]);
@@ -613,7 +616,8 @@ RCR.esc = function (v) {
     return fetch(ENC.DRIVE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // sin consulta previa (CORS)
-      body: JSON.stringify({ encuesta: item.enc, pregunta: qid, respuesta: item.rid, fecha: item.fecha, foto: item.fotos[qid].hq }),
+      body: JSON.stringify({ encuesta: item.enc, pregunta: qid, respuesta: item.rid, fecha: item.fecha,
+        etiqueta: item.etiqueta || '', foto: item.fotos[qid].hq }),
       signal: ctrl ? ctrl.signal : undefined
     }).then(function (r) {
       clearTimeout(t);

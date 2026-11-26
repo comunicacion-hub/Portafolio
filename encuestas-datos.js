@@ -256,7 +256,7 @@ var DAT = {
     });
     if (!DAT.filtro) return todas;
     return todas.filter(function (f) {
-      var txt = [String(f.n), DAT.fmtFechaHora(f.ms)].concat(cols.map(function (c) {
+      var txt = [String(f.n), DAT.fmtFechaHora(f.ms), ENC.codigoResp(f.r._docId)].concat(cols.map(function (c) {
         return ENC.fmtValor(c.val(f.r.respuestas));
       })).join(' ').toLowerCase();
       return txt.indexOf(DAT.filtro) >= 0;
@@ -307,7 +307,8 @@ var DAT = {
           var q = c.q, v = c.val(resp);
           if (RES.vacio(v)) return '<td class="dat-vacio">—</td>';
           var src = ENC.fotoSrc(v);
-          if (src) return '<td class="dat-img"><img src="' + src + '" alt="Imagen adjunta" loading="lazy"></td>';
+          if (src) return '<td class="dat-img"' + (ENC.fotoDrive(v) ? ' title="En Google Drive · código ' + ENC.codigoResp(f.r._docId) + '"' : '') + '>' +
+            '<img src="' + src + '" alt="Imagen adjunta" loading="lazy"></td>';
           var t = ENC.fmtValor(v);
           if (q.tipo === 'estrellas' && isFinite(Number(v))) {
             return '<td class="dat-estr" title="' + ENC.attr(ENC.etiquetaValor(q, v)) + '">' +
@@ -347,7 +348,8 @@ var DAT = {
     var r = (RES.cache[RES.sel] || []).find(function (x) { return x._docId === rid; });
     var v = r && (r.respuestas || {})[qid];
     if (!ENC.fotoSrc(v)) return;
-    RES.mostrarFoto(ENC.fotoSrc(v), 'Respuesta #' + n + ' · P' + pn, DAT.fmtFechaHora(RES.ms(r.enviado)),
+    RES.mostrarFoto(ENC.fotoSrc(v), 'Respuesta #' + n + ' · P' + pn,
+      DAT.fmtFechaHora(RES.ms(r.enviado)) + (ENC.fotoDrive(v) ? ' · Código ' + ENC.codigoResp(rid) : ''),
       RES.nombreArchivo((RES.encuesta() || {}).titulo, 'respuesta ' + n + ' P' + pn), v);
   },
 
@@ -408,6 +410,8 @@ var DAT = {
     ov.classList.toggle('editando', editar);
     ov.querySelector('.modal-header h2').textContent = (editar ? 'Editar respuesta #' : 'Respuesta #') + f.n;
     var sub = DAT.fmtFechaHora(RES.ms(r.enviado)) || 'Sin fecha';
+    /* El código va también en el nombre de sus fotos en Google Drive */
+    if (ENC.tieneFotoDrive(r)) sub += ' · Código ' + ENC.codigoResp(r._docId);
     if (r.editado) sub += ' · Editada' + (r.editado.nombre ? ' por ' + r.editado.nombre : '');
     ov.querySelector('.modal-header p').textContent = sub;
     var body = ov.querySelector('.modal-body');
@@ -820,7 +824,11 @@ var DAT = {
 
     /* Hoja 1: Respuestas */
     var colsX = DAT.columnas(enc);
-    var cab = ['N°', 'Fecha'].concat(colsX.map(function (c) { return c.titulo; }));
+    /* Con fotos en Drive, al final el código de la respuesta (el mismo que
+       termina el nombre de cada foto en la carpeta) */
+    var conCodigo = asc.some(ENC.tieneFotoDrive);
+    var cab = ['N°', 'Fecha'].concat(colsX.map(function (c) { return c.titulo; }))
+      .concat(conCodigo ? ['Código (fotos en Drive)'] : []);
     var aoa = [cab].concat(asc.map(function (r, i) {
       var resp = r.respuestas || {}, ms = RES.ms(r.enviado);
       return [i + 1, ms ? new Date(ms) : ''].concat(colsX.map(function (col) {
@@ -830,7 +838,7 @@ var DAT = {
         if (ENC.fotoDrive(v)) return ENC.fotoDrive(v);
         if (ENC.fotoSrc(v)) return 'Imagen adjunta (ver en Mi RCR)';
         return Array.isArray(v) ? v.join('; ') : String(v);
-      }));
+      })).concat(conCodigo ? [ENC.tieneFotoDrive(r) ? ENC.codigoResp(r._docId) : ''] : []);
     }));
     var ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
     for (var f = 1; f < aoa.length; f++) {

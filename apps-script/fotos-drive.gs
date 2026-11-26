@@ -82,13 +82,16 @@ function guardarFoto(d) {
   if (!enc.imagenes[qid]) return rechazo('pregunta');
 
   var carpeta = carpetaDe(encId, enc.titulo);
-  var nombre = nombreArchivo(d.fecha, enc.imagenes[qid], rid);
+  var quien = limpiar(d.etiqueta, 40);       // primera respuesta de texto corto (suele ser el nombre)
+  var nombre = nombreArchivo(d.fecha, quien, enc.imagenes[qid], rid);
   /* Si la foto ya había llegado (reintento), se devuelve la misma */
   var ya = carpeta.getFilesByName(nombre);
   var archivo = ya.hasNext() ? ya.next() : null;
   if (!archivo) {
     archivo = carpeta.createFile(Utilities.newBlob(bytes, 'image/jpeg', nombre));
-    archivo.setDescription('Encuesta: ' + enc.titulo + '\nPregunta: ' + enc.imagenes[qid] + '\nRespuesta: ' + rid);
+    archivo.setDescription('Encuesta: ' + enc.titulo + '\nPregunta: ' + enc.imagenes[qid] +
+      (quien ? '\nRespondió: ' + quien : '') +
+      '\nCódigo de la respuesta: ' + rid.slice(0, 6) + ' (se busca en Datos de Mi RCR)');
   }
   return { ok: true, id: archivo.getId(), carpeta: carpeta.getId() };
 }
@@ -177,13 +180,18 @@ function abrirCarpeta(id) {
   }
 }
 
-/* "2026-11-26 14.32 · ¿Foto del lugar? · a1b2c3.jpg": se ordena por fecha y
-   es siempre el mismo para la misma foto (sirve para no duplicarla) */
-function nombreArchivo(fecha, pregunta, rid) {
+/* "2026-11-26 14.32 · María López · Foto del lugar · a1b2c3.jpg"
+   · Fecha y hora en que se respondió (se ordena solo por fecha).
+   · Quién: la primera respuesta de texto corto, si la hay.
+   · La pregunta (por si la encuesta pide varias fotos).
+   · Código de la respuesta: se ve en Datos de Mi RCR y se puede buscar ahí.
+   Es siempre el mismo para la misma foto (sirve para no duplicarla). */
+function nombreArchivo(fecha, quien, pregunta, rid) {
   var ms = Number(fecha);
   var f = new Date(isFinite(ms) && ms > 0 ? ms : Date.now());
   var cuando = Utilities.formatDate(f, Session.getScriptTimeZone(), 'yyyy-MM-dd HH.mm');
-  return cuando + ' · ' + limpiar(pregunta, 50) + ' · ' + rid.slice(0, 6) + '.jpg';
+  return [cuando, quien, limpiar(pregunta, 40), rid.slice(0, 6)]
+    .filter(function (x) { return x; }).join(' · ') + '.jpg';
 }
 
 function limpiar(t, max) {

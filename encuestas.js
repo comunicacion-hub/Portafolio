@@ -265,6 +265,13 @@ var ENC = {
   fotoDrive: function (v) {
     return v && typeof v === 'object' && ENC.esIdDrive(v.drive) ? 'https://drive.google.com/file/d/' + v.drive + '/view' : '';
   },
+  /* Código de una respuesta (6 primeros caracteres de su id): va al final del
+     nombre de sus fotos en Drive y se puede buscar en Datos */
+  codigoResp: function (rid) { return String(rid || '').slice(0, 6); },
+  tieneFotoDrive: function (r) {
+    var rs = (r && r.respuestas) || {};
+    return Object.keys(rs).some(function (k) { return !!ENC.fotoDrive(rs[k]); });
+  },
   carpetaDrive: function (v) {
     return v && typeof v === 'object' && ENC.esIdDrive(v.carpeta) ? 'https://drive.google.com/drive/folders/' + v.carpeta : '';
   },

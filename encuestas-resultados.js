@@ -720,7 +720,8 @@ var RES = {
   verFoto: function (qid, k) {
     var f = (RES.fotos[qid] || [])[k];
     if (!f || !ENC.esImagen(f.v)) return;
-    RES.mostrarFoto(f.v, 'Foto ' + (k + 1) + ' de ' + RES.fotos[qid].length, f.ms ? RES.fmtDia(f.ms, true) : '',
+    RES.mostrarFoto(f.v, 'Foto ' + (k + 1) + ' de ' + RES.fotos[qid].length,
+      (f.ms ? RES.fmtDia(f.ms, true) : '') + (ENC.fotoDrive(f.orig) ? (f.ms ? ' · ' : '') + 'Código ' + ENC.codigoResp(f.rid) : ''),
       RES.nombreArchivo((RES.encuesta() || {}).titulo, 'foto ' + (k + 1)), f.orig);
   },
 
