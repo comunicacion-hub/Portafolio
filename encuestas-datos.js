@@ -372,7 +372,7 @@ var DAT = {
       onCerrar: DAT.cerrarFicha
     });
     var ov = document.getElementById('m-dat-ficha');
-    if (ov) ov.classList.add('hoja-ios', 'hoja-ficha');
+    if (ov) ov.classList.add('hoja-ios', 'hoja-gris');
     DAT.pintarFicha();
 
     /* Esc mientras se edita: vuelve a la vista (o avisa si hay cambios) */

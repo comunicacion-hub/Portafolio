@@ -574,30 +574,62 @@ var ENC = {
     var e = docId ? ENC.buscar(docId) : null;
     if (docId ? !ENC.puedeEditarEnc(e) : !RCR.puedeEditar()) { RCR.toast('No tienes permiso para editar'); return; }
     var d = e || { titulo: '', descripcion: '', estado: 'abierta' };
+    var guardar = 'ENC.guardarDatos(\'' + (docId || '') + '\')';
 
+    /* Hoja de iOS: los campos van dentro de un grupo blanco y el estado es
+       un control segmentado (el valor queda en el campo oculto #enc-d-estado) */
     RCR.modal({
       id: 'm-enc-datos',
       persistente: true,
       titulo: docId ? 'Editar encuesta' : 'Nueva encuesta',
-      sub: docId ? '' : 'Después de crearla, toca la tarjeta para agregar las preguntas.',
       cuerpo:
-        '<div class="form-grp"><label class="form-lbl" for="enc-d-titulo">Título *</label>' +
-          '<input class="form-inp" id="enc-d-titulo" maxlength="140" placeholder="Ej. Encuesta de clima laboral" ' +
-            'value="' + ENC.attr(d.titulo || '') + '"></div>' +
-        '<div class="form-grp"><label class="form-lbl" for="enc-d-desc">Descripción <span class="opt">(opcional)</span></label>' +
-          '<textarea class="form-inp" id="enc-d-desc" rows="3" placeholder="Cuéntale a quien responde de qué se trata">' +
-            RCR.esc(d.descripcion || '') + '</textarea></div>' +
-        '<div class="form-grp" style="margin-bottom:0"><label class="form-lbl" for="enc-d-estado">Estado</label>' +
-          '<select class="form-inp" id="enc-d-estado">' +
-            '<option value="abierta"' + (d.estado !== 'cerrada' ? ' selected' : '') + '>Abierta — recibe respuestas</option>' +
-            '<option value="cerrada"' + (d.estado === 'cerrada' ? ' selected' : '') + '>Cerrada — no recibe respuestas</option>' +
-          '</select></div>',
+        '<div class="hf-grupo">' +
+          '<label class="hf-campo"><span class="hf-lbl">Título</span>' +
+            '<input class="hf-inp hf-tit" id="enc-d-titulo" maxlength="140" autocomplete="off" ' +
+              'placeholder="Ej. Encuesta de clima laboral" value="' + ENC.attr(d.titulo || '') + '" ' +
+              'onkeydown="if(event.key===\'Enter\'){event.preventDefault();' + guardar + '}"></label>' +
+          '<label class="hf-campo"><span class="hf-lbl">Descripción<small>opcional</small></span>' +
+            '<textarea class="hf-inp" id="enc-d-desc" rows="3" placeholder="Cuéntale a quien responde de qué se trata">' +
+              RCR.esc(d.descripcion || '') + '</textarea></label>' +
+        '</div>' +
+        '<div class="hf-sec">Estado</div>' +
+        '<div class="hf-grupo">' +
+          '<div class="hf-fila">' +
+            '<span class="hf-estado" id="enc-d-estado-txt"><i aria-hidden="true"></i><span></span></span>' +
+            '<div class="fi-seg" role="radiogroup" aria-label="Estado de la encuesta">' +
+              '<button type="button" role="radio" data-v="abierta" onclick="ENC.estadoDatos(\'abierta\')">Abierta</button>' +
+              '<button type="button" role="radio" data-v="cerrada" onclick="ENC.estadoDatos(\'cerrada\')">Cerrada</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<input type="hidden" id="enc-d-estado" value="abierta">' +
+        (docId ? '' : '<p class="hf-pie">Después de crearla, toca su tarjeta para agregar las preguntas.</p>'),
       acciones:
         '<button class="btn btn-glass" onclick="RCR.cerrarModal(\'m-enc-datos\')">Cancelar</button>' +
-        '<button class="btn btn-primary" id="enc-d-save" onclick="ENC.guardarDatos(\'' + (docId || '') + '\')">' +
+        '<button class="btn btn-primary" id="enc-d-save" onclick="' + guardar + '">' +
           (docId ? 'Guardar' : 'Crear') + '</button>'
     });
+    var ov = document.getElementById('m-enc-datos');
+    if (ov) ov.classList.add('hoja-ios', 'hoja-gris');
+    ENC.estadoDatos(d.estado === 'cerrada' ? 'cerrada' : 'abierta');
     setTimeout(function () { var t = document.getElementById('enc-d-titulo'); if (t && !docId) t.focus(); }, 60);
+  },
+
+  /* Control segmentado del estado: marca el botón y explica qué significa */
+  estadoDatos: function (v) {
+    v = v === 'cerrada' ? 'cerrada' : 'abierta';
+    var inp = document.getElementById('enc-d-estado');
+    if (inp) inp.value = v;
+    document.querySelectorAll('#m-enc-datos .fi-seg button').forEach(function (b) {
+      var on = b.getAttribute('data-v') === v;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-checked', String(on));
+    });
+    var txt = document.getElementById('enc-d-estado-txt');
+    if (txt) {
+      txt.classList.toggle('cerrada', v === 'cerrada');
+      txt.querySelector('span').textContent = v === 'cerrada' ? 'No recibe respuestas' : 'Recibe respuestas';
+    }
   },
 
   guardarDatos: async function (docId) {
