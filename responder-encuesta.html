@@ -95,40 +95,74 @@ RCR.esc = function (v) {
     pintarRed();
   }
 
-  /* ── Fotos (preguntas "Subir imagen") ─────────────────────────────────── */
+  /* ── Fotos (preguntas "Subir imagen") ─────────────────────────────────────
+     Cada pregunta admite hasta ENC.maxFotos(q). Con una sola, la foto se ve
+     grande; con varias, en cuadrícula con un recuadro para agregar más. */
+  function preguntaDe(qid) {
+    return ENC.soloPreguntas(enc.preguntas).filter(function (q) { return q.id === qid; })[0];
+  }
+  function inputFoto(qid, max) {
+    return '<input type="file" accept="image/*" class="sr-only"' + (max > 1 ? ' multiple' : '') +
+      ' data-q="' + qid + '" onchange="window.__elegirFoto(this.dataset.q, this)">';
+  }
   function pintarFoto(qid) {
     var box = document.getElementById('rf-' + qid);
     if (!box) return;
-    var url = fotos[qid] && fotos[qid].ver;
-    var lbl = box.querySelector('.resp-subir');
-    var prev = box.querySelector('.resp-foto-prev');
-    if (prev) prev.remove();
-    lbl.classList.toggle('hidden', !!url);
-    if (url) {
-      box.insertAdjacentHTML('afterbegin',
-        '<div class="resp-foto-prev"><img src="' + url + '" alt="Foto elegida">' +
-          '<button type="button" class="resp-foto-quitar" data-q="' + qid + '" onclick="window.__quitarFoto(this.dataset.q)">' + ico('x', 14, 2.6) + 'Quitar</button>' +
-        '</div>');
+    var max = ENC.maxFotos(preguntaDe(qid)), l = fotos[qid] || [];
+    box.querySelector('.resp-subir').classList.toggle('hidden', l.length > 0);
+    var zona = box.querySelector('.resp-fotos-zona');
+    if (!l.length) { zona.innerHTML = ''; return; }
+    if (max === 1) {
+      zona.innerHTML = '<div class="resp-foto-prev"><img src="' + l[0].ver + '" alt="Foto elegida">' +
+        '<button type="button" class="resp-foto-quitar" onclick="window.__quitarFoto(\'' + qid + '\',0)">' + ico('x', 14, 2.6) + 'Quitar</button>' +
+      '</div>';
+      return;
     }
+    zona.innerHTML = '<div class="resp-fotos">' + l.map(function (f, i) {
+        return '<div class="resp-foto-mini"><img src="' + f.ver + '" alt="Foto ' + (i + 1) + '">' +
+          '<button type="button" class="resp-foto-x" aria-label="Quitar la foto ' + (i + 1) + '" ' +
+            'onclick="window.__quitarFoto(\'' + qid + '\',' + i + ')">' + ico('x', 12, 2.8) + '</button></div>';
+      }).join('') +
+      (l.length < max
+        ? '<label class="resp-foto-mas">' + inputFoto(qid, max) + ico('plus', 22, 2.2) + '<span>Agregar</span></label>'
+        : '') +
+    '</div>' +
+    '<div class="resp-foto-cuenta">' + l.length + ' de ' + max + ' fotos</div>';
   }
 
-  window.__elegirFoto = function (qid, input) {
-    var file = input.files && input.files[0];
+  /* Con Drive: la foto para Drive y una copia chica para la respuesta;
+     sin Drive: una sola, dentro de la respuesta (como antes). Se preparan de
+     a una para no llenar la memoria del teléfono. */
+  window.__elegirFoto = async function (qid, input) {
+    var files = Array.prototype.slice.call(input.files || []);
     input.value = '';
-    if (!file) return;
-    /* Con Drive: la foto para Drive y una copia chica para la respuesta;
-       sin Drive: una sola, dentro de la respuesta (como antes) */
+    if (!files.length) return;
+    var max = ENC.maxFotos(preguntaDe(qid));
+    var l = fotos[qid] = fotos[qid] || [];
+    var libres = max - l.length;
+    if (libres <= 0) { toast(max === 1 ? 'Quita la foto para elegir otra' : 'Ya agregaste las ' + max + ' fotos'); return; }
+    if (files.length > libres) {
+      toast('Se puede subir hasta ' + max + (max === 1 ? ' foto' : ' fotos') + ': ' + (libres === 1 ? 'se agregó 1' : 'se agregaron ' + libres));
+      files = files.slice(0, libres);
+    }
     var tam = ENC.DRIVE_URL ? [ENC.IMG_DRIVE, ENC.IMG_MINI] : [ENC.IMG_RESP];
-    ENC.comprimirImagen(file, tam).then(function (u) {
-      fotos[qid] = u.length === 2 ? { ver: u[1], hq: u[0], mini: u[1] } : { ver: u[0] };
-      pintarFoto(qid);
-      limpiarError(document.getElementById('rq-' + qid));
-      actualizar();
-    }).catch(function () { toast('Elige un archivo de imagen (JPG o PNG)'); });
+    var box = document.getElementById('rf-' + qid);
+    if (box) box.classList.add('preparando');
+    for (var i = 0; i < files.length; i++) {
+      if (l.length >= max) break;
+      try {
+        var u = await ENC.comprimirImagen(files[i], tam);
+        l.push(u.length === 2 ? { ver: u[1], hq: u[0], mini: u[1] } : { ver: u[0] });
+        pintarFoto(qid);
+      } catch (e) { toast('Elige un archivo de imagen (JPG o PNG)'); }
+    }
+    if (box) box.classList.remove('preparando');
+    limpiarError(document.getElementById('rq-' + qid));
+    actualizar();
   };
 
-  window.__quitarFoto = function (qid) {
-    delete fotos[qid];
+  window.__quitarFoto = function (qid, i) {
+    (fotos[qid] || []).splice(i, 1);
     pintarFoto(qid);
     actualizar();
   };
@@ -149,12 +183,15 @@ RCR.esc = function (v) {
     if (q.tipo === 'numero') {
       campo = '<input class="rg-campo resp-numero" name="' + name + '" inputmode="decimal" autocomplete="off" maxlength="30" placeholder="Escribe un número">';
     } else if (q.tipo === 'imagen') {
+      var maxF = ENC.maxFotos(q);
       campo = '<div class="resp-foto" id="rf-' + q.id + '">' +
-        '<label class="resp-subir">' +
-          '<input type="file" accept="image/*" class="sr-only" data-q="' + q.id + '" onchange="window.__elegirFoto(this.dataset.q, this)">' +
+        '<label class="resp-subir">' + inputFoto(q.id, maxF) +
           '<span class="resp-subir-ico">' + ico('image', 22) + '</span>' +
-          '<span><strong>Subir una foto</strong><small>JPG o PNG · también puedes tomarla con el celular</small></span>' +
+          (maxF === 1
+            ? '<span><strong>Subir una foto</strong><small>JPG o PNG · también puedes tomarla con el celular</small></span>'
+            : '<span><strong>Subir fotos</strong><small>Hasta ' + maxF + ' · JPG o PNG · también puedes tomarlas con el celular</small></span>') +
         '</label>' +
+        '<div class="resp-fotos-zona"></div>' +
       '</div>';
     } else if (q.tipo === 'cuadricula') {
       var cols = q.columnas || [];
@@ -343,7 +380,7 @@ RCR.esc = function (v) {
         var el = form.elements[name];
         r[q.id] = el ? el.value.trim() : '';
       } else if (q.tipo === 'imagen') {
-        r[q.id] = fotos[q.id] ? fotos[q.id].ver : '';
+        r[q.id] = (fotos[q.id] || []).map(function (f) { return f.ver; });
       } else if (q.tipo === 'cuadricula') {
         var g = {};
         (q.filas || []).forEach(function (f) {
@@ -459,17 +496,18 @@ RCR.esc = function (v) {
     }
 
     /* Solo se guardan las preguntas visibles y respondidas. Las fotos para
-       Drive van aparte (aDrive); en la respuesta queda su copia chica. */
-    var respuestas = {}, aDrive = {}, etiqueta = '';
+       Drive van aparte (aDrive: una entrada por foto); en la respuesta queda
+       la lista de sus copias chicas. */
+    var respuestas = {}, aDrive = [], etiqueta = '';
     ENC.soloPreguntas(enc.preguntas).forEach(function (q) {
       if (!st.vis[q.id] || vacio(st.r[q.id])) return;
       /* Primera respuesta de texto corto (suele ser el nombre): va en el
-         nombre de la foto en Drive, para saber de quién es */
+         nombre de la carpeta de la respuesta en Drive, para saber de quién es */
       if (q.tipo === 'corto' && !etiqueta) etiqueta = String(st.r[q.id]).trim().slice(0, 60);
-      var f = q.tipo === 'imagen' ? fotos[q.id] : null;
-      if (f && f.hq) {
-        aDrive[q.id] = { hq: f.hq, mini: f.mini };
-        respuestas[q.id] = f.mini;                    // para medir el tamaño final
+      var lf = q.tipo === 'imagen' ? (fotos[q.id] || []) : null;
+      if (lf && lf.length && lf[0].hq) {
+        lf.forEach(function (f, i) { aDrive.push({ q: q.id, n: i + 1, de: lf.length, hq: f.hq, mini: f.mini }); });
+        respuestas[q.id] = lf.map(function (f) { return f.mini; });   // para medir el tamaño final
       } else {
         respuestas[q.id] = q.tipo === 'numero' ? ENC.leerNumero(st.r[q.id]) : st.r[q.id];
       }
@@ -489,8 +527,8 @@ RCR.esc = function (v) {
     var espera = navigator.onLine ? 9000 : 700;
     try {
       var res;
-      if (Object.keys(aDrive).length) {
-        Object.keys(aDrive).forEach(function (k) { delete respuestas[k]; });
+      if (aDrive.length) {
+        aDrive.forEach(function (f) { delete respuestas[f.q]; });
         res = await enviarConFotos({ rid: ref.id, enc: id, fecha: Date.now(), etiqueta: etiqueta, respuestas: respuestas, fotos: aDrive }, espera);
       } else {
         var escritura = guardarRespuesta(ref, respuestas, id);
@@ -610,14 +648,14 @@ RCR.esc = function (v) {
 
   /* Sube una foto. Sin red (o si tarda más de 3 min) lanza error; si Drive
      contesta, devuelve lo que contestó. */
-  function subirFoto(item, qid) {
+  function subirFoto(item, f) {
     var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
     var t = ctrl ? setTimeout(function () { ctrl.abort(); }, 180000) : null;
     return fetch(ENC.DRIVE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // sin consulta previa (CORS)
-      body: JSON.stringify({ encuesta: item.enc, pregunta: qid, respuesta: item.rid, fecha: item.fecha,
-        etiqueta: item.etiqueta || '', foto: item.fotos[qid].hq }),
+      body: JSON.stringify({ encuesta: item.enc, pregunta: f.q, n: f.n, de: f.de, respuesta: item.rid,
+        fecha: item.fecha, etiqueta: item.etiqueta || '', foto: f.hq }),
       signal: ctrl ? ctrl.signal : undefined
     }).then(function (r) {
       clearTimeout(t);
@@ -630,15 +668,23 @@ RCR.esc = function (v) {
      Devuelve { escritura } (envuelta: si se devolviera la promesa sola, el
      await esperaría a que Firestore confirme, y sin conexión no termina). */
   async function procesar(item, avance) {
-    var qids = Object.keys(item.fotos || {});
-    for (var i = 0; i < qids.length; i++) {
-      var f = item.fotos[qids[i]];
+    /* item.fotos: una entrada por foto { q, n, de, hq, mini, drive… }. Las
+       que quedaron en cola con la versión anterior traen una por pregunta. */
+    if (!Array.isArray(item.fotos)) {
+      item.fotos = Object.keys(item.fotos || {}).map(function (q) {
+        return Object.assign({ q: q, n: 1, de: 1 }, item.fotos[q]);
+      });
+    }
+    var lista = item.fotos;
+    for (var i = 0; i < lista.length; i++) {
+      var f = lista[i];
       if (f.drive || f.error) continue;
-      if (avance) avance(i + 1, qids.length, item.rid);
-      var r = await subirFoto(item, qids[i]);
+      if (avance) avance(i + 1, lista.length, item.rid);
+      var r = await subirFoto(item, f);
       if (r && r.ok && ENC.esIdDrive(r.id)) {
         f.drive = r.id;
         f.carpeta = ENC.esIdDrive(r.carpeta) ? r.carpeta : '';
+        f.carpetaResp = ENC.esIdDrive(r.carpetaResp) ? r.carpetaResp : '';
       } else if ((r && r.permanente) || (f.fallas = (f.fallas || 0) + 1) >= 4) {
         f.error = String((r && r.error) || 'drive');
         console.warn('Foto no guardada en Drive (' + f.error + '): queda la copia chica');
@@ -649,10 +695,13 @@ RCR.esc = function (v) {
       delete f.hq;
       await colaGuardar(item);
     }
+    /* Cada pregunta guarda la lista de sus fotos, en el orden en que se eligieron */
     var resp = Object.assign({}, item.respuestas);
-    qids.forEach(function (q) {
-      var f = item.fotos[q];
-      resp[q] = f.drive ? { drive: f.drive, mini: f.mini, carpeta: f.carpeta || '' } : f.mini;
+    lista.forEach(function (f) {
+      if (!Array.isArray(resp[f.q])) resp[f.q] = [];
+      resp[f.q].push(f.drive
+        ? { drive: f.drive, mini: f.mini, carpeta: f.carpeta || '', carpetaResp: f.carpetaResp || '' }
+        : f.mini);
     });
     var ref = db.collection(ENC.COL).doc(item.enc).collection(ENC.SUB_RESP).doc(item.rid);
     var escritura = guardarRespuesta(ref, resp, item.enc);

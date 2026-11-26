@@ -146,13 +146,23 @@ var ENC = {
   /* Fotos de quien responde en Google Drive (Apps Script de la cuenta dueña
      de la carpeta; el código está en apps-script/fotos-drive.gs). Vacío =
      como antes: la foto va dentro de la respuesta.
-     Con Drive, la respuesta guarda { drive, mini, carpeta }: el id del
-     archivo, una copia chica para verla en Mi RCR y la carpeta de la encuesta.
+     En Drive: carpeta de la encuesta → carpeta de cada respuesta → fotos.
+     La respuesta guarda una lista con { drive, mini, carpeta, carpetaResp }
+     por foto: el id del archivo, una copia chica para verla en Mi RCR y las
+     carpetas de la encuesta y de la respuesta.
      La foto se vuelve a dibujar en el teléfono: pesa menos para subirla con
      datos móviles y no lleva la ubicación GPS que traen las fotos. */
   DRIVE_URL: 'https://script.google.com/macros/s/AKfycbzu3DX-zuGn5e6X4NEx3Q4yd22Hf9UjKTaey2Dz0pQoqYr4sKbDkNLt99LGZPNlrj-D0g/exec',
   IMG_DRIVE: { lado: 2048, calidad: 0.82 },   // la que se sube a Drive
-  IMG_MINI:  { lado: 640, calidad: 0.66 },    // la copia chica de la respuesta
+  IMG_MINI:  { lado: 480, calidad: 0.62 },    // la copia chica de la respuesta
+
+  /* Cuántas fotos se pueden subir en una pregunta "Subir imagen" */
+  FOTOS_MAX: 10,
+  FOTOS_DEF: 5,                               // si quien creó la encuesta no eligió
+  maxFotos: function (q) {
+    var n = parseInt(q && q.maxFotos, 10);
+    return n >= 1 && n <= ENC.FOTOS_MAX ? n : ENC.FOTOS_DEF;
+  },
 
   /* Tipos que pueden servir de condición para otra pregunta */
   RAMIFICAN: ['unica', 'multiple', 'sino', 'escala', 'estrellas'],
@@ -240,7 +250,8 @@ var ENC = {
   },
 
   fmtValor: function (v) {
-    if (ENC.fotoSrc(v)) return 'Imagen adjunta';
+    var fs = ENC.fotosDe(v);
+    if (fs.length) return fs.length === 1 ? 'Imagen adjunta' : fs.length + ' imágenes adjuntas';
     if (Array.isArray(v)) return v.join(', ');
     if (v && typeof v === 'object') return Object.keys(v).map(function (k) { return v[k]; }).join('; ');
     if (ENC.esImagen(v)) return 'Imagen adjunta';
@@ -254,26 +265,38 @@ var ENC = {
     return typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
   },
 
-  /* Foto de una respuesta: base64 (dentro de la respuesta) o { drive, mini,
-     carpeta } (en Google Drive). fotoSrc da lo que se puede mostrar aquí. */
+  /* Fotos de una respuesta "Subir imagen", siempre como lista (las
+     respuestas de antes traen una sola, sin lista). Cada foto es base64
+     (dentro de la respuesta) o { drive, mini, carpeta, carpetaResp } (en
+     Google Drive). fotoSrc da lo que se puede mostrar aquí de una foto. */
+  fotosDe: function (v) {
+    var l = Array.isArray(v) ? v : (v ? [v] : []);
+    return l.filter(function (x) { return !!ENC.fotoSrc(x); });
+  },
   fotoSrc: function (v) {
     if (ENC.esImagen(v)) return v;
-    if (v && typeof v === 'object' && ENC.esImagen(v.mini)) return v.mini;
+    if (v && typeof v === 'object' && !Array.isArray(v) && ENC.esImagen(v.mini)) return v.mini;
     return '';
   },
   esIdDrive: function (s) { return typeof s === 'string' && /^[A-Za-z0-9_-]{10,100}$/.test(s); },
   fotoDrive: function (v) {
     return v && typeof v === 'object' && ENC.esIdDrive(v.drive) ? 'https://drive.google.com/file/d/' + v.drive + '/view' : '';
   },
-  /* Código de una respuesta (6 primeros caracteres de su id): va al final del
-     nombre de sus fotos en Drive y se puede buscar en Datos */
+  /* Carpeta en Drive de la encuesta / de la respuesta (de cualquiera de sus fotos) */
+  carpetaDrive: function (v) {
+    var c = ENC.fotosDe(v).filter(function (x) { return x && ENC.esIdDrive(x.carpeta); })[0];
+    return c ? 'https://drive.google.com/drive/folders/' + c.carpeta : '';
+  },
+  carpetaRespDrive: function (v) {
+    var c = ENC.fotosDe(v).filter(function (x) { return x && ENC.esIdDrive(x.carpetaResp); })[0];
+    return c ? 'https://drive.google.com/drive/folders/' + c.carpetaResp : '';
+  },
+  /* Código de una respuesta (6 primeros caracteres de su id): va en el
+     nombre de su carpeta y de sus fotos en Drive y se puede buscar en Datos */
   codigoResp: function (rid) { return String(rid || '').slice(0, 6); },
   tieneFotoDrive: function (r) {
     var rs = (r && r.respuestas) || {};
-    return Object.keys(rs).some(function (k) { return !!ENC.fotoDrive(rs[k]); });
-  },
-  carpetaDrive: function (v) {
-    return v && typeof v === 'object' && ENC.esIdDrive(v.carpeta) ? 'https://drive.google.com/drive/folders/' + v.carpeta : '';
+    return Object.keys(rs).some(function (k) { return ENC.fotosDe(rs[k]).some(function (x) { return !!ENC.fotoDrive(x); }); });
   },
 
   /* Enlace seguro: solo http(s); se agrega https:// si falta. '' si no sirve. */
@@ -1014,8 +1037,8 @@ var ENC = {
         cuerpo = '<div class="eb-muestra"><div class="eb-linea eb-linea-num"><b>123</b>Respuesta con un número</div></div>';
       } else if (q.tipo === 'imagen') {
         cuerpo = '<div class="eb-muestra"><div class="eb-subir">' + ico('image', 20) +
-          '<span><strong>Subir una foto</strong>Quien responde podrá adjuntar una imagen o tomarla con el celular.' +
-          (ENC.DRIVE_URL ? ' Se guarda en Google Drive, en una carpeta de esta encuesta.' : '') + '</span></div></div>';
+          '<span><strong>Subir fotos</strong>Quien responde podrá adjuntar fotos o tomarlas con el celular.' +
+          (ENC.DRIVE_URL ? ' Se guardan en Google Drive: una carpeta por encuesta y, dentro, una por respuesta.' : '') + '</span></div></div>';
       } else {
         cuerpo = '<div class="eb-muestra"><div class="eb-linea' + (q.tipo === 'largo' ? ' largo' : '') + '">' +
           (q.tipo === 'largo' ? 'Respuesta larga' : 'Respuesta corta') + '</div></div>';
@@ -1050,6 +1073,7 @@ var ENC = {
             '<span class="eb-switch"><input type="checkbox" role="switch"' + (q.requerida ? ' checked' : '') +
               ' onchange="ENC.b.preguntas[' + i + '].requerida=this.checked"><i></i></span></label>' +
           (q.tipo === 'multiple' ? ENC.maxHtml(q, i, chev) : '') +
+          (q.tipo === 'imagen' ? ENC.maxFotosHtml(q, i, chev) : '') +
           '<div class="eb-cond" id="encc-' + q.id + '">' + ENC.condHtml(i) + '</div>' +
         '</div>' +
       '</article>';
@@ -1072,6 +1096,18 @@ var ENC = {
     return '<div class="eb-fila"><span class="eb-fila-txt">Máximo de respuestas</span>' +
       '<label class="eb-select"><select aria-label="Cuántas opciones se pueden elegir" ' +
         'onchange="ENC.b.preguntas[' + i + '].maxElegir=this.value?Number(this.value):null">' + ops + '</select>' + chev + '</label>' +
+    '</div>';
+  },
+
+  /* ── Subir imagen: cuántas fotos se pueden subir ───────────────────────── */
+  maxFotosHtml: function (q, i, chev) {
+    var n = ENC.maxFotos(q), ops = '';
+    for (var k = 1; k <= ENC.FOTOS_MAX; k++) {
+      ops += '<option value="' + k + '"' + (k === n ? ' selected' : '') + '>' + (k === 1 ? '1 foto' : 'Hasta ' + k + ' fotos') + '</option>';
+    }
+    return '<div class="eb-fila"><span class="eb-fila-txt">Máximo de fotos</span>' +
+      '<label class="eb-select"><select aria-label="Cuántas fotos se pueden subir" ' +
+        'onchange="ENC.b.preguntas[' + i + '].maxFotos=Number(this.value)">' + ops + '</select>' + chev + '</label>' +
     '</div>';
   },
 
@@ -1619,6 +1655,7 @@ var ENC = {
           ? { id: q.id, tipo: 'seccion', texto: q.texto, descripcion: q.descripcion, condicion: cond }
           : { id: q.id, tipo: q.tipo, texto: q.texto, requerida: !!q.requerida, opciones: q.opciones, condicion: cond };
         if (ENC.maxValido(q)) x.maxElegir = ENC.maxValido(q);
+        if (q.tipo === 'imagen') x.maxFotos = ENC.maxFotos(q);
         if (q.tipo === 'cuadricula') { x.filas = q.filas; x.columnas = q.columnas; }
         if (q.apoyoImg && ENC.esImagen(q.apoyoImg)) x.apoyoImg = q.apoyoImg;
         if (q.enlace) x.enlace = { url: q.enlace.url, texto: q.enlace.texto };

@@ -308,15 +308,17 @@ var RES = {
         return s;
       }
 
-      /* Subir imagen: galería de fotos */
+      /* Subir imagen: galería con todas las fotos de todas las respuestas */
       if (q.tipo === 'imagen') {
-        s.fotos = resps.filter(function (r) { return ENC.fotoSrc((r.respuestas || {})[q.id]); })
-          .map(function (r) {
-            var v = r.respuestas[q.id];
-            if (!s.carpeta && ENC.carpetaDrive(v)) s.carpeta = ENC.carpetaDrive(v);
-            return { v: ENC.fotoSrc(v), orig: v, ms: RES.ms(r.enviado), rid: r._docId };
-          });
-        s.respondieron = s.fotos.length;
+        s.fotos = [];
+        s.respondieron = 0;
+        resps.forEach(function (r) {
+          var v = (r.respuestas || {})[q.id], fts = ENC.fotosDe(v);
+          if (!fts.length) return;
+          s.respondieron++;
+          if (!s.carpeta && ENC.carpetaDrive(v)) s.carpeta = ENC.carpetaDrive(v);
+          fts.forEach(function (x) { s.fotos.push({ v: ENC.fotoSrc(x), orig: x, ms: RES.ms(r.enviado), rid: r._docId }); });
+        });
         return s;
       }
 

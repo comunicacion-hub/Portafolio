@@ -306,9 +306,12 @@ var DAT = {
         cols.map(function (c) {
           var q = c.q, v = c.val(resp);
           if (RES.vacio(v)) return '<td class="dat-vacio">—</td>';
-          var src = ENC.fotoSrc(v);
-          if (src) return '<td class="dat-img"' + (ENC.fotoDrive(v) ? ' title="En Google Drive · código ' + ENC.codigoResp(f.r._docId) + '"' : '') + '>' +
-            '<img src="' + src + '" alt="Imagen adjunta" loading="lazy"></td>';
+          var fts = ENC.fotosDe(v);
+          if (fts.length) {
+            return '<td class="dat-img"' + (ENC.carpetaRespDrive(v) || ENC.fotoDrive(fts[0]) ? ' title="En Google Drive · código ' + ENC.codigoResp(f.r._docId) + '"' : '') + '>' +
+              '<span class="dat-img-in"><img src="' + ENC.fotoSrc(fts[0]) + '" alt="' + ENC.attr(ENC.fmtValor(v)) + '" loading="lazy">' +
+              (fts.length > 1 ? '<span class="dat-img-n">+' + (fts.length - 1) + '</span>' : '') + '</span></td>';
+          }
           var t = ENC.fmtValor(v);
           if (q.tipo === 'estrellas' && isFinite(Number(v))) {
             return '<td class="dat-estr" title="' + ENC.attr(ENC.etiquetaValor(q, v)) + '">' +
@@ -344,13 +347,14 @@ var DAT = {
   },
 
   /* Foto de una respuesta en grande (con descarga) */
-  verFoto: function (rid, qid, n, pn) {
+  verFoto: function (rid, qid, n, pn, i) {
     var r = (RES.cache[RES.sel] || []).find(function (x) { return x._docId === rid; });
-    var v = r && (r.respuestas || {})[qid];
-    if (!ENC.fotoSrc(v)) return;
-    RES.mostrarFoto(ENC.fotoSrc(v), 'Respuesta #' + n + ' · P' + pn,
-      DAT.fmtFechaHora(RES.ms(r.enviado)) + (ENC.fotoDrive(v) ? ' · Código ' + ENC.codigoResp(rid) : ''),
-      RES.nombreArchivo((RES.encuesta() || {}).titulo, 'respuesta ' + n + ' P' + pn), v);
+    var fts = ENC.fotosDe(r && (r.respuestas || {})[qid]), x = fts[i || 0];
+    if (!x) return;
+    var cual = fts.length > 1 ? ' · foto ' + ((i || 0) + 1) + ' de ' + fts.length : '';
+    RES.mostrarFoto(ENC.fotoSrc(x), 'Respuesta #' + n + ' · P' + pn + cual,
+      DAT.fmtFechaHora(RES.ms(r.enviado)) + (ENC.fotoDrive(x) ? ' · Código ' + ENC.codigoResp(rid) : ''),
+      RES.nombreArchivo((RES.encuesta() || {}).titulo, 'respuesta ' + n + ' P' + pn + (fts.length > 1 ? ' foto ' + ((i || 0) + 1) : '')), x);
   },
 
   /* ==========================================================================
@@ -454,12 +458,19 @@ var DAT = {
   /* Valor en modo ver */
   valorHtml: function (q, k, v, visible, r) {
     if (RES.vacio(v)) return '<div class="fi-v vacio">' + (visible ? 'Sin respuesta' : 'No aplica') + '</div>';
-    if (ENC.fotoSrc(v)) {
-      return '<button type="button" class="fi-img" title="Ver en grande" aria-label="Ver la imagen en grande" ' +
-        'onclick="DAT.verFoto(\'' + r._docId + '\',\'' + q.id + '\',' + DAT.ficha.n + ',' + (k + 1) + ')"><img src="' + ENC.fotoSrc(v) + '" alt="Imagen adjunta"></button>' +
-        (ENC.fotoDrive(v)
-          ? '<a class="fi-link fi-drive" href="' + ENC.fotoDrive(v) + '" target="_blank" rel="noopener">' + ico('externalLink', 13) + 'Abrir en Google Drive</a>'
-          : '');
+    var fts = ENC.fotosDe(v);
+    if (fts.length) {
+      /* La carpeta de la respuesta en Drive; si no hay (fotos de antes), la foto */
+      var enDrive = ENC.carpetaRespDrive(v), uno = fts.length === 1 ? ENC.fotoDrive(fts[0]) : '';
+      return '<div class="fi-fotos">' + fts.map(function (x, i) {
+          return '<button type="button" class="fi-img" title="Ver en grande" aria-label="Ver la foto ' + (i + 1) + ' en grande" ' +
+            'onclick="DAT.verFoto(\'' + r._docId + '\',\'' + q.id + '\',' + DAT.ficha.n + ',' + (k + 1) + ',' + i + ')"><img src="' + ENC.fotoSrc(x) + '" alt="Foto ' + (i + 1) + '"></button>';
+        }).join('') + '</div>' +
+        (enDrive
+          ? '<a class="fi-link fi-drive" href="' + enDrive + '" target="_blank" rel="noopener">' + ico('folder', 13) + 'Abrir la carpeta en Google Drive</a>'
+          : uno
+            ? '<a class="fi-link fi-drive" href="' + uno + '" target="_blank" rel="noopener">' + ico('externalLink', 13) + 'Abrir en Google Drive</a>'
+            : '');
     }
     if (q.tipo === 'cuadricula' && typeof v === 'object' && !Array.isArray(v)) {
       return '<div class="fi-sub">' + (q.filas || []).map(function (f) {
@@ -587,14 +598,20 @@ var DAT = {
       }).join('') + '</div>';
     }
     if (t === 'imagen') {
-      var antes = DAT.ficha.original[q.id];
-      if (ENC.fotoSrc(v)) {
-        return '<div class="fi-img-ed"><span class="fi-img"><img src="' + ENC.fotoSrc(v) + '" alt="Imagen adjunta"></span>' +
-          '<button type="button" class="fi-link rojo" onclick="DAT.edImagen(' + k + ',false)">Quitar imagen</button></div>';
+      /* Cada foto con su botón para quitarla; "Deshacer" vuelve a las de antes.
+         Quitar una foto aquí no la borra de Google Drive. */
+      var antes = ENC.fotosDe(DAT.ficha.original[q.id]), ahora = ENC.fotosDe(v);
+      var cambio = ahora.length !== antes.length;
+      var deshacer = cambio ? '<button type="button" class="fi-link" onclick="DAT.edImagen(' + k + ')">Deshacer</button>' : '';
+      if (ahora.length) {
+        return '<div class="fi-fotos">' + ahora.map(function (x, i) {
+            return '<span class="fi-img fi-img-quitable"><img src="' + ENC.fotoSrc(x) + '" alt="Foto ' + (i + 1) + '">' +
+              '<button type="button" class="fi-img-x" title="Quitar esta foto" aria-label="Quitar la foto ' + (i + 1) + '" ' +
+                'onclick="DAT.edQuitarFoto(' + k + ',' + i + ')">' + ico('x', 11, 2.8) + '</button></span>';
+          }).join('') + '</div>' + deshacer;
       }
-      return ENC.fotoSrc(antes)
-        ? '<div class="fi-img-ed"><span class="fi-v vacio">Imagen quitada</span>' +
-            '<button type="button" class="fi-link" onclick="DAT.edImagen(' + k + ',true)">Deshacer</button></div>'
+      return antes.length
+        ? '<div class="fi-img-ed"><span class="fi-v vacio">' + (antes.length === 1 ? 'Foto quitada' : 'Fotos quitadas') + '</span>' + deshacer + '</div>'
         : '<div class="fi-v vacio">Sin imagen</div>';
     }
     return '<div class="fi-v">' + RCR.esc(ENC.fmtValor(v)) + '</div>';
@@ -644,10 +661,20 @@ var DAT = {
     f.sucio = true;
   },
 
-  edImagen: function (k, conservar) {
+  /* Vuelve a las fotos que tenía la respuesta */
+  edImagen: function (k) {
     var q = DAT.edPregunta(k), f = DAT.ficha;
     if (!q || !f) return;
-    f.vals[q.id] = conservar ? f.original[q.id] : null;
+    f.vals[q.id] = f.original[q.id];
+    f.sucio = true;
+    DAT.edRepintar(k);
+  },
+  edQuitarFoto: function (k, i) {
+    var q = DAT.edPregunta(k), f = DAT.ficha;
+    if (!q || !f) return;
+    var l = ENC.fotosDe(f.vals[q.id]).slice();
+    l.splice(i, 1);
+    f.vals[q.id] = l.length ? l : null;
     f.sucio = true;
     DAT.edRepintar(k);
   },
@@ -711,7 +738,7 @@ var DAT = {
       } else if (q.tipo === 'cuadricula') {
         if (!v || typeof v !== 'object' || !Object.keys(v).length) continue;
       } else if (q.tipo === 'imagen') {
-        if (!ENC.fotoSrc(v)) continue;
+        if (!ENC.fotosDe(v).length) continue;
       } else if (v == null || v === '') {
         continue;
       }
@@ -835,8 +862,13 @@ var DAT = {
         var q = col.q, v = col.val(resp);
         if (RES.vacio(v)) return '';
         if (q.tipo === 'escala' || q.tipo === 'estrellas' || q.tipo === 'numero') { var x = Number(v); return isFinite(x) ? x : String(v); }
-        if (ENC.fotoDrive(v)) return ENC.fotoDrive(v);
-        if (ENC.fotoSrc(v)) return 'Imagen adjunta (ver en Mi RCR)';
+        /* Fotos: la carpeta de la respuesta en Drive (o la foto, si es de antes) */
+        var fts = ENC.fotosDe(v);
+        if (fts.length) {
+          if (ENC.carpetaRespDrive(v)) return ENC.carpetaRespDrive(v);
+          if (fts.length === 1 && ENC.fotoDrive(fts[0])) return ENC.fotoDrive(fts[0]);
+          return ENC.fmtValor(v) + ' (ver en Mi RCR)';
+        }
         return Array.isArray(v) ? v.join('; ') : String(v);
       })).concat(conCodigo ? [ENC.tieneFotoDrive(r) ? ENC.codigoResp(r._docId) : ''] : []);
     }));
@@ -848,7 +880,7 @@ var DAT = {
       for (var k = 2; k < aoa[f].length; k++) {
         var x = aoa[f][k];
         if (typeof x === 'string' && x.indexOf('https://drive.google.com/') === 0) {
-          ws[XLSX.utils.encode_cell({ r: f, c: k })].l = { Target: x, Tooltip: 'Abrir la foto en Google Drive' };
+          ws[XLSX.utils.encode_cell({ r: f, c: k })].l = { Target: x, Tooltip: 'Abrir en Google Drive' };
         }
       }
     }
@@ -870,7 +902,9 @@ var DAT = {
       }
       var ops = q.tipo === 'cuadricula'
         ? 'Filas: ' + (q.filas || []).map(function (f) { return f.t; }).join('; ') + ' | Columnas: ' + (q.columnas || []).join('; ')
-        : (q.opciones || []).join('; ') + (ENC.maxValido(q) ? ' (máx. ' + ENC.maxValido(q) + ')' : '');
+        : q.tipo === 'imagen'
+          ? (ENC.maxFotos(q) === 1 ? '1 foto' : 'Hasta ' + ENC.maxFotos(q) + ' fotos')
+          : (q.opciones || []).join('; ') + (ENC.maxValido(q) ? ' (máx. ' + ENC.maxValido(q) + ')' : '');
       return [i + 1, q.texto, ENC.tipoLabel(q.tipo), q.requerida ? 'Sí' : 'No', ops, cond,
         (q.enlace && ENC.urlSegura(q.enlace.url)) || ''];
     }));
